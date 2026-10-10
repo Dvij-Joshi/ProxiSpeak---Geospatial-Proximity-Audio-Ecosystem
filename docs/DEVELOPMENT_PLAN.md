@@ -1,0 +1,239 @@
+# ProxiSpeak — Week-wise Development Plan
+
+## Project: Geospatial Proximity Audio Ecosystem
+**Duration:** 4 Weeks + Mid & Final Project Reviews  
+**Stack:** Node.js · Express · Socket.io · MongoDB · React · WebRTC · Web Audio API · HTML5 Canvas
+
+---
+
+## Overview
+
+| Phase | Backend Goal | Frontend Goal |
+|---|---|---|
+| Week 1 | Signaling & Movement | World Rendering |
+| Week 2 | Proximity Calculations | WebRTC Integration |
+| Mid-Review | Spatial Audit | Audio Check |
+| Week 3 | Mesh Scaling | Dynamic Attenuation |
+| Week 4 | Room Persistence | Refine & Polish |
+| Final Review | Scalable Geospatial Server | Immersive Audio Platform |
+
+---
+
+## Week 1 — Foundation
+
+### 🖥️ Backend: Signaling & Movement
+
+**Goal:** Build a WebSocket server that broadcasts avatar X/Y coordinates and set up basic MongoDB geospatial schemas.
+
+#### Tasks
+- [ ] Initialize Node.js + Express project with `package.json`
+- [ ] Connect to MongoDB with Mongoose
+- [ ] Create `User` model with **GeoJSON Point** schema and `2dsphere` index
+- [ ] Set up Socket.io server
+- [ ] Implement `join-room` event — registers user + stores initial position
+- [ ] Implement `move` event — updates position in MongoDB + broadcasts `user-moved` to room
+- [ ] Implement `disconnect` event — removes user from DB + notifies room
+- [ ] Basic REST `GET /health` endpoint
+
+#### Deliverables
+- Working WebSocket server that two browser tabs can connect to
+- Avatar position stored and updated in MongoDB on every move event
+- Verified with MongoDB Compass: coordinates update in real-time
+
+---
+
+### 🎨 Frontend: World Rendering
+
+**Goal:** Build the React Canvas layer and implement smooth keyboard/mouse avatar movement with coordinate broadcasting.
+
+#### Tasks
+- [ ] Initialize Vite + React project
+- [ ] Create `<WorldCanvas>` component with HTML5 Canvas `requestAnimationFrame` loop
+- [ ] Render a simple office background (grid + colored zones)
+- [ ] Create `<Avatar>` component — colored circle + username label
+- [ ] Implement keyboard movement: `WASD` / arrow keys change avatar position
+- [ ] Implement mouse-click movement: avatar smoothly moves to click position
+- [ ] Connect to Socket.io backend and emit `move` events (throttled to 50ms)
+- [ ] Listen for `user-moved` events and render other users' avatars
+
+#### Deliverables
+- User can move their avatar smoothly around the 2D canvas
+- Other users' avatars appear and update in real-time
+- Canvas renders at a consistent 60 FPS
+
+---
+
+## Week 2 — Proximity & WebRTC
+
+### 🖥️ Backend: Proximity Calculations
+
+**Goal:** Implement MongoDB `$near` queries to group users. Logic to only send WebRTC offer/answers to users within a 100-pixel radius.
+
+#### Tasks
+- [ ] Create `/api/proximity/:userId` endpoint using `$near` with `$maxDistance: 100`
+- [ ] After each `move` event, query nearby users in the same room
+- [ ] Emit `proximity-update` to the mover: `{ inEarshot: [...], leftEarshot: [...] }`
+- [ ] Track per-socket "earshot state" to detect entry/exit events
+- [ ] Only initiate WebRTC offers to newly-entered earshot users
+- [ ] Relay `webrtc-offer`, `webrtc-answer`, `ice-candidate` events between correct socket pairs
+
+#### Deliverables
+- `$near` query verified to return only users within 100-unit radius
+- Server correctly detects when users enter/leave earshot
+- WebRTC signaling events are correctly relayed between peers
+
+---
+
+### 🎨 Frontend: WebRTC Integration
+
+**Goal:** Implement standard WebRTC peer-to-peer audio connections using the browser's `getUserMedia`.
+
+#### Tasks
+- [ ] Create `webrtcManager.js` service
+- [ ] On page load: request microphone access with `getUserMedia({ audio: true })`
+- [ ] On `proximity-update.inEarshot`: create `RTCPeerConnection`, add local audio track, send offer
+- [ ] On `proximity-update.leftEarshot`: close `RTCPeerConnection` and remove audio
+- [ ] Handle `webrtc-offer` → create answer → `setLocalDescription` → emit `webrtc-answer`
+- [ ] Handle `webrtc-answer` → `setRemoteDescription`
+- [ ] Handle `ice-candidate` → `addIceCandidate`
+- [ ] Attach received remote audio streams to `<audio>` elements (muted for now)
+
+#### Deliverables
+- Two browser tabs can establish a live audio connection via the signaling server
+- Audio flows when avatars are within 100 pixels; connection closes when they move apart
+
+---
+
+## Mid-Project Review
+
+### ✅ Backend: Spatial Audit
+
+**Goal:** Prove the backend accurately filters and clusters users based on geospatial coordinates **under 20ms**.
+
+#### Audit Checklist
+- [ ] Benchmark `$near` query response time with 10 / 25 / 50 simulated users using a load testing script
+- [ ] Verify `2dsphere` index is being used (`explain()` query)
+- [ ] Confirm no false positives (users outside 100px reported as nearby)
+- [ ] Confirm no false negatives (users inside 100px missed)
+- [ ] Document average query latency in `docs/DEVELOPMENT_PLAN.md`
+
+#### Pass Criteria
+- 95th percentile proximity query < **20ms** with 50 concurrent users
+
+---
+
+### 🎨 Frontend: Audio Check
+
+**Goal:** Demonstrate two browsers successfully establishing a WebRTC audio connection via the signaling server.
+
+#### Audit Checklist
+- [ ] Two browser instances connect to the same room
+- [ ] Moving avatars within 100px triggers WebRTC offer/answer
+- [ ] Live audio heard in second tab (microphone → peer)
+- [ ] Moving apart closes connection cleanly (no zombie peer connections)
+
+---
+
+## Week 3 — Scale & Spatial Audio
+
+### 🖥️ Backend: Mesh Scaling
+
+**Goal:** Optimize the WebRTC mesh network. Implement Redis Pub/Sub to allow scaling the Socket.io server across multiple Node.js instances.
+
+#### Tasks
+- [ ] Install and configure `@socket.io/redis-adapter`
+- [ ] Set up Redis locally (Docker or local install)
+- [ ] Verify Socket.io events work across two separate Node.js processes
+- [ ] Implement Node.js `cluster` module to fork workers per CPU core
+- [ ] Test `move` events with sticky sessions or Redis adapter coordination
+- [ ] Document scaling architecture in `docs/ARCHITECTURE.md`
+
+#### Deliverables
+- Two Node.js processes can share Socket.io state via Redis
+- Load test with 50 simulated users shows no dropped events
+
+---
+
+### 🎨 Frontend: Dynamic Attenuation
+
+**Goal:** Hook WebRTC audio tracks into the Web Audio API. Write algorithms to calculate volume drop-off based on pixel distance.
+
+#### Tasks
+- [ ] Create `audioMixer.js` service wrapping Web Audio API
+- [ ] For each peer stream: `MediaStreamSource → GainNode → StereoPannerNode → destination`
+- [ ] Implement `setGainAndPan(peerId, distance, deltaX)`:
+  - Gain = `Math.max(0, 1 - distance / MAX_DISTANCE)`
+  - Pan = `Math.max(-1, Math.min(1, deltaX / MAX_DISTANCE))`
+- [ ] Call `audioMixer.setGainAndPan` every time `user-moved` or `proximity-update` fires
+- [ ] Test: at 0px → full volume, at 100px → silence, at 50px left → audible in left ear
+
+#### Deliverables
+- Audio volume dynamically changes as avatars move
+- Stereo panning positions audio correctly in left/right ear
+
+---
+
+## Week 4 — Persistence & Polish
+
+### 🖥️ Backend: Room Persistence
+
+**Goal:** Save office layouts and furniture obstacles (which block sound) into MongoDB.
+
+#### Tasks
+- [ ] Create `Room` MongoDB schema: `{ roomId, layout: [{ type, x, y, w, h }] }`
+- [ ] `POST /api/rooms` — create a new room layout
+- [ ] `GET /api/rooms/:roomId` — fetch layout (sent to frontend on join)
+- [ ] Implement basic **acoustic shadowing**: if a wall obstacle exists between two users, reduce gain by 50%
+- [ ] Store default `main-office` layout in a seed script
+
+#### Deliverables
+- Room layouts persist across server restarts
+- Furniture obstacles reduce audio gain between users
+
+---
+
+### 🎨 Frontend: Refine & Polish
+
+**Goal:** Add 3D audio panning (stereo separation) and ensure Canvas animations render at a steady 60 FPS.
+
+#### Tasks
+- [ ] Implement delta-time smoothing in the `requestAnimationFrame` loop
+- [ ] Add avatar movement interpolation (smooth position transitions, not teleporting)
+- [ ] Fetch and render room layout (furniture) from backend on join
+- [ ] Draw walls/obstacles as blocking rectangles on canvas
+- [ ] Refine avatar visuals: avatar icon, name label, "speaking" indicator ring
+- [ ] Add connection status HUD (users in room, microphone status, FPS counter)
+- [ ] Performance audit: ensure no memory leaks from closed WebRTC connections
+
+#### Deliverables
+- Canvas renders at a stable 60 FPS with 10+ users
+- Smooth avatar movement with no teleporting
+- Furniture obstacles visible on the canvas map
+
+---
+
+## Final Project Review
+
+### 🖥️ Backend Final State
+A **highly scalable, stateful geospatial server** managing complex P2P routing logic:
+- Redis-backed multi-instance Socket.io
+- MongoDB geospatial clustering < 20ms
+- Persistent room layouts with acoustic shadowing
+
+### 🎨 Frontend Final State
+An **immersive, physics-aware communication platform** demonstrating advanced browser audio manipulation:
+- Smooth 60 FPS 2D virtual office
+- Dynamic spatial audio (volume + stereo panning)
+- Seamless WebRTC lifecycle management
+
+---
+
+## Success Metrics
+
+| Metric | Target |
+|---|---|
+| Geospatial query latency (p95) | < 20ms |
+| Canvas render rate | ≥ 60 FPS |
+| Max concurrent users tested | ≥ 50 |
+| WebRTC connection setup time | < 3 seconds |
+| Audio cutoff accuracy | Within ±5 pixels of 100px threshold |
