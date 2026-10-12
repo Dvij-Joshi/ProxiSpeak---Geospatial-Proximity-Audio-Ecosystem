@@ -101,6 +101,13 @@ export function initSignalingServer(io) {
       io.to(to).emit('ice-candidate', { from: socket.id, candidate });
     });
 
+    // ── Network Quality ───────────────────────────────────────────────────────
+    // Client reports its own WebRTC stats; server relays to the peer's room
+    // so their avatar can display a signal quality indicator.
+    socket.on('network-quality', ({ peerId, quality }) => {
+      io.to(peerId).emit('peer-network-quality', { socketId: socket.id, quality });
+    });
+
     // ── disconnect ────────────────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       const { userId, roomId } = socket.data;
