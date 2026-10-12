@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import connectDB from './config/db.js';
 import proximityRoutes from './routes/proximity.js';
 import { initSignalingServer } from './socket/signalingServer.js';
+import { notFound, errorHandler } from './middleware/errorHandler.js';
 
 // Load environment variables
 dotenv.config();
@@ -46,6 +47,10 @@ app.use('/api/proximity', proximityRoutes);
 
 // Socket.io Signaling Server
 initSignalingServer(io);
+
+// Error handling (must be after all routes)
+app.use(notFound);
+app.use(errorHandler);
 
 // Start server
 httpServer.listen(PORT, () => {
