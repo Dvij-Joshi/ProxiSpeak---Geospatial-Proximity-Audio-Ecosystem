@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "seed": "node scripts/seedRooms.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest"
   },
   "keywords": [
