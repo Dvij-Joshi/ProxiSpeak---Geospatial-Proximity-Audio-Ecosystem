@@ -1,6 +1,6 @@
 # ProxiSpeak — Feature Roadmap
 
-> Last updated after team feature planning session — October 2025
+> Last updated after mid-project review — October 13, 2025
 
 This roadmap captures all features discussed and tentatively agreed upon by the team. Items marked **In Scope** will be built within the 4-week project timeline. Items marked **Post-MVP** are stretch goals for v2.0.
 
@@ -12,13 +12,13 @@ These were part of the original project spec and are actively being built.
 
 | Feature | Description | Status |
 |---|---|---|
-| Real-time avatar movement | Keyboard/mouse-driven movement on 2D canvas | 🔨 In Progress |
-| Geospatial proximity clustering | MongoDB `$near` to detect earshot (100px radius) | 🔨 In Progress |
-| WebRTC P2P audio | Direct browser-to-browser audio via signaling server | 🔨 In Progress |
+| Real-time avatar movement | Keyboard/mouse-driven movement on 2D canvas | ✅ Done |
+| Geospatial proximity clustering | MongoDB `$near` to detect earshot (100px radius) | ✅ Done |
+| WebRTC P2P audio | Direct browser-to-browser audio via signaling server | ✅ Done |
 | Dynamic volume attenuation | Gain drops linearly with distance | 🔨 In Progress |
 | Stereo panning | Left/right ear placement based on avatar position | 🔨 In Progress |
 | Room persistence | Save office layouts and furniture to MongoDB | 📋 Planned |
-| 60 FPS canvas rendering | Delta-time smoothed `requestAnimationFrame` loop | 📋 Planned |
+| 60 FPS canvas rendering | Delta-time smoothed `requestAnimationFrame` loop | ✅ Done |
 
 ---
 
@@ -48,13 +48,15 @@ Live speech-to-text captions displayed as floating bubbles above avatars.
 ---
 
 ### 📶 Bad Network Indicator
-*Priority: High — Target: Week 2*
+*Priority: High — Target: Week 2 → Week 3 (deferred)*
 
 Visual signal degradation icon above avatars with poor connectivity.
 - Backend reads **WebRTC stats** (`RTCPeerConnection.getStats()`)
 - Emits `network-quality` Socket.io event with a quality score (`good` / `degraded` / `poor`)
 - Canvas renders a signal icon (📶 → 📵) above the affected avatar
 - Helps teammates understand audio issues aren't caused by the speaker
+
+> **Status (Oct 13):** Backend `network-quality` event scaffolded. Frontend rendering deferred to Week 3 alongside `audioMixer.js` work.
 
 ---
 
