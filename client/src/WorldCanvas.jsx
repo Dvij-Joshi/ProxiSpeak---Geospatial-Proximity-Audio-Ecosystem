@@ -7,8 +7,9 @@ const H = 680;
 const SPEED = 2.8;
 const R = 14; // avatar radius
 const ROOM_ID = 'main-office';
-// Use empty string so socket.io connects via Vite proxy (works for localhost AND network IPs)
-const SERVER_URL = '';
+// Local dev  → empty string, Vite proxy routes /socket.io → localhost:5000
+// Production → set VITE_SERVER_URL in Vercel env vars to your deployed backend URL
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || '';
 const MOVE_THROTTLE_MS = 50; // emit move at most every 50ms
 
 // ─── Office Layout ────────────────────────────────────────────────────────────

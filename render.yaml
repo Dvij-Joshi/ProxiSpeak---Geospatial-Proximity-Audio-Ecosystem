@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: proxispeak-server
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false          # set manually in Render dashboard
+      - key: CLIENT_URL
+        value: https://proxi-speak-geospatial-proximity-au-kappa.vercel.app
