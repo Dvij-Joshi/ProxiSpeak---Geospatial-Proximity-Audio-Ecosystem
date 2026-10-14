@@ -6,10 +6,14 @@ const W = 1200;
 const H = 680;
 const SPEED = 2.8;
 const R = 14; // avatar radius
-const ROOM_ID = 'main-office';
 // Local dev  → empty string, Vite proxy routes /socket.io → localhost:5000
-// Production → set VITE_SERVER_URL in Vercel env vars to your deployed backend URL
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || '';
+// Production → fallback to active tunnel URL if VITE_SERVER_URL not defined in env
+const DEFAULT_SERVER_URL =
+  typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? 'https://4d2a-103-241-227-192.ngrok-free.app'
+    : '';
+
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || DEFAULT_SERVER_URL;
 const MOVE_THROTTLE_MS = 50; // emit move at most every 50ms
 
 // ─── Office Layout ────────────────────────────────────────────────────────────
@@ -323,7 +327,10 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     // ── Socket.io connection ───────────────────────────────────────────────
     const socket = io(SERVER_URL, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
+      extraHeaders: {
+        'ngrok-skip-browser-warning': 'true',
+      },
+      reconnectionAttempts: 25,
       reconnectionDelay: 1000,
     });
     socketRef.current = socket;

@@ -15,26 +15,24 @@ const ALLOWED_ORIGINS = [
   'http://localhost:4173',
   'https://proxi-speak-geospatial-proximity-au-kappa.vercel.app',
   process.env.CLIENT_URL,
+  process.env.NGROK_URL,
 ].filter(Boolean);
 
 // ── Express + HTTP + Socket.io ────────────────────────────────────────────────
 const app = express();
 
 app.use(cors({
-  origin: (origin, cb) => {
-    // Allow requests with no origin (server-to-server, curl, etc.)
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS blocked: ${origin}`));
-  },
-  credentials: false,
+  origin: true, // Allow any requesting origin
+  credentials: true,
 }));
 app.use(express.json());
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ALLOWED_ORIGINS,
+    origin: '*',
     methods: ['GET', 'POST'],
+    credentials: true,
   },
   transports: ['websocket', 'polling'],
   pingTimeout: 20000,
