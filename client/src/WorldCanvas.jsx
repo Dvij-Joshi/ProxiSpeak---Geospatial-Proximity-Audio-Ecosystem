@@ -6,6 +6,7 @@ const W = 1200;
 const H = 680;
 const SPEED = 2.8;
 const R = 14; // avatar radius
+const ROOM_ID = 'main-office';
 // Local dev  → empty string, Vite proxy routes /socket.io → localhost:5000
 // Production → fallback to active tunnel URL if VITE_SERVER_URL not defined in env
 const DEFAULT_SERVER_URL =
