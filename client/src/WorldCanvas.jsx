@@ -7,7 +7,8 @@ const H = 680;
 const SPEED = 2.8;
 const R = 14; // avatar radius
 const ROOM_ID = 'main-office';
-const SERVER_URL = 'http://localhost:5000';
+// Use empty string so socket.io connects via Vite proxy (works for localhost AND network IPs)
+const SERVER_URL = '';
 const MOVE_THROTTLE_MS = 50; // emit move at most every 50ms
 
 // ─── Office Layout ────────────────────────────────────────────────────────────
@@ -319,7 +320,11 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     offscreenRef.current = offscreen;
 
     // ── Socket.io connection ───────────────────────────────────────────────
-    const socket = io(SERVER_URL, { transports: ['websocket'] });
+    const socket = io(SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
