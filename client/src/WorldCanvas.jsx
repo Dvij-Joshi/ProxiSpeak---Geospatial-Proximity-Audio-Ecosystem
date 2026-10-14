@@ -8,10 +8,10 @@ const SPEED = 2.8;
 const R = 14; // avatar radius
 const ROOM_ID = 'main-office';
 // Local dev  → empty string, Vite proxy routes /socket.io → localhost:5000
-// Production → fallback to active tunnel URL if VITE_SERVER_URL not defined in env
+// Production on Vercel → fallback to deployed Render backend
 const DEFAULT_SERVER_URL =
   typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? 'https://4d2a-103-241-227-192.ngrok-free.app'
+    ? 'https://proxispeak-server.onrender.com'
     : '';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || DEFAULT_SERVER_URL;
@@ -328,13 +328,18 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     // ── Socket.io connection ───────────────────────────────────────────────
     const socket = io(SERVER_URL, {
       transports: ['websocket', 'polling'],
-      extraHeaders: {
-        'ngrok-skip-browser-warning': 'true',
-      },
-      reconnectionAttempts: 25,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1500,
+      timeout: 20000,
     });
     socketRef.current = socket;
+
+    // Periodic client-side ping (every 2 mins) to keep Render service awake
+    const keepAliveTimer = setInterval(() => {
+      if (SERVER_URL) {
+        fetch(`${SERVER_URL}/health`).catch(() => {});
+      }
+    }, 2 * 60 * 1000);
 
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
@@ -416,6 +421,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       cancelAnimationFrame(rafRef.current);
+      clearInterval(keepAliveTimer);
       socket.disconnect();
     };
   }, [username, avatarColor, render]);

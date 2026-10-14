@@ -152,6 +152,29 @@ io.on('connection', (socket) => {
   });
 });
 
+// ── Keep-Alive Self-Ping (Prevents Render Free Tier from Sleeping) ───────────
+const PING_INTERVAL_MS = 2.5 * 60 * 1000; // 2.5 minutes
+
+function startKeepAlive() {
+  const selfUrl = process.env.RENDER_EXTERNAL_URL || process.env.SERVER_URL;
+  if (!selfUrl) {
+    console.log('[Keep-Alive] No external URL set (RENDER_EXTERNAL_URL or SERVER_URL). Skipping self-ping in local environment.');
+    return;
+  }
+
+  console.log(`[Keep-Alive] Service active — self-ping scheduled every 2.5 mins to ${selfUrl}/health`);
+
+  setInterval(async () => {
+    try {
+      const pingUrl = `${selfUrl}/health`;
+      const res = await fetch(pingUrl);
+      console.log(`[Keep-Alive] Self-ping sent to ${pingUrl} (HTTP ${res.status})`);
+    } catch (err) {
+      console.warn('[Keep-Alive] Ping failed:', err.message);
+    }
+  }, PING_INTERVAL_MS);
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────────
 connectDB()
   .then(() => {
@@ -160,12 +183,13 @@ connectDB()
       console.log(`   Local  : http://localhost:${PORT}`);
       console.log(`   Health : http://localhost:${PORT}/health`);
       console.log(`   Allowed: ${ALLOWED_ORIGINS.join(', ')}\n`);
+      startKeepAlive();
     });
   })
   .catch(err => {
     console.error('[DB] Atlas connection failed — starting without DB:', err.message);
-    // Still boot so in-memory multiplayer works even without Atlas
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`\n⚠️  ProxiSpeak server running (NO DB) on http://localhost:${PORT}\n`);
+      startKeepAlive();
     });
   });

@@ -14,3 +14,5 @@ services:
         sync: false          # set manually in Render dashboard
       - key: CLIENT_URL
         value: https://proxi-speak-geospatial-proximity-au-kappa.vercel.app
+      - key: SERVER_URL
+        value: https://proxispeak-server.onrender.com
