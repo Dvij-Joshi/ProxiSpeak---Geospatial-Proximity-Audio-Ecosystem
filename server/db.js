@@ -6,4 +6,17 @@ export async function connectDB() {
 
   await mongoose.connect(uri);
   console.log('[DB] Connected to MongoDB Atlas');
+
+  try {
+    const col = mongoose.connection.collection('users');
+    const indexes = await col.indexes();
+    for (const idx of indexes) {
+      if (idx.name.startsWith('location_')) {
+        await col.dropIndex(idx.name);
+        console.log(`[DB] Dropped legacy index: ${idx.name}`);
+      }
+    }
+  } catch (_e) {
+    // collection may not exist yet on fresh database
+  }
 }

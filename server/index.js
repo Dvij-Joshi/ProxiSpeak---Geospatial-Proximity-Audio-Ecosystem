@@ -108,10 +108,12 @@ io.on('connection', (socket) => {
           username,
           avatarColor,
           roomId,
-          location: { type: 'Point', coordinates: [spawnX, spawnY] },
+          x: spawnX,
+          y: spawnY,
+          location: [spawnX, spawnY],
           lastSeen: new Date(),
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       ).catch(err => console.error('[DB join]', err.message));
 
     } catch (err) {
@@ -131,7 +133,12 @@ io.on('connection', (socket) => {
     // Async Atlas update — never blocks broadcast
     User.findOneAndUpdate(
       { socketId: socket.id },
-      { location: { type: 'Point', coordinates: [x, y] }, lastSeen: new Date() }
+      {
+        x,
+        y,
+        location: [x, y],
+        lastSeen: new Date(),
+      }
     ).catch(err => console.error('[DB move]', err.message));
   });
 

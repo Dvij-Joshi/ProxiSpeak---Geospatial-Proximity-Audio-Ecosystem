@@ -5,17 +5,20 @@ const UserSchema = new mongoose.Schema({
   username: { type: String, required: true },
   avatarColor: { type: String, default: '#3b82f6' },
   roomId: { type: String, default: 'main-office' },
+  x: { type: Number, default: 620 },
+  y: { type: Number, default: 390 },
 
-  // GeoJSON Point — [lng, lat] maps to [x, y] canvas coords
+  // Flat 2D coordinates [x, y] on the 1200x680 canvas
   location: {
-    type: { type: String, enum: ['Point'], default: 'Point' },
-    coordinates: { type: [Number], default: [620, 390] }, // [x, y]
+    type: [Number],
+    default: [620, 390],
   },
 
   lastSeen: { type: Date, default: Date.now },
 });
 
-// 2dsphere index for geospatial $near queries
-UserSchema.index({ location: '2dsphere' });
+// Planar 2D index bounded for 0 to 2000 pixels (canvas dimensions)
+UserSchema.index({ location: '2d' }, { min: 0, max: 2000 });
+UserSchema.index({ roomId: 1, lastSeen: 1 });
 
 export default mongoose.model('User', UserSchema);
