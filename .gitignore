@@ -8,6 +8,7 @@ pnpm-debug.log*
 # Environment variables
 .env
 .env.*
+atlas-credentials.env
 *.env
 *.env.*
 .env.local
