@@ -1,6 +1,6 @@
 {
   "name": "proxispeak---geospatial-proximity-audio-ecosystem",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)\r [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org/)\r [![React](https://img.shields.io/badge/React-18-blue)](https://reactjs.org/)\r [![MongoDB](https://img.shields.io/badge/MongoDB-6.x-brightgreen)](https://www.mongodb.com/)\r [![Socket.io](https://img.shields.io/badge/Socket.io-4.x-black)](https://socket.io/)\r [![WebRTC](https://img.shields.io/badge/WebRTC-Enabled-orange)](https://webrtc.org/)",
   "main": "server/index.js",
   "type": "module",
