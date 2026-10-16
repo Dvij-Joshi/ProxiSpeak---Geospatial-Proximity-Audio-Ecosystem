@@ -1,4 +1,5 @@
 # 🎙️ ProxiSpeak — Geospatial Proximity Audio Ecosystem
+![Version](https://img.shields.io/badge/version-1.0.1-blue)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org/)
