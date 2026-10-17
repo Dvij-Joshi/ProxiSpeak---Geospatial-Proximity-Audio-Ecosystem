@@ -237,7 +237,7 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
     ctx.setLineDash([]);
 
     // Soft audio range gradient
-    const grad = ctx.createRadialGradient(x, y, 40, x, y, MAX_DISTANCE);
+    const grad = ctx.createRadialGradient(x, y, 15, x, y, MAX_DISTANCE);
     grad.addColorStop(0, 'rgba(59, 130, 246, 0.05)');
     grad.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
     ctx.fillStyle = grad;

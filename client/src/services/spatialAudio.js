@@ -4,8 +4,8 @@
  * based on the 2D Euclidean distance between the local avatar and remote avatars.
  */
 
-export const MIN_DISTANCE = 35;  // full volume within 35px
-export const MAX_DISTANCE = 280; // linear/exponential fade to 0 at 280px
+export const MIN_DISTANCE = 25;  // full volume when right next to each other (<=25px)
+export const MAX_DISTANCE = 130; // smooth fade to 0 silence at 130px (intimate walk-up radius)
 
 class SpatialAudioManager {
   constructor() {
