@@ -344,7 +344,6 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const peerVolumesRef = useRef({}); // peerId -> volume
   const peerIntensitiesRef = useRef({}); // peerId -> voiceIntensity
   const localIntensityRef = useRef(0);
-  const lastIntensityUpdateRef = useRef(0);
   const rafRef      = useRef(null);
   const socketRef   = useRef(null);
   const lastEmitRef = useRef(0);
@@ -439,6 +438,16 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     spatialAudio.setDeafened(nextDeafened);
     setIsDeafened(nextDeafened);
   };
+
+  // ── Voice intensity polling (decoupled from RAF loop) ─────────────────
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const v = webrtc.getLocalVoiceIntensity();
+      localIntensityRef.current = v;
+      setLocalIntensityState(v);
+    }, 50);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -586,14 +595,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       peerIntensitiesRef.current = peerIntensities || {};
       setInEarshotCount(currentInEarshot);
 
-      const curLocalIntensity = webrtc.getLocalVoiceIntensity();
-      localIntensityRef.current = curLocalIntensity;
-
       const now = Date.now();
-      if (now - lastIntensityUpdateRef.current >= 60) {
-        setLocalIntensityState(curLocalIntensity);
-        lastIntensityUpdateRef.current = now;
-      }
       if ((s.x !== prevX || s.y !== prevY) && now - lastEmitRef.current >= MOVE_THROTTLE_MS) {
         socket.emit('move', { x: s.x, y: s.y, roomId: ROOM_ID });
         lastEmitRef.current = now;

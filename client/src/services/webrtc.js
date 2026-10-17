@@ -313,13 +313,13 @@ class WebRTCManager {
    * Returns current microphone voice intensity between 0 and 1.0.
    */
   getLocalVoiceIntensity() {
-    if (!this.analyser || this.isMuted) return 0;
+    if (!this.analyser) return 0;
     const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
     this.analyser.getByteFrequencyData(dataArray);
     let sum = 0;
     for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
     const avg = sum / dataArray.length;
-    return Math.min(1, Math.max(0, avg / 70));
+    return Math.min(1, Math.max(0, avg / 35));
   }
 
   /**
