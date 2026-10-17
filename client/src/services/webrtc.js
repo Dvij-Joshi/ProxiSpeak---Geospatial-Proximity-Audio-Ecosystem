@@ -275,12 +275,22 @@ class WebRTCManager {
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       this.audioContext = new AudioContextClass();
+
+      // Force-resume — Chrome sometimes suspends AudioContext even during a user gesture
+      this.audioContext.resume().then(() => {
+        console.log('[WebRTC] AudioContext state after resume:', this.audioContext.state);
+      });
+
       const source = this.audioContext.createMediaStreamSource(stream);
       this.analyser = this.audioContext.createAnalyser();
-      this.analyser.fftSize = 256;
+      this.analyser.fftSize = 512;
+      this.analyser.smoothingTimeConstant = 0.3;
       source.connect(this.analyser);
 
+      console.log('[WebRTC] Analyser created, frequencyBinCount=', this.analyser.frequencyBinCount);
+
       const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+      let debugCount = 0;
 
       const checkVolume = () => {
         if (!this.analyser) return;
@@ -291,7 +301,16 @@ class WebRTCManager {
           sum += dataArray[i];
         }
         const average = sum / dataArray.length;
-        const speaking = !this.isMuted && average > 14;
+
+        // Log first 60 frames to verify data is flowing
+        if (debugCount < 60) {
+          debugCount++;
+          if (debugCount % 20 === 0) {
+            console.log(`[WebRTC] VAD avg=${average.toFixed(2)} ctx=${this.audioContext.state} muted=${this.isMuted}`);
+          }
+        }
+
+        const speaking = !this.isMuted && average > 10;
 
         if (speaking !== this.isSpeaking) {
           this.isSpeaking = speaking;
