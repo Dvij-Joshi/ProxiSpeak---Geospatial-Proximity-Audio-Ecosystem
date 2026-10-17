@@ -356,9 +356,12 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const [localIntensityState, setLocalIntensityState] = useState(0);
   const [inEarshotCount, setInEarshotCount] = useState(0);
 
+  const isMutedRef = useRef(true);
+  const isSpeakingRef = useRef(false);
+  const renderRef = useRef(null);
   const offscreenRef = useRef(null);
 
-  // Render loop
+  // Render loop (reads from refs so it never changes identity when mute/speech states update)
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -366,7 +369,9 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     const s = stateRef.current;
 
     // 1. Static office layer
-    ctx.drawImage(offscreenRef.current, 0, 0);
+    if (offscreenRef.current) {
+      ctx.drawImage(offscreenRef.current, 0, 0);
+    }
 
     // 2. Draw remote peers
     for (const [peerId, peer] of Object.entries(peersRef.current)) {
@@ -390,7 +395,19 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
 
     // 3. Draw local avatar on top with live voice intensity
     const myIntensity = localIntensityRef.current;
-    drawAvatar(ctx, s.x, s.y, avatarColor, username, s.moving, true, isMuted, isSpeaking, 1, myIntensity);
+    drawAvatar(
+      ctx,
+      s.x,
+      s.y,
+      avatarColor,
+      username,
+      s.moving,
+      true,
+      isMutedRef.current,
+      isSpeakingRef.current,
+      1,
+      myIntensity
+    );
 
     // 4. Movement guide bottom-left
     const userCount = Object.keys(peersRef.current).length + 1;
@@ -411,7 +428,9 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'right';
     ctx.fillStyle = connected ? '#86efac' : '#fca5a5';
     ctx.fillText(connected ? 'Connected' : 'Offline', W - 36, H - 20);
-  }, [username, avatarColor, isMuted, isSpeaking]);
+  }, [username, avatarColor]);
+
+  renderRef.current = render;
 
   // Audio Control Handlers
   const handleToggleMic = async () => {
@@ -421,13 +440,14 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       try {
         await webrtc.startMicrophone();
         setMicActive(true);
-        const newMuted = webrtc.toggleMute(ROOM_ID); // unmute on first mic activation
-        setIsMuted(newMuted);
+        isMutedRef.current = false;
+        setIsMuted(false);
       } catch (err) {
         alert('Microphone permission required for voice audio. Please allow microphone access in your browser settings.');
       }
     } else {
       const newMuted = webrtc.toggleMute(ROOM_ID);
+      isMutedRef.current = newMuted;
       setIsMuted(newMuted);
     }
   };
@@ -479,6 +499,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
         }
       },
       onVoiceActivity: (speaking) => {
+        isSpeakingRef.current = speaking;
         setIsSpeaking(speaking);
       },
     });
@@ -601,7 +622,9 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
         lastEmitRef.current = now;
       }
 
-      render();
+      if (renderRef.current) {
+        renderRef.current();
+      }
       rafRef.current = requestAnimationFrame(tick);
     }
 
@@ -616,7 +639,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       webrtc.closeAll();
       spatialAudio.destroy();
     };
-  }, [username, avatarColor, render]);
+  }, [username, avatarColor]);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'12px', padding:'16px' }}>

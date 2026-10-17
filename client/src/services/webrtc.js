@@ -127,10 +127,11 @@ class WebRTCManager {
       });
 
       this.localStream = stream;
+      this.isMuted = false;
 
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = !this.isMuted;
+        audioTrack.enabled = true;
       }
 
       // Attach audio track to all active peer connections
