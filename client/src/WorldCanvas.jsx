@@ -1,5 +1,7 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { spatialAudio, MAX_DISTANCE } from './services/spatialAudio';
+import { webrtc } from './services/webrtc';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const W = 1200;
@@ -7,6 +9,7 @@ const H = 680;
 const SPEED = 2.8;
 const R = 14; // avatar radius
 const ROOM_ID = 'main-office';
+
 // Local dev  → empty string, Vite proxy routes /socket.io → localhost:5000
 // Production on Vercel → fallback to deployed Render backend
 const DEFAULT_SERVER_URL =
@@ -221,12 +224,27 @@ function collidesWithWall(nx, ny, walls) {
   return false;
 }
 
-// ─── Avatar drawing ───────────────────────────────────────────────────────────
-function drawAvatar(ctx, x, y, color, username, moving, isMe = false) {
-  // Proximity ring
-  ctx.beginPath(); ctx.arc(x, y, 100, 0, Math.PI * 2);
-  ctx.strokeStyle = color + '30'; ctx.lineWidth = 1.5;
-  ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+// ─── Avatar drawing with Audio Visualizers ─────────────────────────────────────
+function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = false, isSpeaking = false, volumeGain = 0) {
+  // Proximity earshot ring (only drawn around local player)
+  if (isMe) {
+    ctx.beginPath();
+    ctx.arc(x, y, MAX_DISTANCE, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.22)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Soft audio range gradient
+    const grad = ctx.createRadialGradient(x, y, 40, x, y, MAX_DISTANCE);
+    grad.addColorStop(0, 'rgba(59, 130, 246, 0.05)');
+    grad.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, MAX_DISTANCE, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Drop shadow
   ctx.beginPath(); ctx.ellipse(x + 2, y + 5, R, R * 0.5, 0, 0, Math.PI * 2);
@@ -238,7 +256,22 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false) {
     ctx.fillStyle = color + '25'; ctx.fill();
   }
 
-  // "Me" outer ring indicator
+  // Speaking sound waves (pulsing green indicator)
+  if (isSpeaking && !isMuted) {
+    ctx.beginPath();
+    ctx.arc(x, y, R + 7, 0, Math.PI * 2);
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(x, y, R + 13, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(34, 197, 94, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // "Me" outer white ring
   if (isMe) {
     ctx.beginPath(); ctx.arc(x, y, R + 3, 0, Math.PI * 2);
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
@@ -247,79 +280,146 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false) {
   // Avatar circle
   ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2);
   ctx.fillStyle = color; ctx.fill();
-  ctx.strokeStyle = isMe ? '#fff' : 'rgba(255,255,255,0.6)';
+  ctx.strokeStyle = isMe ? '#fff' : 'rgba(255,255,255,0.7)';
   ctx.lineWidth = isMe ? 2.5 : 1.5; ctx.stroke();
 
-  // Inner highlight
+  // Inner face highlight
   ctx.beginPath(); ctx.arc(x - 4, y - 4, 4, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fill();
 
-  // Name tag
+  // Name tag with mic indicator
   ctx.font = '600 12px Inter, sans-serif';
   ctx.textAlign = 'center';
+  const micIcon = isMuted ? '🔇' : (isSpeaking ? '🗣️' : '🎙️');
   const label = isMe ? `${username} (you)` : username;
-  const tw = ctx.measureText(label).width;
-  const px = 8, tagX = x - tw / 2 - px, tagY = y - R - 26;
-  const tagW = tw + px * 2, tagH = 20;
-  ctx.fillStyle = isMe ? 'rgba(15,17,23,0.9)' : 'rgba(15,17,23,0.75)';
-  drawRoundRect(ctx, tagX, tagY, tagW, tagH, 5); ctx.fill();
-  ctx.fillStyle = isMe ? '#fff' : '#cbd5e1';
-  ctx.fillText(label, x, tagY + tagH - 5);
+  const fullTag = `${micIcon} ${label}`;
+  const tw = ctx.measureText(fullTag).width;
+  const px = 8, tagX = x - tw / 2 - px, tagY = y - R - 28;
+  const tagW = tw + px * 2, tagH = 22;
+
+  ctx.fillStyle = isMe ? 'rgba(15,17,23,0.92)' : 'rgba(15,17,23,0.78)';
+  drawRoundRect(ctx, tagX, tagY, tagW, tagH, 6);
+  ctx.fill();
+
+  if (isSpeaking && !isMuted) {
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = isMe ? '#ffffff' : '#cbd5e1';
+  ctx.fillText(fullTag, x, tagY + tagH - 6);
+
+  // Volume indicator for remote peers within earshot
+  if (!isMe && volumeGain > 0.05) {
+    const volPct = Math.round(volumeGain * 100);
+    ctx.font = '500 10px Inter, sans-serif';
+    ctx.fillStyle = '#10b981';
+    ctx.fillText(`🔊 ${volPct}%`, x, y + R + 15);
+  }
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const canvasRef   = useRef(null);
   const stateRef    = useRef({ x: 620, y: 390, keys: {}, moving: false });
-  const peersRef    = useRef({}); // { socketId: { x, y, username, avatarColor } }
+  const peersRef    = useRef({}); // { socketId: { x, y, username, avatarColor, isMuted } }
+  const peerVolumesRef = useRef({}); // peerId -> volume
   const rafRef      = useRef(null);
   const socketRef   = useRef(null);
   const lastEmitRef = useRef(0);
 
-  // Draw a single frame
+  // Audio & Mic States
+  const [micActive, setMicActive] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [inEarshotCount, setInEarshotCount] = useState(0);
+
   const offscreenRef = useRef(null);
 
+  // Render loop
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const s = stateRef.current;
 
-    // Blit static office
+    // 1. Static office layer
     ctx.drawImage(offscreenRef.current, 0, 0);
 
-    // Draw all remote peers (behind local avatar)
-    for (const peer of Object.values(peersRef.current)) {
-      drawAvatar(ctx, peer.x, peer.y, peer.avatarColor, peer.username, false, false);
+    // 2. Draw remote peers
+    for (const [peerId, peer] of Object.entries(peersRef.current)) {
+      const vol = peerVolumesRef.current[peerId] || 0;
+      drawAvatar(
+        ctx,
+        peer.x,
+        peer.y,
+        peer.avatarColor,
+        peer.username,
+        false,
+        false,
+        peer.isMuted ?? false,
+        false,
+        vol
+      );
     }
 
-    // Draw local avatar on top
-    drawAvatar(ctx, s.x, s.y, avatarColor, username, s.moving, true);
+    // 3. Draw local avatar on top
+    drawAvatar(ctx, s.x, s.y, avatarColor, username, s.moving, true, isMuted, isSpeaking, 1);
 
-    // HUD bottom-left
+    // 4. Movement guide bottom-left
     const userCount = Object.keys(peersRef.current).length + 1;
     ctx.fillStyle = 'rgba(15,17,23,0.75)';
-    drawRoundRect(ctx, 16, H - 50, 270, 34, 6); ctx.fill();
+    drawRoundRect(ctx, 16, H - 50, 270, 34, 6);
+    ctx.fill();
     ctx.font = '12px Inter, sans-serif';
-    ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'left';
     ctx.fillText('W A S D  /  ↑ ↓ ← →  to move', 26, H - 32);
     ctx.fillStyle = '#64748b';
     ctx.fillText(`👥 ${userCount} user${userCount !== 1 ? 's' : ''} in room`, 26, H - 18);
 
-    // Connection dot
+    // 5. Connection indicator bottom-right
     const connected = socketRef.current?.connected;
     ctx.beginPath(); ctx.arc(W - 24, H - 24, 7, 0, Math.PI * 2);
     ctx.fillStyle = connected ? '#22c55e' : '#ef4444'; ctx.fill();
     ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'right';
     ctx.fillStyle = connected ? '#86efac' : '#fca5a5';
     ctx.fillText(connected ? 'Connected' : 'Offline', W - 36, H - 20);
-  }, [username, avatarColor]);
+  }, [username, avatarColor, isMuted, isSpeaking]);
+
+  // Audio Control Handlers
+  const handleToggleMic = async () => {
+    spatialAudio.ensureContext();
+
+    if (!micActive) {
+      try {
+        await webrtc.startMicrophone();
+        setMicActive(true);
+        const newMuted = webrtc.toggleMute(ROOM_ID); // unmute on first mic activation
+        setIsMuted(newMuted);
+      } catch (err) {
+        alert('Microphone permission required for voice audio. Please allow microphone access in your browser settings.');
+      }
+    } else {
+      const newMuted = webrtc.toggleMute(ROOM_ID);
+      setIsMuted(newMuted);
+    }
+  };
+
+  const handleToggleDeafen = () => {
+    spatialAudio.ensureContext();
+    const nextDeafened = !isDeafened;
+    spatialAudio.setDeafened(nextDeafened);
+    setIsDeafened(nextDeafened);
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.focus();
+    if (canvas) canvas.focus();
 
-    // ── Build static offscreen ─────────────────────────────────────────────
+    // ── Pre-render static office ───────────────────────────────────────────
     const offscreen = document.createElement('canvas');
     offscreen.width = W; offscreen.height = H;
     drawOffice(offscreen.getContext('2d'));
@@ -334,7 +434,22 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     });
     socketRef.current = socket;
 
-    // Periodic client-side ping (every 2 mins) to keep Render service awake
+    // Initialize WebRTC signaling
+    webrtc.init(socket, {
+      onRemoteTrack: (peerId, stream) => {
+        spatialAudio.attachPeerStream(peerId, stream);
+      },
+      onMuteStatus: (peerId, peerIsMuted) => {
+        if (peersRef.current[peerId]) {
+          peersRef.current[peerId].isMuted = peerIsMuted;
+        }
+      },
+      onVoiceActivity: (speaking) => {
+        setIsSpeaking(speaking);
+      },
+    });
+
+    // Keep Render free tier awake
     const keepAliveTimer = setInterval(() => {
       if (SERVER_URL) {
         fetch(`${SERVER_URL}/health`).catch(() => {});
@@ -346,22 +461,36 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       socket.emit('join-room', { username, avatarColor, roomId: ROOM_ID });
     });
 
-    // Initial room state — populate all existing peers
+    // Populate existing peers and initiate WebRTC connections
     socket.on('room-state', ({ selfId, users }) => {
       peersRef.current = {};
       for (const u of users) {
         if (u.id !== selfId) {
-          peersRef.current[u.id] = { x: u.x, y: u.y, username: u.username, avatarColor: u.avatarColor };
+          peersRef.current[u.id] = {
+            x: u.x,
+            y: u.y,
+            username: u.username,
+            avatarColor: u.avatarColor,
+            isMuted: u.isMuted ?? false,
+          };
+          webrtc.connectToPeer(u.id);
         }
       }
     });
 
-    // New user joined
-    socket.on('user-joined', ({ id, username: uname, avatarColor: ucolor, x, y }) => {
-      peersRef.current[id] = { x, y, username: uname, avatarColor: ucolor };
+    // New peer joins
+    socket.on('user-joined', ({ id, username: uname, avatarColor: ucolor, x, y, isMuted: peerMuted }) => {
+      peersRef.current[id] = {
+        x,
+        y,
+        username: uname,
+        avatarColor: ucolor,
+        isMuted: peerMuted ?? false,
+      };
+      webrtc.connectToPeer(id);
     });
 
-    // Remote user moved — update their position instantly
+    // Peer moves
     socket.on('user-moved', ({ id, x, y }) => {
       if (peersRef.current[id]) {
         peersRef.current[id].x = x;
@@ -369,25 +498,39 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       }
     });
 
-    // User left
+    // Peer mute status changed
+    socket.on('user-mute-status', ({ id, isMuted: peerMuted }) => {
+      if (peersRef.current[id]) {
+        peersRef.current[id].isMuted = peerMuted;
+      }
+    });
+
+    // Peer leaves
     socket.on('user-left', ({ id }) => {
       delete peersRef.current[id];
+      delete peerVolumesRef.current[id];
+      webrtc.removePeer(id);
+      spatialAudio.removePeerStream(id);
     });
 
     socket.on('disconnect', () => {
       console.log('[Socket] disconnected');
     });
 
-    // ── Keyboard handlers ─────────────────────────────────────────────────
-    const onKeyDown = e => {
+    // Keyboard handlers
+    const onKeyDown = (e) => {
       stateRef.current.keys[e.key] = true;
-      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+        e.preventDefault();
+      }
     };
-    const onKeyUp = e => { stateRef.current.keys[e.key] = false; };
+    const onKeyUp = (e) => {
+      stateRef.current.keys[e.key] = false;
+    };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // ── Game loop ─────────────────────────────────────────────────────────
+    // ── 60 FPS Game & Spatial Audio Loop ──────────────────────────────────
     function tick() {
       const s = stateRef.current;
       const k = s.keys;
@@ -404,7 +547,12 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       if (dx && !collidesWithWall(s.x + dx, s.y, WALLS)) s.x += dx;
       if (dy && !collidesWithWall(s.x, s.y + dy, WALLS)) s.y += dy;
 
-      // Throttled emit: only emit if position changed and throttle window passed
+      // Update Web Audio distance attenuation based on current positions
+      const { inEarshotCount: currentInEarshot, peerVolumes } = spatialAudio.updatePositions(s, peersRef.current);
+      peerVolumesRef.current = peerVolumes;
+      setInEarshotCount(currentInEarshot);
+
+      // Throttled coordinate emit
       const now = Date.now();
       if ((s.x !== prevX || s.y !== prevY) && now - lastEmitRef.current >= MOVE_THROTTLE_MS) {
         socket.emit('move', { x: s.x, y: s.y, roomId: ROOM_ID });
@@ -423,32 +571,152 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       cancelAnimationFrame(rafRef.current);
       clearInterval(keepAliveTimer);
       socket.disconnect();
+      webrtc.closeAll();
+      spatialAudio.destroy();
     };
   }, [username, avatarColor, render]);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'12px', padding:'16px' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-        <span style={{ fontSize:'22px' }}>🎙️</span>
-        <h2 style={{ fontWeight:700, fontSize:'20px', color:'#f8fafc' }}>ProxiSpeak — Virtual Office</h2>
+      {/* Top Header */}
+      <div style={{ display:'flex', alignItems:'center', gap:'16px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+          <span style={{ fontSize:'24px' }}>🎙️</span>
+          <h2 style={{ fontWeight:700, fontSize:'20px', color:'#f8fafc', letterSpacing:'-0.02em' }}>
+            ProxiSpeak — Virtual Office
+          </h2>
+        </div>
         <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:'20px',
-          padding:'4px 14px', fontSize:'13px', color:'#64748b' }}>
-          Logged in as <span style={{ color: avatarColor, fontWeight: 600 }}>{username}</span>
+          padding:'5px 16px', fontSize:'13px', color:'#94a3b8', display:'flex', alignItems:'center', gap:'8px' }}>
+          <span>Logged in as</span>
+          <span style={{ color: avatarColor, fontWeight: 600 }}>{username}</span>
         </div>
       </div>
-      <canvas
-        ref={canvasRef}
-        width={W}
-        height={H}
-        tabIndex={0}
-        style={{
-          display:'block', borderRadius:'10px', outline:'none',
-          border:'2px solid #1e293b',
-          boxShadow:'0 24px 60px rgba(0,0,0,0.6)',
-          cursor:'none',
-          maxWidth:'100%',
-        }}
-      />
+
+      {/* Canvas Area with Floating HUD Controls */}
+      <div style={{ position: 'relative' }}>
+        <canvas
+          ref={canvasRef}
+          width={W}
+          height={H}
+          tabIndex={0}
+          style={{
+            display:'block',
+            borderRadius:'12px',
+            outline:'none',
+            border:'2px solid #1e293b',
+            boxShadow:'0 24px 60px rgba(0,0,0,0.6)',
+            cursor:'none',
+            maxWidth:'100%',
+          }}
+        />
+
+        {/* Floating Glassmorphic Audio Controls HUD */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            background: 'rgba(15, 23, 42, 0.88)',
+            backdropFilter: 'blur(12px)',
+            padding: '8px 18px',
+            borderRadius: '40px',
+            border: '1px solid rgba(51, 65, 85, 0.7)',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.45)',
+            zIndex: 10,
+          }}
+        >
+          {/* Microphone Toggle Button */}
+          <button
+            onClick={handleToggleMic}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '9px 18px',
+              borderRadius: '25px',
+              border: 'none',
+              background: !micActive
+                ? '#2563eb'
+                : isMuted
+                ? '#ef4444'
+                : '#10b981',
+              color: '#ffffff',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: isSpeaking && !isMuted ? '0 0 15px rgba(34, 197, 94, 0.6)' : 'none',
+            }}
+            title={!micActive ? 'Click to grant microphone access' : isMuted ? 'Click to Unmute' : 'Click to Mute'}
+          >
+            <span style={{ fontSize: '15px' }}>
+              {!micActive ? '🎙️' : isMuted ? '🔇' : (isSpeaking ? '🗣️' : '🎙️')}
+            </span>
+            <span>
+              {!micActive ? 'Enable Mic' : isMuted ? 'Muted' : (isSpeaking ? 'Speaking...' : 'Mic On')}
+            </span>
+          </button>
+
+          {/* Deafen Toggle Button */}
+          <button
+            onClick={handleToggleDeafen}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 16px',
+              borderRadius: '25px',
+              border: '1px solid #334155',
+              background: isDeafened ? '#ef4444' : '#1e293b',
+              color: '#ffffff',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            title={isDeafened ? 'Click to un-deafen' : 'Click to mute all incoming audio'}
+          >
+            <span>{isDeafened ? '🔕' : '🎧'}</span>
+            <span>{isDeafened ? 'Deafened' : 'Audio On'}</span>
+          </button>
+
+          {/* In-Earshot Proximity Counter */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              padding: '6px 14px',
+              borderRadius: '20px',
+              background: 'rgba(30, 41, 59, 0.7)',
+              fontSize: '12px',
+              color: '#cbd5e1',
+              border: '1px solid rgba(51, 65, 85, 0.5)',
+            }}
+          >
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: inEarshotCount > 0 ? '#10b981' : '#64748b',
+                boxShadow: inEarshotCount > 0 ? '0 0 8px #10b981' : 'none',
+              }}
+            />
+            <span>{inEarshotCount} in earshot</span>
+          </div>
+
+          {/* Proximity Distance Hint */}
+          <div style={{ fontSize: '11px', color: '#64748b', paddingLeft: '4px' }}>
+            🔊 Distance attenuation active
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
