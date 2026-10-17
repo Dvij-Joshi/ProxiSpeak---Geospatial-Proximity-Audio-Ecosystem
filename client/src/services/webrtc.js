@@ -17,12 +17,12 @@ class WebRTCManager {
     this.socket = null;
     this.localStream = null;
     this.peers = new Map(); // peerId -> RTCPeerConnection
-    this.isMuted = true; // start muted by default for privacy
+    this.iceCandidateQueues = new Map(); // peerId -> RTCIceCandidate[]
+    this.isMuted = true; // default to muted
     this.onRemoteTrackCallback = null;
     this.onMuteStatusCallback = null;
     this.onVoiceActivityCallback = null;
 
-    // Audio analyser for detecting local speaking activity
     this.audioContext = null;
     this.analyser = null;
     this.animFrame = null;
@@ -40,12 +40,18 @@ class WebRTCManager {
 
     this.socket.on('webrtc-offer', async ({ from, offer }) => {
       try {
+        console.log(`[WebRTC] Received offer from ${from}`);
         const pc = this.getOrCreatePeer(from, false);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+        // Flush any queued ICE candidates that arrived before remote description
+        await this.flushIceCandidateQueue(from, pc);
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
         this.socket.emit('webrtc-answer', { to: from, answer });
+        console.log(`[WebRTC] Sent answer to ${from}`);
       } catch (err) {
         console.error('[WebRTC] Error handling offer from', from, err);
       }
@@ -53,9 +59,11 @@ class WebRTCManager {
 
     this.socket.on('webrtc-answer', async ({ from, answer }) => {
       try {
+        console.log(`[WebRTC] Received answer from ${from}`);
         const pc = this.peers.get(from);
         if (pc) {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          await this.flushIceCandidateQueue(from, pc);
         }
       } catch (err) {
         console.error('[WebRTC] Error handling answer from', from, err);
@@ -66,10 +74,18 @@ class WebRTCManager {
       try {
         const pc = this.peers.get(from);
         if (pc && candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          if (!pc.remoteDescription || !pc.remoteDescription.type) {
+            // Queue candidate until remote description is set
+            if (!this.iceCandidateQueues.has(from)) {
+              this.iceCandidateQueues.set(from, []);
+            }
+            this.iceCandidateQueues.get(from).push(candidate);
+          } else {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          }
         }
       } catch (err) {
-        console.error('[WebRTC] Error adding ICE candidate from', from, err);
+        console.warn('[WebRTC] Error adding ICE candidate from', from, err.message);
       }
     });
 
@@ -80,8 +96,20 @@ class WebRTCManager {
     });
   }
 
+  async flushIceCandidateQueue(peerId, pc) {
+    const queue = this.iceCandidateQueues.get(peerId);
+    if (queue && queue.length > 0) {
+      for (const cand of queue) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch (_e) {}
+      }
+      this.iceCandidateQueues.delete(peerId);
+    }
+  }
+
   /**
-   * Requests microphone access from the user and initializes the audio stream.
+   * Requests microphone access and sends audio tracks to all peers.
    */
   async startMicrophone() {
     if (this.localStream) return this.localStream;
@@ -98,23 +126,31 @@ class WebRTCManager {
 
       this.localStream = stream;
 
-      // Apply initial mute setting
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = !this.isMuted;
       }
 
-      // Add local audio track to all existing peer connections
-      this.peers.forEach((pc) => {
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      // Attach audio track to all active peer connections
+      this.peers.forEach((pc, peerId) => {
+        const senders = pc.getSenders();
+        const audioSender = senders.find((s) => !s.track || s.track.kind === 'audio');
+
+        if (audioSender && audioTrack) {
+          audioSender.replaceTrack(audioTrack).catch((e) => {
+            console.warn('[WebRTC] replaceTrack error:', e);
+          });
+        } else if (audioTrack) {
+          pc.addTrack(audioTrack, stream);
+          this.initiateOffer(peerId, pc);
+        }
       });
 
       this.setupVoiceActivityDetection(stream);
-
-      console.log('[WebRTC] Microphone stream acquired successfully');
+      console.log('[WebRTC] Microphone stream active');
       return stream;
     } catch (err) {
-      console.warn('[WebRTC] Microphone access denied or unavailable:', err.message);
+      console.warn('[WebRTC] Microphone error:', err.message);
       throw err;
     }
   }
@@ -127,14 +163,24 @@ class WebRTCManager {
       return this.peers.get(peerId);
     }
 
+    console.log(`[WebRTC] Creating RTCPeerConnection for ${peerId} (initiator: ${isInitiator})`);
     const pc = new RTCPeerConnection(ICE_CONFIG);
     this.peers.set(peerId, pc);
 
-    // If microphone is already active, attach tracks
+    // Pre-create audio transceiver so SDP negotiates audio channel immediately
+    pc.addTransceiver('audio', { direction: 'sendrecv' });
+
+    // If local microphone already exists, attach track
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream);
-      });
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        const sender = pc.getSenders().find((s) => !s.track || s.track.kind === 'audio');
+        if (sender) {
+          sender.replaceTrack(audioTrack).catch(() => {});
+        } else {
+          pc.addTrack(audioTrack, this.localStream);
+        }
+      }
     }
 
     pc.onicecandidate = (event) => {
@@ -147,16 +193,19 @@ class WebRTCManager {
     };
 
     pc.ontrack = (event) => {
-      console.log(`[WebRTC] Received remote track from peer: ${peerId}`);
-      if (event.streams && event.streams[0] && this.onRemoteTrackCallback) {
-        this.onRemoteTrackCallback(peerId, event.streams[0]);
+      console.log(`[WebRTC] Received remote audio track from ${peerId}`);
+      const remoteStream =
+        event.streams && event.streams[0]
+          ? event.streams[0]
+          : new MediaStream([event.track]);
+
+      if (this.onRemoteTrackCallback) {
+        this.onRemoteTrackCallback(peerId, remoteStream);
       }
     };
 
-    pc.onconnectionstatechange = () => {
-      if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
-        console.log(`[WebRTC] Connection state ${pc.connectionState} for peer: ${peerId}`);
-      }
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[WebRTC] ICE state with ${peerId}: ${pc.iceConnectionState}`);
     };
 
     if (isInitiator) {
@@ -174,6 +223,7 @@ class WebRTCManager {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       this.socket.emit('webrtc-offer', { to: peerId, offer });
+      console.log(`[WebRTC] Sent offer to ${peerId}`);
     } catch (err) {
       console.error(`[WebRTC] Failed to create offer to ${peerId}:`, err);
     }
@@ -195,6 +245,7 @@ class WebRTCManager {
       pc.close();
       this.peers.delete(peerId);
     }
+    this.iceCandidateQueues.delete(peerId);
   }
 
   /**
@@ -210,7 +261,6 @@ class WebRTCManager {
       }
     }
 
-    // Broadcast updated mute state to everyone in the room
     if (this.socket) {
       this.socket.emit('user-mute-status', { isMuted: this.isMuted, roomId });
     }
@@ -219,7 +269,7 @@ class WebRTCManager {
   }
 
   /**
-   * Detects when user is speaking via Web Audio AnalyserNode.
+   * Detects speaking activity using AnalyserNode.
    */
   setupVoiceActivityDetection(stream) {
     try {
@@ -255,12 +305,12 @@ class WebRTCManager {
 
       checkVolume();
     } catch (e) {
-      console.warn('[WebRTC] Voice activity analyser not supported', e);
+      console.warn('[WebRTC] Voice activity detector initialization skipped:', e);
     }
   }
 
   /**
-   * Cleans up all media streams, connections, and audio nodes.
+   * Cleans up all media streams and peer connections.
    */
   closeAll() {
     if (this.animFrame) {
@@ -275,6 +325,7 @@ class WebRTCManager {
     }
     this.peers.forEach((pc) => pc.close());
     this.peers.clear();
+    this.iceCandidateQueues.clear();
   }
 }
 

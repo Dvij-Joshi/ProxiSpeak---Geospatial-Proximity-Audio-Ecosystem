@@ -1,11 +1,10 @@
 /**
  * Spatial Audio Engine for ProxiSpeak
- * Uses Web Audio API to dynamically adjust gain (volume) and stereo panning
- * based on the 2D Euclidean distance between the local avatar and remote avatars.
+ * Dynamically adjusts volume and stereo panning based on distance.
  */
 
 export const MIN_DISTANCE = 25;  // full volume when right next to each other (<=25px)
-export const MAX_DISTANCE = 130; // smooth fade to 0 silence at 130px (intimate walk-up radius)
+export const MAX_DISTANCE = 130; // smooth fade to 0 silence at 130px (walk-up radius)
 
 class SpatialAudioManager {
   constructor() {
@@ -15,51 +14,71 @@ class SpatialAudioManager {
   }
 
   /**
-   * Initializes or resumes the AudioContext (must be called after user interaction).
+   * Initializes or resumes the AudioContext (safe to call on any user gesture).
    */
   ensureContext() {
-    if (!this.audioCtx) {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      this.audioCtx = new AudioContextClass();
-    }
-    if (this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
+    try {
+      if (!this.audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.audioCtx = new AudioContextClass();
+      }
+      if (this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume();
+      }
+    } catch (e) {
+      console.warn('[SpatialAudio] Could not resume audio context:', e);
     }
     return this.audioCtx;
   }
 
   /**
-   * Attaches an incoming remote MediaStream to the Web Audio spatial pipeline.
-   * Pipeline: Source -> GainNode (distance) -> StereoPannerNode (left/right) -> Destination
+   * Attaches an incoming remote MediaStream to the audio pipeline.
+   * Uses both Web Audio API for spatial panning and a direct HTMLAudioElement
+   * with synchronized volume as a fallback to guarantee cross-browser playback.
    */
   attachPeerStream(peerId, mediaStream) {
+    console.log(`[SpatialAudio] Attaching stream for peer ${peerId}`);
     const ctx = this.ensureContext();
 
-    // Clean up any existing pipeline for this peer
     this.removePeerStream(peerId);
 
     try {
-      // Hidden audio element to ensure the stream stays active across browser engines
+      // 1. Direct HTMLAudioElement for guaranteed hardware playback
       const audioEl = document.createElement('audio');
       audioEl.srcObject = mediaStream;
-      audioEl.muted = true; // muted because Web Audio API handles the playback
       audioEl.autoplay = true;
-      audioEl.play().catch(() => {});
+      audioEl.volume = 0; // Starts silent until distance is calculated
+      audioEl.setAttribute('playsinline', 'true');
+      document.body.appendChild(audioEl);
 
-      const source = ctx.createMediaStreamSource(mediaStream);
-      const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0, ctx.currentTime); // start silent until distance is calculated
+      audioEl.play().catch((err) => {
+        console.warn(`[SpatialAudio] Autoplay pending user interaction for ${peerId}:`, err.message);
+      });
 
+      // 2. Web Audio API pipeline for stereo panning and filtering
+      let source = null;
+      let gainNode = null;
       let pannerNode = null;
-      if (typeof ctx.createStereoPanner === 'function') {
-        pannerNode = ctx.createStereoPanner();
-        pannerNode.pan.setValueAtTime(0, ctx.currentTime);
-        source.connect(gainNode);
-        gainNode.connect(pannerNode);
-        pannerNode.connect(ctx.destination);
-      } else {
-        source.connect(gainNode);
-        gainNode.connect(ctx.destination);
+
+      if (ctx) {
+        try {
+          source = ctx.createMediaStreamSource(mediaStream);
+          gainNode = ctx.createGain();
+          gainNode.gain.setValueAtTime(0, ctx.currentTime);
+
+          if (typeof ctx.createStereoPanner === 'function') {
+            pannerNode = ctx.createStereoPanner();
+            pannerNode.pan.setValueAtTime(0, ctx.currentTime);
+            source.connect(gainNode);
+            gainNode.connect(pannerNode);
+            pannerNode.connect(ctx.destination);
+          } else {
+            source.connect(gainNode);
+            gainNode.connect(ctx.destination);
+          }
+        } catch (webaudioErr) {
+          console.warn('[SpatialAudio] Web Audio node setup skipped, using native audio element:', webaudioErr.message);
+        }
       }
 
       this.peers.set(peerId, {
@@ -70,35 +89,28 @@ class SpatialAudioManager {
         audioEl,
       });
 
-      console.log(`[SpatialAudio] Attached stream for peer: ${peerId}`);
+      console.log(`[SpatialAudio] Successfully registered audio pipeline for ${peerId}`);
     } catch (err) {
       console.error(`[SpatialAudio] Failed to attach stream for ${peerId}:`, err);
     }
   }
 
   /**
-   * Updates volumes and panning for all connected peers based on current positions.
-   * @param {{ x: number, y: number }} localPos
-   * @param {Record<string, { x: number, y: number }>} peersMap
-   * @returns {{ inEarshotCount: number, peerVolumes: Record<string, number> }}
+   * Updates volumes and panning for all peers based on Euclidean distance.
    */
   updatePositions(localPos, peersMap) {
-    if (!this.audioCtx || !localPos) {
+    if (!localPos || !peersMap) {
       return { inEarshotCount: 0, peerVolumes: {} };
     }
 
     const ctx = this.audioCtx;
-    const now = ctx.currentTime;
+    const now = ctx ? ctx.currentTime : 0;
     let inEarshotCount = 0;
     const peerVolumes = {};
 
-    this.peers.forEach((peer, peerId) => {
-      const remotePos = peersMap[peerId];
-      if (!remotePos) {
-        peer.gainNode.gain.setTargetAtTime(0, now, 0.05);
-        peerVolumes[peerId] = 0;
-        return;
-      }
+    // Calculate geometric proximity for all peers in the room
+    Object.entries(peersMap).forEach(([peerId, remotePos]) => {
+      if (!remotePos) return;
 
       const dx = remotePos.x - localPos.x;
       const dy = remotePos.y - localPos.y;
@@ -111,25 +123,35 @@ class SpatialAudioManager {
         } else if (distance >= MAX_DISTANCE) {
           targetGain = 0.0;
         } else {
-          // Smooth linear falloff
-          targetGain = 1.0 - (distance - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE);
-          // Curve it slightly for natural sound perception (square root curve)
-          targetGain = Math.max(0, Math.min(1, Math.pow(targetGain, 1.2)));
+          // Smooth falloff
+          const ratio = (distance - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE);
+          targetGain = Math.max(0, Math.min(1, 1.0 - ratio));
         }
       }
 
-      // Smooth gain transition to avoid audio clicks
-      peer.gainNode.gain.setTargetAtTime(targetGain, now, 0.05);
       peerVolumes[peerId] = targetGain;
 
-      if (targetGain > 0.05) {
+      // Count anyone within MAX_DISTANCE as in earshot
+      if (distance < MAX_DISTANCE) {
         inEarshotCount++;
       }
 
-      // 3D Stereo panning based on relative horizontal coordinate
-      if (peer.pannerNode) {
-        const panValue = Math.max(-1, Math.min(1, dx / MAX_DISTANCE));
-        peer.pannerNode.pan.setTargetAtTime(panValue, now, 0.05);
+      // Update audio output
+      const peer = this.peers.get(peerId);
+      if (peer) {
+        // Update direct audio element volume
+        if (peer.audioEl) {
+          peer.audioEl.volume = Math.max(0, Math.min(1, targetGain));
+        }
+
+        // Update Web Audio API nodes if active
+        if (peer.gainNode && ctx) {
+          peer.gainNode.gain.setTargetAtTime(targetGain, now, 0.05);
+        }
+        if (peer.pannerNode && ctx) {
+          const panValue = Math.max(-1, Math.min(1, dx / MAX_DISTANCE));
+          peer.pannerNode.pan.setTargetAtTime(panValue, now, 0.05);
+        }
       }
     });
 
@@ -144,9 +166,9 @@ class SpatialAudioManager {
     if (!peer) return;
 
     try {
-      peer.gainNode.disconnect();
+      if (peer.gainNode) peer.gainNode.disconnect();
       if (peer.pannerNode) peer.pannerNode.disconnect();
-      peer.source.disconnect();
+      if (peer.source) peer.source.disconnect();
       if (peer.audioEl) {
         peer.audioEl.srcObject = null;
         peer.audioEl.remove();
@@ -164,14 +186,14 @@ class SpatialAudioManager {
    */
   setDeafened(deafened) {
     this.isDeafened = Boolean(deafened);
-    if (this.audioCtx) {
-      const now = this.audioCtx.currentTime;
-      this.peers.forEach((peer) => {
-        if (this.isDeafened) {
-          peer.gainNode.gain.setTargetAtTime(0, now, 0.05);
+    this.peers.forEach((peer) => {
+      if (this.isDeafened) {
+        if (peer.audioEl) peer.audioEl.volume = 0;
+        if (peer.gainNode && this.audioCtx) {
+          peer.gainNode.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.05);
         }
-      });
-    }
+      }
+    });
     return this.isDeafened;
   }
 

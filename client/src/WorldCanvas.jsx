@@ -456,12 +456,19 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       }
     }, 2 * 60 * 1000);
 
+    // Auto-resume AudioContext on first user click or keypress
+    const unlockAudio = () => {
+      spatialAudio.ensureContext();
+    };
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
       socket.emit('join-room', { username, avatarColor, roomId: ROOM_ID });
     });
 
-    // Populate existing peers and initiate WebRTC connections
+    // Populate existing peers and initiate WebRTC connections (new joiner initiates to existing peers)
     socket.on('room-state', ({ selfId, users }) => {
       peersRef.current = {};
       for (const u of users) {
@@ -478,7 +485,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       }
     });
 
-    // New peer joins
+    // Existing user gets notified of new peer (waits for new peer's offer to avoid collision)
     socket.on('user-joined', ({ id, username: uname, avatarColor: ucolor, x, y, isMuted: peerMuted }) => {
       peersRef.current[id] = {
         x,
@@ -487,7 +494,8 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
         avatarColor: ucolor,
         isMuted: peerMuted ?? false,
       };
-      webrtc.connectToPeer(id);
+      // Prepare peer connection in responder mode
+      webrtc.getOrCreatePeer(id, false);
     });
 
     // Peer moves
