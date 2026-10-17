@@ -225,7 +225,7 @@ function collidesWithWall(nx, ny, walls) {
 }
 
 // ─── Avatar drawing with Audio Visualizers ─────────────────────────────────────
-function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = false, isSpeaking = false, volumeGain = 0) {
+function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = false, isSpeaking = false, volumeGain = 0, voiceIntensity = 0) {
   // Proximity earshot ring (only drawn around local player)
   if (isMe) {
     ctx.beginPath();
@@ -256,17 +256,20 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
     ctx.fillStyle = color + '25'; ctx.fill();
   }
 
-  // Speaking sound waves (pulsing green indicator)
-  if (isSpeaking && !isMuted) {
+  // Speaking sound waves (pulsing green aura scaled by voice intensity)
+  if ((isSpeaking || voiceIntensity > 0.04) && !isMuted) {
+    const intensityFactor = Math.max(0.1, voiceIntensity);
+    const pulseRadius = R + 5 + intensityFactor * 16;
+
     ctx.beginPath();
-    ctx.arc(x, y, R + 7, 0, Math.PI * 2);
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 2.5;
+    ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(34, 197, 94, ${0.4 + intensityFactor * 0.6})`;
+    ctx.lineWidth = 2 + intensityFactor * 2.5;
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(x, y, R + 13, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(34, 197, 94, 0.45)';
+    ctx.arc(x, y, pulseRadius + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(34, 197, 94, ${0.2 + intensityFactor * 0.3})`;
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
@@ -287,34 +290,48 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
   ctx.beginPath(); ctx.arc(x - 4, y - 4, 4, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fill();
 
-  // Name tag with mic indicator
+  // Name tag with mic indicator and live equalizer bars
   ctx.font = '600 12px Inter, sans-serif';
   ctx.textAlign = 'center';
-  const micIcon = isMuted ? '🔇' : (isSpeaking ? '🗣️' : '🎙️');
+  const isActuallySpeaking = !isMuted && (isSpeaking || voiceIntensity > 0.04);
+  const micIcon = isMuted ? '🔇' : (isActuallySpeaking ? '🗣️' : '🎙️');
   const label = isMe ? `${username} (you)` : username;
   const fullTag = `${micIcon} ${label}`;
   const tw = ctx.measureText(fullTag).width;
-  const px = 8, tagX = x - tw / 2 - px, tagY = y - R - 28;
-  const tagW = tw + px * 2, tagH = 22;
+  const extraForEq = !isMuted ? 16 : 0;
+  const px = 8, tagX = x - (tw + extraForEq) / 2 - px, tagY = y - R - 28;
+  const tagW = tw + extraForEq + px * 2, tagH = 22;
 
   ctx.fillStyle = isMe ? 'rgba(15,17,23,0.92)' : 'rgba(15,17,23,0.78)';
   drawRoundRect(ctx, tagX, tagY, tagW, tagH, 6);
   ctx.fill();
 
-  if (isSpeaking && !isMuted) {
+  if (isActuallySpeaking) {
     ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
 
   ctx.fillStyle = isMe ? '#ffffff' : '#cbd5e1';
-  ctx.fillText(fullTag, x, tagY + tagH - 6);
+  ctx.fillText(fullTag, x - extraForEq / 2, tagY + tagH - 6);
+
+  // 3-bar voice intensity equalizer
+  if (!isMuted) {
+    const eqX = tagX + tagW - 18;
+    const eqCenterY = tagY + tagH / 2;
+    for (let b = 0; b < 3; b++) {
+      const thresh = (b + 1) * 0.2;
+      const barH = voiceIntensity >= thresh ? 5 + b * 2.5 : 2;
+      ctx.fillStyle = voiceIntensity >= thresh ? '#22c55e' : 'rgba(148, 163, 184, 0.35)';
+      ctx.fillRect(eqX + b * 4, eqCenterY - barH / 2, 2.5, barH);
+    }
+  }
 
   // Volume indicator for remote peers within earshot
   if (!isMe && volumeGain > 0.05) {
     const volPct = Math.round(volumeGain * 100);
     ctx.font = '500 10px Inter, sans-serif';
-    ctx.fillStyle = '#10b981';
+    ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
     ctx.fillText(`🔊 ${volPct}%`, x, y + R + 15);
   }
 }
@@ -325,6 +342,9 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const stateRef    = useRef({ x: 620, y: 390, keys: {}, moving: false });
   const peersRef    = useRef({}); // { socketId: { x, y, username, avatarColor, isMuted } }
   const peerVolumesRef = useRef({}); // peerId -> volume
+  const peerIntensitiesRef = useRef({}); // peerId -> voiceIntensity
+  const localIntensityRef = useRef(0);
+  const lastIntensityUpdateRef = useRef(0);
   const rafRef      = useRef(null);
   const socketRef   = useRef(null);
   const lastEmitRef = useRef(0);
@@ -334,6 +354,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const [isMuted, setIsMuted] = useState(true);
   const [isDeafened, setIsDeafened] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [localIntensityState, setLocalIntensityState] = useState(0);
   const [inEarshotCount, setInEarshotCount] = useState(0);
 
   const offscreenRef = useRef(null);
@@ -351,6 +372,8 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     // 2. Draw remote peers
     for (const [peerId, peer] of Object.entries(peersRef.current)) {
       const vol = peerVolumesRef.current[peerId] || 0;
+      const intensity = peerIntensitiesRef.current[peerId] || 0;
+      const peerSpeaking = intensity > 0.05;
       drawAvatar(
         ctx,
         peer.x,
@@ -360,13 +383,15 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
         false,
         false,
         peer.isMuted ?? false,
-        false,
-        vol
+        peerSpeaking,
+        vol,
+        intensity
       );
     }
 
-    // 3. Draw local avatar on top
-    drawAvatar(ctx, s.x, s.y, avatarColor, username, s.moving, true, isMuted, isSpeaking, 1);
+    // 3. Draw local avatar on top with live voice intensity
+    const myIntensity = localIntensityRef.current;
+    drawAvatar(ctx, s.x, s.y, avatarColor, username, s.moving, true, isMuted, isSpeaking, 1, myIntensity);
 
     // 4. Movement guide bottom-left
     const userCount = Object.keys(peersRef.current).length + 1;
@@ -556,12 +581,19 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       if (dy && !collidesWithWall(s.x, s.y + dy, WALLS)) s.y += dy;
 
       // Update Web Audio distance attenuation based on current positions
-      const { inEarshotCount: currentInEarshot, peerVolumes } = spatialAudio.updatePositions(s, peersRef.current);
+      const { inEarshotCount: currentInEarshot, peerVolumes, peerIntensities } = spatialAudio.updatePositions(s, peersRef.current);
       peerVolumesRef.current = peerVolumes;
+      peerIntensitiesRef.current = peerIntensities || {};
       setInEarshotCount(currentInEarshot);
 
-      // Throttled coordinate emit
+      const curLocalIntensity = webrtc.getLocalVoiceIntensity();
+      localIntensityRef.current = curLocalIntensity;
+
       const now = Date.now();
+      if (now - lastIntensityUpdateRef.current >= 60) {
+        setLocalIntensityState(curLocalIntensity);
+        lastIntensityUpdateRef.current = now;
+      }
       if ((s.x !== prevX || s.y !== prevY) && now - lastEmitRef.current >= MOVE_THROTTLE_MS) {
         socket.emit('move', { x: s.x, y: s.y, roomId: ROOM_ID });
         lastEmitRef.current = now;
@@ -669,6 +701,34 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
               {!micActive ? 'Enable Mic' : isMuted ? 'Muted' : (isSpeaking ? 'Speaking...' : 'Mic On')}
             </span>
           </button>
+
+          {/* Live Mic Voice Intensity Meter */}
+          {micActive && !isMuted && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                background: 'rgba(30, 41, 59, 0.8)',
+                border: '1px solid rgba(51, 65, 85, 0.6)',
+              }}
+              title="Live voice intensity level"
+            >
+              <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 700, letterSpacing: '0.05em' }}>VOICE</span>
+              <div style={{ width: '40px', height: '6px', background: '#1e293b', borderRadius: '3px', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    width: `${Math.round(localIntensityState * 100)}%`,
+                    height: '100%',
+                    background: localIntensityState > 0.6 ? '#f59e0b' : '#22c55e',
+                    transition: 'width 0.05s ease-out',
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Deafen Toggle Button */}
           <button

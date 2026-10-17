@@ -59,12 +59,17 @@ class SpatialAudioManager {
       let source = null;
       let gainNode = null;
       let pannerNode = null;
+      let analyser = null;
 
       if (ctx) {
         try {
           source = ctx.createMediaStreamSource(mediaStream);
           gainNode = ctx.createGain();
           gainNode.gain.setValueAtTime(0, ctx.currentTime);
+
+          analyser = ctx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
 
           if (typeof ctx.createStereoPanner === 'function') {
             pannerNode = ctx.createStereoPanner();
@@ -85,6 +90,7 @@ class SpatialAudioManager {
         source,
         gainNode,
         pannerNode,
+        analyser,
         stream: mediaStream,
         audioEl,
       });
@@ -107,6 +113,7 @@ class SpatialAudioManager {
     const now = ctx ? ctx.currentTime : 0;
     let inEarshotCount = 0;
     const peerVolumes = {};
+    const peerIntensities = {};
 
     // Calculate geometric proximity for all peers in the room
     Object.entries(peersMap).forEach(([peerId, remotePos]) => {
@@ -152,10 +159,24 @@ class SpatialAudioManager {
           const panValue = Math.max(-1, Math.min(1, dx / MAX_DISTANCE));
           peer.pannerNode.pan.setTargetAtTime(panValue, now, 0.05);
         }
+
+        // Measure live voice intensity from remote stream
+        if (peer.analyser) {
+          const data = new Uint8Array(peer.analyser.frequencyBinCount);
+          peer.analyser.getByteFrequencyData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i++) sum += data[i];
+          const avg = sum / data.length;
+          peerIntensities[peerId] = Math.min(1, Math.max(0, avg / 70));
+        } else {
+          peerIntensities[peerId] = 0;
+        }
+      } else {
+        peerIntensities[peerId] = 0;
       }
     });
 
-    return { inEarshotCount, peerVolumes };
+    return { inEarshotCount, peerVolumes, peerIntensities };
   }
 
   /**
