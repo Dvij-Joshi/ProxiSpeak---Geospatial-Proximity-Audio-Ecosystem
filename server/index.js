@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
 
       // In-memory state
       const roomUsers = getRoomUsers(roomId);
-      roomUsers.set(socket.id, { username, avatarColor, x: spawnX, y: spawnY });
+      roomUsers.set(socket.id, { username, avatarColor, x: spawnX, y: spawnY, isMuted: false });
 
       socket.join(roomId);
       socket.data.roomId  = roomId;
@@ -86,6 +86,7 @@ io.on('connection', (socket) => {
           avatarColor: u.avatarColor,
           x: u.x,
           y: u.y,
+          isMuted:     u.isMuted ?? false,
         })),
       });
 
@@ -96,6 +97,7 @@ io.on('connection', (socket) => {
         avatarColor,
         x: spawnX,
         y: spawnY,
+        isMuted: false,
       });
 
       console.log(`[Room] "${username}" joined "${roomId}" | online: ${roomUsers.size}`);
@@ -140,6 +142,29 @@ io.on('connection', (socket) => {
         lastSeen: new Date(),
       }
     ).catch(err => console.error('[DB move]', err.message));
+  });
+
+  // ── WebRTC Signaling Relay ──────────────────────────────────────────────────
+  socket.on('webrtc-offer', ({ to, offer }) => {
+    io.to(to).emit('webrtc-offer', { from: socket.id, offer });
+  });
+
+  socket.on('webrtc-answer', ({ to, answer }) => {
+    io.to(to).emit('webrtc-answer', { from: socket.id, answer });
+  });
+
+  socket.on('webrtc-ice-candidate', ({ to, candidate }) => {
+    io.to(to).emit('webrtc-ice-candidate', { from: socket.id, candidate });
+  });
+
+  // ── Microphone Mute Status ──────────────────────────────────────────────────
+  socket.on('user-mute-status', ({ isMuted, roomId = 'main-office' }) => {
+    const roomUsers = getRoomUsers(roomId);
+    const user = roomUsers.get(socket.id);
+    if (user) {
+      user.isMuted = isMuted;
+    }
+    socket.to(roomId).emit('user-mute-status', { id: socket.id, isMuted });
   });
 
   // ── disconnect ──────────────────────────────────────────────────────────────

@@ -55,3 +55,7 @@ data/db/
 
 # Redis dump
 dump.rdb
+
+# Agents
+.agents/
+skills-lock.json
