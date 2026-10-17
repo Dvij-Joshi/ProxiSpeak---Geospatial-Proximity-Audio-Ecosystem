@@ -1,6 +1,6 @@
 # ProxiSpeak — Feature Roadmap
 
-> Last updated after mid-project review — October 13, 2025
+> Last updated after multiplayer sync milestone — October 2025
 
 This roadmap captures all features discussed and tentatively agreed upon by the team. Items marked **In Scope** will be built within the 4-week project timeline. Items marked **Post-MVP** are stretch goals for v2.0.
 
@@ -17,8 +17,9 @@ These were part of the original project spec and are actively being built.
 | WebRTC P2P audio | Direct browser-to-browser audio via signaling server | ✅ Done |
 | Dynamic volume attenuation | Gain drops linearly with distance | 🔨 In Progress |
 | Stereo panning | Left/right ear placement based on avatar position | 🔨 In Progress |
-| Room persistence | Save office layouts and furniture to MongoDB | 📋 Planned |
+| Room persistence | Save office layouts and furniture to MongoDB | 🔨 In Progress |
 | 60 FPS canvas rendering | Delta-time smoothed `requestAnimationFrame` loop | ✅ Done |
+| Multiplayer real-time sync | Socket.io multi-user canvas with MongoDB Atlas | ✅ Done |
 
 ---
 
@@ -130,7 +131,7 @@ AI-generated context cards for late-joining conversation participants.
 
 | Category | Count |
 |---|---|
-| Core features (in progress) | 7 |
+| Core features (in progress) | 8 |
 | Tentative new features (in scope) | 5 |
 | AI-powered features (post-MVP) | 2 |
-| **Total** | **14** |
+| **Total** | **15** |
