@@ -160,14 +160,16 @@ class SpatialAudioManager {
           peer.pannerNode.pan.setTargetAtTime(panValue, now, 0.05);
         }
 
-        // Measure live voice intensity from remote stream
+        // Measure live voice intensity from remote stream using time-domain amplitude
         if (peer.analyser) {
-          const data = new Uint8Array(peer.analyser.frequencyBinCount);
-          peer.analyser.getByteFrequencyData(data);
+          const data = new Uint8Array(peer.analyser.fftSize);
+          peer.analyser.getByteTimeDomainData(data);
           let sum = 0;
-          for (let i = 0; i < data.length; i++) sum += data[i];
+          for (let i = 0; i < data.length; i++) sum += Math.abs(data[i] - 128);
           const avg = sum / data.length;
-          peerIntensities[peerId] = Math.min(1, Math.max(0, avg / 70));
+          const net = Math.max(0, avg - 1.2);
+          const normalized = Math.min(1, Math.max(0, net / 16));
+          peerIntensities[peerId] = Math.pow(normalized, 0.75);
         } else {
           peerIntensities[peerId] = 0;
         }

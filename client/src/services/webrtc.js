@@ -25,6 +25,8 @@ class WebRTCManager {
 
     this.audioContext = null;
     this.analyser = null;
+    this.sourceNode = null;
+    this.silenceGain = null;
     this.animFrame = null;
     this.isSpeaking = false;
   }
@@ -274,43 +276,56 @@ class WebRTCManager {
   setupVoiceActivityDetection(stream) {
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      this.audioContext = new AudioContextClass();
+      if (!this.audioContext || this.audioContext.state === 'closed') {
+        this.audioContext = new AudioContextClass();
+      }
 
-      // Force-resume — Chrome sometimes suspends AudioContext even during a user gesture
-      this.audioContext.resume().then(() => {
-        console.log('[WebRTC] AudioContext state after resume:', this.audioContext.state);
-      });
+      // Resume context if suspended
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().then(() => {
+          console.log('[WebRTC] AudioContext resumed, state:', this.audioContext.state);
+        });
+      }
 
-      const source = this.audioContext.createMediaStreamSource(stream);
+      // Keep persistent reference to avoid Chrome garbage collecting the source
+      this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 512;
       this.analyser.smoothingTimeConstant = 0.3;
-      source.connect(this.analyser);
 
-      console.log('[WebRTC] Analyser created, frequencyBinCount=', this.analyser.frequencyBinCount);
+      // Connect source to analyser
+      this.sourceNode.connect(this.analyser);
 
-      const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+      // Connect to zero-gain node -> destination to guarantee Chrome's audio engine
+      // pulls data continuously without outputting any feedback loop
+      this.silenceGain = this.audioContext.createGain();
+      this.silenceGain.gain.setValueAtTime(0, this.audioContext.currentTime);
+      this.analyser.connect(this.silenceGain);
+      this.silenceGain.connect(this.audioContext.destination);
+
+      console.log('[WebRTC] VAD pipeline initialized with persistent silent sink');
+
+      const dataArray = new Uint8Array(this.analyser.fftSize);
       let debugCount = 0;
 
       const checkVolume = () => {
         if (!this.analyser) return;
-        this.analyser.getByteFrequencyData(dataArray);
+        this.analyser.getByteTimeDomainData(dataArray);
 
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
+          sum += Math.abs(dataArray[i] - 128);
         }
-        const average = sum / dataArray.length;
+        const avg = sum / dataArray.length; // Deviation from baseline silence (128)
 
-        // Log first 60 frames to verify data is flowing
         if (debugCount < 60) {
           debugCount++;
           if (debugCount % 20 === 0) {
-            console.log(`[WebRTC] VAD avg=${average.toFixed(2)} ctx=${this.audioContext.state} muted=${this.isMuted}`);
+            console.log(`[WebRTC] VAD dev=${avg.toFixed(2)} ctx=${this.audioContext.state} muted=${this.isMuted}`);
           }
         }
 
-        const speaking = !this.isMuted && average > 10;
+        const speaking = !this.isMuted && avg > 3.0;
 
         if (speaking !== this.isSpeaking) {
           this.isSpeaking = speaking;
@@ -333,12 +348,18 @@ class WebRTCManager {
    */
   getLocalVoiceIntensity() {
     if (!this.analyser) return 0;
-    const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.getByteFrequencyData(dataArray);
+    const dataArray = new Uint8Array(this.analyser.fftSize);
+    this.analyser.getByteTimeDomainData(dataArray);
     let sum = 0;
-    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+    for (let i = 0; i < dataArray.length; i++) {
+      sum += Math.abs(dataArray[i] - 128);
+    }
     const avg = sum / dataArray.length;
-    return Math.min(1, Math.max(0, avg / 35));
+    // Ambient silence is ~0.5-1.5. Normal speech is 5-30.
+    const net = Math.max(0, avg - 1.2);
+    // Exponential curve for natural volume response
+    const normalized = Math.min(1, Math.max(0, net / 16));
+    return Math.pow(normalized, 0.75);
   }
 
   /**
@@ -347,9 +368,23 @@ class WebRTCManager {
   closeAll() {
     if (this.animFrame) {
       cancelAnimationFrame(this.animFrame);
+      this.animFrame = null;
+    }
+    if (this.silenceGain) {
+      try { this.silenceGain.disconnect(); } catch (_e) {}
+      this.silenceGain = null;
+    }
+    if (this.sourceNode) {
+      try { this.sourceNode.disconnect(); } catch (_e) {}
+      this.sourceNode = null;
+    }
+    if (this.analyser) {
+      try { this.analyser.disconnect(); } catch (_e) {}
+      this.analyser = null;
     }
     if (this.audioContext) {
       this.audioContext.close().catch(() => {});
+      this.audioContext = null;
     }
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
