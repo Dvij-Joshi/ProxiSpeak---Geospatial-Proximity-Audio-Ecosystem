@@ -113,7 +113,11 @@ class WebRTCManager {
   /**
    * Requests microphone access and sends audio tracks to all peers.
    */
-  async startMicrophone() {
+  async startMicrophone(sharedAudioContext = null) {
+    if (sharedAudioContext) {
+      this.audioContext = sharedAudioContext;
+    }
+
     if (this.localStream) return this.localStream;
 
     try {
@@ -134,17 +138,20 @@ class WebRTCManager {
         audioTrack.enabled = true;
       }
 
-      // Attach audio track to all active peer connections
+      // Attach audio track to all active peer connections and renegotiate
       this.peers.forEach((pc, peerId) => {
         const senders = pc.getSenders();
         const audioSender = senders.find((s) => !s.track || s.track.kind === 'audio');
 
         if (audioSender && audioTrack) {
-          audioSender.replaceTrack(audioTrack).catch((e) => {
+          audioSender.replaceTrack(audioTrack).then(() => {
+            console.log(`[WebRTC] Replaced track with mic for ${peerId}, initiating renegotiation offer`);
+            this.initiateOffer(peerId, pc);
+          }).catch((e) => {
             console.warn('[WebRTC] replaceTrack error:', e);
           });
         } else if (audioTrack) {
-          pc.addTrack(audioTrack, stream);
+          pc.addTrack(audioTrack, this.localStream);
           this.initiateOffer(peerId, pc);
         }
       });
@@ -170,20 +177,17 @@ class WebRTCManager {
     const pc = new RTCPeerConnection(ICE_CONFIG);
     this.peers.set(peerId, pc);
 
-    // Pre-create audio transceiver so SDP negotiates audio channel immediately
-    pc.addTransceiver('audio', { direction: 'sendrecv' });
-
-    // If local microphone already exists, attach track
+    // If local microphone already exists, attach track directly with stream ID
     if (this.localStream) {
       const audioTrack = this.localStream.getAudioTracks()[0];
       if (audioTrack) {
-        const sender = pc.getSenders().find((s) => !s.track || s.track.kind === 'audio');
-        if (sender) {
-          sender.replaceTrack(audioTrack).catch(() => {});
-        } else {
-          pc.addTrack(audioTrack, this.localStream);
-        }
+        pc.addTrack(audioTrack, this.localStream);
+      } else {
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
       }
+    } else {
+      // Pre-create audio transceiver so SDP negotiates audio channel immediately
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
     }
 
     pc.onicecandidate = (event) => {
@@ -196,7 +200,7 @@ class WebRTCManager {
     };
 
     pc.ontrack = (event) => {
-      console.log(`[WebRTC] Received remote audio track from ${peerId}`);
+      console.log(`[WebRTC] Received remote audio track from ${peerId}`, event);
       const remoteStream =
         event.streams && event.streams[0]
           ? event.streams[0]
@@ -223,6 +227,10 @@ class WebRTCManager {
    */
   async initiateOffer(peerId, pc) {
     try {
+      if (pc.signalingState !== 'stable') {
+        console.warn(`[WebRTC] Cannot initiate offer to ${peerId}, signalingState is ${pc.signalingState}`);
+        return;
+      }
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       this.socket.emit('webrtc-offer', { to: peerId, offer });
@@ -285,7 +293,18 @@ class WebRTCManager {
       if (this.audioContext.state === 'suspended') {
         this.audioContext.resume().then(() => {
           console.log('[WebRTC] AudioContext resumed, state:', this.audioContext.state);
-        });
+        }).catch(() => {});
+      }
+
+      // Disconnect existing nodes if re-initializing
+      if (this.sourceNode) {
+        try { this.sourceNode.disconnect(); } catch (_e) {}
+      }
+      if (this.analyser) {
+        try { this.analyser.disconnect(); } catch (_e) {}
+      }
+      if (this.silenceGain) {
+        try { this.silenceGain.disconnect(); } catch (_e) {}
       }
 
       // Keep persistent reference to avoid Chrome garbage collecting the source
@@ -294,17 +313,14 @@ class WebRTCManager {
       this.analyser.fftSize = 512;
       this.analyser.smoothingTimeConstant = 0.3;
 
-      // Connect source to analyser
-      this.sourceNode.connect(this.analyser);
-
-      // Connect to zero-gain node -> destination to guarantee Chrome's audio engine
-      // pulls data continuously without outputting any feedback loop
       this.silenceGain = this.audioContext.createGain();
       this.silenceGain.gain.setValueAtTime(0, this.audioContext.currentTime);
+
+      this.sourceNode.connect(this.analyser);
       this.analyser.connect(this.silenceGain);
       this.silenceGain.connect(this.audioContext.destination);
 
-      console.log('[WebRTC] VAD pipeline initialized with persistent silent sink');
+      console.log('[WebRTC] VAD pipeline connected, AudioContext state:', this.audioContext.state);
 
       const dataArray = new Uint8Array(this.analyser.fftSize);
       let debugCount = 0;
@@ -326,7 +342,7 @@ class WebRTCManager {
           }
         }
 
-        const speaking = !this.isMuted && avg > 3.0;
+        const speaking = !this.isMuted && avg > 1.5;
 
         if (speaking !== this.isSpeaking) {
           this.isSpeaking = speaking;
@@ -349,6 +365,11 @@ class WebRTCManager {
    */
   getLocalVoiceIntensity() {
     if (!this.analyser) return 0;
+
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+
     const dataArray = new Uint8Array(this.analyser.fftSize);
     this.analyser.getByteTimeDomainData(dataArray);
     let sum = 0;
@@ -356,11 +377,11 @@ class WebRTCManager {
       sum += Math.abs(dataArray[i] - 128);
     }
     const avg = sum / dataArray.length;
-    // Ambient silence is ~0.5-1.5. Normal speech is 5-30.
-    const net = Math.max(0, avg - 1.2);
-    // Exponential curve for natural volume response
-    const normalized = Math.min(1, Math.max(0, net / 16));
-    return Math.pow(normalized, 0.75);
+    // Ambient silence is ~0.1-0.4. Soft speech is 1.2-4. Normal speech is 5-25.
+    const net = Math.max(0, avg - 0.4);
+    // Smooth natural volume response
+    const normalized = Math.min(1, Math.max(0, net / 10));
+    return Math.pow(normalized, 0.7);
   }
 
   /**

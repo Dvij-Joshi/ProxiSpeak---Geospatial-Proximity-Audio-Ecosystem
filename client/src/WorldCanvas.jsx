@@ -434,16 +434,19 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
 
   // Audio Control Handlers
   const handleToggleMic = async () => {
-    spatialAudio.ensureContext();
+    const audioCtx = spatialAudio.ensureContext();
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
 
     if (!micActive) {
       try {
-        await webrtc.startMicrophone();
+        await webrtc.startMicrophone(audioCtx);
         setMicActive(true);
         isMutedRef.current = false;
         setIsMuted(false);
       } catch (err) {
-        alert('Microphone permission required for voice audio. Please allow microphone access in your browser settings.');
+        alert('Microphone permission required for voice audio: ' + (err.message || err));
       }
     } else {
       const newMuted = webrtc.toggleMute(ROOM_ID);
@@ -461,10 +464,16 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
 
   // ── Voice intensity polling (decoupled from RAF loop) ─────────────────
   useEffect(() => {
+    let lastLog = 0;
     const timer = setInterval(() => {
       const v = webrtc.getLocalVoiceIntensity();
       localIntensityRef.current = v;
       setLocalIntensityState(v);
+      const now = Date.now();
+      if (v > 0.05 && now - lastLog > 1500) {
+        console.log(`[Voice] Live voice intensity: ${(v * 100).toFixed(0)}%`);
+        lastLog = now;
+      }
     }, 50);
     return () => clearInterval(timer);
   }, []);
@@ -742,13 +751,16 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
               title="Live voice intensity level"
             >
               <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 700, letterSpacing: '0.05em' }}>VOICE</span>
-              <div style={{ width: '40px', height: '6px', background: '#1e293b', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: '60px', height: '8px', background: '#0f172a', borderRadius: '4px', overflow: 'hidden', padding: '1px', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
                 <div
                   style={{
                     width: `${Math.round(localIntensityState * 100)}%`,
+                    minWidth: localIntensityState > 0.02 ? '4px' : '0px',
                     height: '100%',
+                    borderRadius: '3px',
                     background: localIntensityState > 0.6 ? '#f59e0b' : '#22c55e',
-                    transition: 'width 0.05s ease-out',
+                    boxShadow: localIntensityState > 0.1 ? '0 0 8px rgba(34, 197, 94, 0.7)' : 'none',
+                    transition: 'width 0.04s ease-out',
                   }}
                 />
               </div>

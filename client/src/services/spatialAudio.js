@@ -110,6 +110,9 @@ class SpatialAudioManager {
     }
 
     const ctx = this.audioCtx;
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const now = ctx ? ctx.currentTime : 0;
     let inEarshotCount = 0;
     const peerVolumes = {};
@@ -146,9 +149,12 @@ class SpatialAudioManager {
       // Update audio output
       const peer = this.peers.get(peerId);
       if (peer) {
-        // Update direct audio element volume
+        // Update direct audio element volume & unpause if within earshot
         if (peer.audioEl) {
           peer.audioEl.volume = Math.max(0, Math.min(1, targetGain));
+          if (targetGain > 0.05 && peer.audioEl.paused) {
+            peer.audioEl.play().catch(() => {});
+          }
         }
 
         // Update Web Audio API nodes if active
@@ -167,9 +173,9 @@ class SpatialAudioManager {
           let sum = 0;
           for (let i = 0; i < data.length; i++) sum += Math.abs(data[i] - 128);
           const avg = sum / data.length;
-          const net = Math.max(0, avg - 1.2);
-          const normalized = Math.min(1, Math.max(0, net / 16));
-          peerIntensities[peerId] = Math.pow(normalized, 0.75);
+          const net = Math.max(0, avg - 0.4);
+          const normalized = Math.min(1, Math.max(0, net / 10));
+          peerIntensities[peerId] = Math.pow(normalized, 0.7);
         } else {
           peerIntensities[peerId] = 0;
         }
