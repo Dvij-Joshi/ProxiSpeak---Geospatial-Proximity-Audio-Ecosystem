@@ -9,6 +9,9 @@
   },
   "scripts": {
     "dev": "node --watch server/index.js",
+    "server": "node --watch server/index.js",
+    "client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
     "start": "node server/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

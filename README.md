@@ -146,18 +146,16 @@ cp .env.example .env
 # Edit .env with your MongoDB URI and other values
 ```
 
-### 3. Start the Backend
+### 3. Start the Backend (Root directory)
 ```bash
-cd server
 npm install
-npm run dev
+npm run server
 ```
 
 ### 4. Start the Frontend
 ```bash
-cd client
-npm install
-npm run dev
+npm run client
+# or: cd client && npm install && npm run dev
 ```
 
 ### 5. Open in Browser

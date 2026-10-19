@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { spatialAudio, MAX_DISTANCE } from './services/spatialAudio';
+import { spatialAudio, MAX_DISTANCE, DOORS, isDoorOpen, getRoomAt, playKnockSound } from './services/spatialAudio';
 import { webrtc } from './services/webrtc';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -10,10 +10,21 @@ const SPEED = 2.8;
 const R = 14; // avatar radius
 const ROOM_ID = 'main-office';
 
-// Local dev  → empty string, Vite proxy routes /socket.io → localhost:5000
-// Production on Vercel → fallback to deployed Render backend
+// Local dev & LAN → empty string, Vite proxy routes /socket.io → localhost:5000
+// Production on Vercel/cloud → fallback to deployed Render backend
+function isLocalHost(hostname) {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.startsWith('192.168.') ||
+    hostname.startsWith('10.') ||
+    hostname.startsWith('172.') ||
+    hostname.endsWith('.local')
+  );
+}
+
 const DEFAULT_SERVER_URL =
-  typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+  typeof window !== 'undefined' && !isLocalHost(window.location.hostname)
     ? 'https://proxispeak-server.onrender.com'
     : '';
 
@@ -114,14 +125,6 @@ const FURNITURE = [
   { type: 'plant', x: 1165, y: 490, r: 12 },
 ];
 
-const DOOR_ARCS = [
-  [276, 261, 40, -Math.PI / 2, 0],
-  [543, 228, 43, -Math.PI / 2, 0],
-  [863, 155, 70, 0, Math.PI / 2],
-  [240, 487, 56, Math.PI, Math.PI * 1.5],
-  [937, 570, 65, 0, Math.PI / 2],
-];
-
 // ─── Drawing helpers ──────────────────────────────────────────────────────────
 function drawPlant(ctx, x, y, r) {
   ctx.beginPath(); ctx.ellipse(x + 2, y + r + 2, r * 0.5, r * 0.25, 0, 0, Math.PI * 2);
@@ -207,25 +210,112 @@ function drawOffice(ctx) {
   for (const w of WALLS) ctx.fillRect(w.x, w.y, w.w, w.h);
   ctx.fillStyle = 'rgba(255,255,255,0.06)';
   for (const w of WALLS) ctx.fillRect(w.x, w.y, w.w, 1);
-  ctx.strokeStyle = 'rgba(100,140,200,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
-  for (const [cx, cy, rad, sa, ea] of DOOR_ARCS) {
-    ctx.beginPath(); ctx.arc(cx, cy, rad, sa, ea); ctx.stroke();
-  }
-  ctx.setLineDash([]);
 }
 
-// ─── Collision ────────────────────────────────────────────────────────────────
-function collidesWithWall(nx, ny, walls) {
+// ─── Dynamic Doors Drawing ───────────────────────────────────────────────────
+function drawDoors(ctx, doors = {}) {
+  for (const [key, door] of Object.entries(DOORS)) {
+    const isOpen = isDoorOpen(doors, key);
+    const [cx, cy, rad, sa, ea] = door.arc;
+    const wall = door.wall;
+
+    if (isOpen) {
+      // Draw open door swing radius arc (soft green dashed line)
+      ctx.save();
+      ctx.strokeStyle = 'rgba(34, 197, 94, 0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad, sa, ea);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw open door slab (swung open along sa)
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(sa);
+      ctx.fillStyle = '#92400e';
+      ctx.fillRect(0, -2.5, rad * 0.95, 5);
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, -2.5, rad * 0.95, 5);
+      // Brass hinge
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Open status badge text
+      ctx.font = '600 9px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      const midX = wall.x + wall.w / 2;
+      const midY = wall.y + wall.h / 2;
+      ctx.fillStyle = '#16a34a';
+      ctx.fillText('🔓 OPEN', midX, midY + (wall.h > wall.w ? 0 : -8));
+      ctx.restore();
+    } else {
+      // Draw closed door: solid wooden panel barrier
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+
+      // Wooden panel slab
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+
+      // Panel bevel
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+
+      // Golden door lock & handle
+      ctx.fillStyle = '#fbbf24';
+      const hx = wall.w > wall.h ? wall.x + wall.w * 0.72 : wall.x + wall.w / 2;
+      const hy = wall.h > wall.w ? wall.y + wall.h * 0.72 : wall.y + wall.h / 2;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Closed status badge
+      ctx.font = '600 9px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      const midX = wall.x + wall.w / 2;
+      const midY = wall.y + wall.h / 2;
+      ctx.fillStyle = '#ef4444';
+      ctx.fillText('🔒 CLOSED', midX, midY + (wall.h > wall.w ? 0 : -8));
+      ctx.restore();
+    }
+  }
+}
+
+// ─── Collision (Checking Walls + Closed Doors) ───────────────────────────────
+function collidesWithWall(nx, ny, walls, doors = {}) {
+  // 1. Regular office walls
   for (const w of walls) {
     const cx = Math.max(w.x, Math.min(nx, w.x + w.w));
     const cy = Math.max(w.y, Math.min(ny, w.y + w.h));
     if ((nx - cx) ** 2 + (ny - cy) ** 2 < R * R) return true;
   }
+
+  // 2. Closed doors act as solid physical barriers
+  for (const [key, d] of Object.entries(DOORS)) {
+    const isOpen = isDoorOpen(doors, key);
+    if (!isOpen && d.wall) {
+      const w = d.wall;
+      const cx = Math.max(w.x, Math.min(nx, w.x + w.w));
+      const cy = Math.max(w.y, Math.min(ny, w.y + w.h));
+      if ((nx - cx) ** 2 + (ny - cy) ** 2 < R * R) return true;
+    }
+  }
+
   return false;
 }
 
 // ─── Avatar drawing with Audio Visualizers ─────────────────────────────────────
-function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = false, isSpeaking = false, volumeGain = 0, voiceIntensity = 0) {
+function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = false, isSpeaking = false, volumeGain = 0, voiceIntensity = 0, acousticInfo = null) {
   // Proximity earshot ring (only drawn around local player)
   if (isMe) {
     ctx.beginPath();
@@ -327,12 +417,42 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
     }
   }
 
-  // Volume indicator for remote peers within earshot
-  if (!isMe && volumeGain > 0.05) {
-    const volPct = Math.round(volumeGain * 100);
+  // Volume & Acoustic Status Indicator
+  if (!isMe) {
     ctx.font = '500 10px Inter, sans-serif';
-    ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
-    ctx.fillText(`🔊 ${volPct}%`, x, y + R + 15);
+    ctx.textAlign = 'center';
+    if (acousticInfo) {
+      if (acousticInfo.status === 'blocked-wall' || acousticInfo.status === 'door-closed') {
+        ctx.fillStyle = '#ef4444';
+        const label = acousticInfo.status === 'door-closed' ? 'Closed Door' : 'Soundproof';
+        ctx.fillText(`🔒 ${acousticInfo.remoteRoom?.name || 'Room'} (${label})`, x, y + R + 15);
+      } else if (acousticInfo.status === 'in-room') {
+        const volPct = Math.round(volumeGain * 100);
+        ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
+        ctx.fillText(`🔊 ${volPct}% · ${acousticInfo.remoteRoom.name}`, x, y + R + 15);
+      } else if (acousticInfo.status === 'doorway') {
+        const volPct = Math.round(volumeGain * 100);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText(`🚪 Open Door 🔊 ${volPct}%`, x, y + R + 15);
+      } else if (acousticInfo.status === 'occluded') {
+        const volPct = Math.round(volumeGain * 100);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillText(`🧱 Muffled Wall 🔊 ${volPct}%`, x, y + R + 15);
+      } else if (volumeGain > 0.04) {
+        const volPct = Math.round(volumeGain * 100);
+        ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
+        ctx.fillText(`🔊 ${volPct}%`, x, y + R + 15);
+      }
+    } else if (volumeGain > 0.04) {
+      const volPct = Math.round(volumeGain * 100);
+      ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
+      ctx.fillText(`🔊 ${volPct}%`, x, y + R + 15);
+    }
+  } else if (isMe && acousticInfo?.localRoom) {
+    ctx.font = '500 10px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = acousticInfo.localRoom.isIsolated ? '#38bdf8' : '#94a3b8';
+    ctx.fillText(`📍 ${acousticInfo.localRoom.name}`, x, y + R + 15);
   }
 }
 
@@ -343,10 +463,42 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const peersRef    = useRef({}); // { socketId: { x, y, username, avatarColor, isMuted } }
   const peerVolumesRef = useRef({}); // peerId -> volume
   const peerIntensitiesRef = useRef({}); // peerId -> voiceIntensity
+  const peerAcousticsRef = useRef({}); // peerId -> acousticInfo
+  const localRoomRef = useRef({ name: 'Open Workspace', isIsolated: false });
   const localIntensityRef = useRef(0);
   const rafRef      = useRef(null);
   const socketRef   = useRef(null);
   const lastEmitRef = useRef(0);
+
+  // Door States & Toast Notifications (All rooms start open and accessible for first-time access)
+  const [doors, setDoors] = useState({
+    'meeting-room': { isOpen: true, accessed: false, changedBy: 'System' },
+    'manager-office': { isOpen: true, accessed: false, changedBy: 'System' },
+    'tech-server': { isOpen: true, accessed: false, changedBy: 'System' },
+    'lounge-break': { isOpen: true, accessed: false, changedBy: 'System' },
+    'print-copy': { isOpen: true, accessed: false, changedBy: 'System' },
+  });
+  const doorsRef = useRef(doors);
+  const [nearbyDoor, setNearbyDoor] = useState(null);
+  const nearbyDoorRef = useRef(null);
+  const [doorToast, setDoorToast] = useState(null);
+  const doorToastTimerRef = useRef(null);
+
+  // Knock-to-Enter State
+  const [pendingKnockRequests, setPendingKnockRequests] = useState([]); // [{ visitorId, visitorName, doorKey, timestamp }]
+  const [myKnockStatus, setMyKnockStatus] = useState(null); // { doorKey, status: 'waiting' | 'welcomed' | 'declined', message }
+  const myKnockStatusRef = useRef(null);
+  myKnockStatusRef.current = myKnockStatus;
+  const [welcomedDoors, setWelcomedDoors] = useState({}); // doorKey -> boolean
+  const doorAutoCloseTimerRef = useRef(null);
+
+  const showToast = useCallback((msg, type = 'info') => {
+    if (doorToastTimerRef.current) clearTimeout(doorToastTimerRef.current);
+    setDoorToast({ msg, type, id: Date.now() });
+    doorToastTimerRef.current = setTimeout(() => {
+      setDoorToast(null);
+    }, 4500);
+  }, []);
 
   // Audio & Mic States
   const [micActive, setMicActive] = useState(false);
@@ -355,6 +507,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [localIntensityState, setLocalIntensityState] = useState(0);
   const [inEarshotCount, setInEarshotCount] = useState(0);
+  const [currentRoom, setCurrentRoom] = useState({ id: 'open-workspace', name: 'Open Workspace', isIsolated: false });
 
   const isMutedRef = useRef(true);
   const isSpeakingRef = useRef(false);
@@ -373,10 +526,14 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       ctx.drawImage(offscreenRef.current, 0, 0);
     }
 
-    // 2. Draw remote peers
+    // 1b. Dynamic Doors layer
+    drawDoors(ctx, doorsRef.current);
+
+    // 2. Draw remote peers with acoustic occlusion information
     for (const [peerId, peer] of Object.entries(peersRef.current)) {
       const vol = peerVolumesRef.current[peerId] || 0;
       const intensity = peerIntensitiesRef.current[peerId] || 0;
+      const acoustic = peerAcousticsRef.current[peerId] || null;
       const peerSpeaking = intensity > 0.05;
       drawAvatar(
         ctx,
@@ -389,11 +546,12 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
         peer.isMuted ?? false,
         peerSpeaking,
         vol,
-        intensity
+        intensity,
+        acoustic
       );
     }
 
-    // 3. Draw local avatar on top with live voice intensity
+    // 3. Draw local avatar on top with live voice intensity & local room tag
     const myIntensity = localIntensityRef.current;
     drawAvatar(
       ctx,
@@ -406,7 +564,8 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       isMutedRef.current,
       isSpeakingRef.current,
       1,
-      myIntensity
+      myIntensity,
+      { localRoom: localRoomRef.current }
     );
 
     // 4. Movement guide bottom-left
@@ -465,10 +624,16 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   // ── Voice intensity polling (decoupled from RAF loop) ─────────────────
   useEffect(() => {
     let lastLog = 0;
+    let prevBucket = -1;
     const timer = setInterval(() => {
       const v = webrtc.getLocalVoiceIntensity();
       localIntensityRef.current = v;
-      setLocalIntensityState(v);
+      // Only re-render React HUD when intensity bucket changes (avoids 20 full re-renders/sec)
+      const bucket = Math.round(v * 20); // 5% step buckets
+      if (bucket !== prevBucket) {
+        prevBucket = bucket;
+        setLocalIntensityState(v);
+      }
       const now = Date.now();
       if (v > 0.05 && now - lastLog > 1500) {
         console.log(`[Voice] Live voice intensity: ${(v * 100).toFixed(0)}%`);
@@ -520,20 +685,38 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       }
     }, 2 * 60 * 1000);
 
-    // Auto-resume AudioContext on first user click or keypress
+    // Auto-resume AudioContext on user click or keypress
     const unlockAudio = () => {
       spatialAudio.ensureContext();
     };
-    window.addEventListener('click', unlockAudio, { once: true });
-    window.addEventListener('keydown', unlockAudio, { once: true });
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
 
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
-      socket.emit('join-room', { username, avatarColor, roomId: ROOM_ID });
+      socket.emit('join-room', { username, avatarColor, roomId: ROOM_ID, isMuted: true });
     });
 
     // Populate existing peers and initiate WebRTC connections (new joiner initiates to existing peers)
-    socket.on('room-state', ({ selfId, users }) => {
+    socket.on('room-state', ({ selfId, users, doors: initialDoors }) => {
+      if (initialDoors) {
+        setDoors((prev) => {
+          const next = { ...prev };
+          for (const [k, v] of Object.entries(initialDoors)) {
+            if (typeof v === 'boolean') {
+              next[k] = { isOpen: v, accessed: false, changedBy: 'System' };
+            } else if (v && typeof v === 'object') {
+              next[k] = {
+                isOpen: typeof v.isOpen === 'boolean' ? v.isOpen : true,
+                accessed: !!v.accessed,
+                changedBy: v.changedBy || 'System',
+              };
+            }
+          }
+          doorsRef.current = next;
+          return next;
+        });
+      }
       peersRef.current = {};
       for (const u of users) {
         if (u.id !== selfId) {
@@ -547,6 +730,85 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
           webrtc.connectToPeer(u.id);
         }
       }
+    });
+
+    // Door state changed (opened or closed by a member)
+    socket.on('door-state-changed', ({ doorKey, roomKey, isOpen, accessed, changedBy }) => {
+      const key = doorKey || roomKey;
+      if (!key) return;
+      setDoors((prev) => {
+        const next = {
+          ...prev,
+          [key]: {
+            isOpen: !!isOpen,
+            accessed: accessed !== false,
+            changedBy: changedBy || 'Member',
+          },
+        };
+        doorsRef.current = next;
+        return next;
+      });
+      const dName = DOORS[key]?.name || key;
+      showToast(`${isOpen ? '🚪' : '🔒'} ${changedBy || 'Member'} ${isOpen ? 'opened' : 'closed'} the ${dName} door!`, isOpen ? 'success' : 'warn');
+    });
+
+    // Audio chime broadcast when someone knocks on any door
+    socket.on('door-knocked', ({ doorKey, roomKey, targetRoomKey, knockedBy }) => {
+      const key = doorKey || roomKey || targetRoomKey;
+      if (!key) return;
+      const amIInside = localRoomRef.current?.id === key;
+      if (amIInside) {
+        playKnockSound();
+      }
+    });
+
+    // Received by room occupants when a visitor knocks on their door
+    socket.on('visitor-knocked', ({ doorKey, roomName, visitorId, visitorName, pendingKnocks }) => {
+      const amIInside = localRoomRef.current?.id === doorKey;
+      if (amIInside) {
+        playKnockSound();
+        setPendingKnockRequests(pendingKnocks || []);
+        showToast(`🔔 ${visitorName} is knocking at the ${roomName} door!`, 'alert');
+      }
+    });
+
+    // Updated list of pending knocks (when a visitor is approved, declined, or cancels)
+    socket.on('pending-knocks-updated', ({ doorKey, pendingKnocks }) => {
+      const amIInside = localRoomRef.current?.id === doorKey;
+      if (amIInside) {
+        setPendingKnockRequests(pendingKnocks || []);
+      }
+    });
+
+    // Received by visitor regarding their knock status
+    socket.on('knock-status', ({ doorKey, status, message }) => {
+      const dName = DOORS[doorKey]?.name || doorKey;
+      if (status === 'waiting') {
+        setMyKnockStatus({ doorKey, status: 'waiting', message });
+        showToast(`🔔 Waiting for occupants of ${dName} to welcome you...`, 'info');
+      } else if (status === 'room-empty') {
+        setMyKnockStatus(null);
+        showToast(`ℹ️ ${message}`, 'info');
+      }
+    });
+
+    // Received by visitor when an occupant welcomes them in
+    socket.on('visitor-welcomed', ({ doorKey, roomName, welcomedBy }) => {
+      setWelcomedDoors((prev) => ({ ...prev, [doorKey]: true }));
+      setMyKnockStatus({ doorKey, status: 'welcomed' });
+      showToast(`🎉 ${welcomedBy} welcomed you into ${roomName}! Step inside.`, 'success');
+    });
+
+    // Received by visitor when an occupant declines entry
+    socket.on('visitor-declined', ({ doorKey, roomName, declinedBy, reason }) => {
+      setMyKnockStatus({ doorKey, status: 'declined' });
+      showToast(`🔒 ${declinedBy} declined entry to ${roomName}: ${reason}`, 'alert');
+    });
+
+    // Received if an unauthorized action is denied by the server
+    socket.on('door-action-denied', ({ doorKey, reason }) => {
+      const dName = DOORS[doorKey]?.name || doorKey;
+      showToast(`🔒 ${dName}: ${reason}`, 'alert');
     });
 
     // Existing user gets notified of new peer (waits for new peer's offer to avoid collision)
@@ -616,14 +878,87 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       s.moving = dx !== 0 || dy !== 0;
 
       const prevX = s.x, prevY = s.y;
-      if (dx && !collidesWithWall(s.x + dx, s.y, WALLS)) s.x += dx;
-      if (dy && !collidesWithWall(s.x, s.y + dy, WALLS)) s.y += dy;
+      if (dx && !collidesWithWall(s.x + dx, s.y, WALLS, doorsRef.current)) s.x += dx;
+      if (dy && !collidesWithWall(s.x, s.y + dy, WALLS, doorsRef.current)) s.y += dy;
 
-      // Update Web Audio distance attenuation based on current positions
-      const { inEarshotCount: currentInEarshot, peerVolumes, peerIntensities } = spatialAudio.updatePositions(s, peersRef.current);
+      // Update Web Audio distance attenuation, room isolation & wall raycasting based on current positions
+      const { inEarshotCount: currentInEarshot, peerVolumes, peerIntensities, peerAcoustics, localRoom } =
+        spatialAudio.updatePositions(s, peersRef.current, doorsRef.current);
       peerVolumesRef.current = peerVolumes;
       peerIntensitiesRef.current = peerIntensities || {};
-      setInEarshotCount(currentInEarshot);
+      peerAcousticsRef.current = peerAcoustics || {};
+      setInEarshotCount((prev) => (prev !== currentInEarshot ? currentInEarshot : prev));
+      if (localRoom && localRoom.name !== localRoomRef.current?.name) {
+        const prevRoom = localRoomRef.current;
+        localRoomRef.current = localRoom;
+        setCurrentRoom(localRoom);
+
+        // If player stepped into a room that they knocked on or were welcomed into:
+        if (localRoom.id && DOORS[localRoom.id]) {
+          // If we had permission or knock status for this room, consume it
+          setWelcomedDoors((prev) => {
+            if (prev[localRoom.id]) {
+              const next = { ...prev };
+              delete next[localRoom.id];
+              return next;
+            }
+            return prev;
+          });
+          setMyKnockStatus((prev) => (prev?.doorKey === localRoom.id ? null : prev));
+
+          // Auto-close door after 3.5s when entering room to secure meeting privacy
+          if (doorAutoCloseTimerRef.current) clearTimeout(doorAutoCloseTimerRef.current);
+          const enteredRoomKey = localRoom.id;
+          doorAutoCloseTimerRef.current = setTimeout(() => {
+            if (localRoomRef.current?.id === enteredRoomKey && isDoorOpen(doorsRef.current, enteredRoomKey)) {
+              socketRef.current?.emit('toggle-door', {
+                roomId: ROOM_ID,
+                doorKey: enteredRoomKey,
+                isOpen: false,
+              });
+              showToast(`🔒 Door closed for private meeting. Visitors must knock to enter.`, 'info');
+            }
+          }, 3500);
+        }
+
+        // If player stepped out of a room, clear pending knocks for that room
+        if (prevRoom?.id && prevRoom.id !== localRoom.id) {
+          setPendingKnockRequests((prev) => prev.filter((r) => r.doorKey !== prevRoom.id));
+        }
+      }
+
+      // Check for nearby door proximity (within 95px of door midpoint)
+      let detectedNearbyDoor = null;
+      for (const [key, d] of Object.entries(DOORS)) {
+        if (d.wall) {
+          const dcx = d.wall.x + d.wall.w / 2;
+          const dcy = d.wall.y + d.wall.h / 2;
+          const dist = Math.hypot(s.x - dcx, s.y - dcy);
+          if (dist < 95) {
+            detectedNearbyDoor = key;
+            break;
+          }
+        }
+      }
+      if (detectedNearbyDoor !== nearbyDoorRef.current) {
+        nearbyDoorRef.current = detectedNearbyDoor;
+        setNearbyDoor(detectedNearbyDoor);
+      }
+
+      // Auto-cancel knock if visitor walked away (> 160px) from door
+      if (myKnockStatusRef.current?.status === 'waiting') {
+        const targetDoor = DOORS[myKnockStatusRef.current.doorKey];
+        if (targetDoor?.wall) {
+          const dcx = targetDoor.wall.x + targetDoor.wall.w / 2;
+          const dcy = targetDoor.wall.y + targetDoor.wall.h / 2;
+          const dist = Math.hypot(s.x - dcx, s.y - dcy);
+          if (dist > 160) {
+            socketRef.current?.emit('cancel-knock', { roomId: ROOM_ID, doorKey: myKnockStatusRef.current.doorKey });
+            setMyKnockStatus(null);
+            showToast('Knock cancelled because you walked away.', 'info');
+          }
+        }
+      }
 
       const now = Date.now();
       if ((s.x !== prevX || s.y !== prevY) && now - lastEmitRef.current >= MOVE_THROTTLE_MS) {
@@ -642,6 +977,8 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
       cancelAnimationFrame(rafRef.current);
       clearInterval(keepAliveTimer);
       socket.disconnect();
@@ -649,6 +986,86 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       spatialAudio.destroy();
     };
   }, [username, avatarColor]);
+
+  // ── Door Interaction Calculations ──────────────────────────────────────────
+  const currentRoomId = currentRoom?.id || localRoomRef.current?.id;
+  const roomDoorKey = currentRoomId && DOORS[currentRoomId] ? currentRoomId : null;
+  const isRoomDoorOpen = roomDoorKey ? isDoorOpen(doors, roomDoorKey) : false;
+
+  // Filter pending knocks specifically for the room where the local member is currently present
+  const currentRoomKnocks = (pendingKnockRequests || []).filter(
+    (k) => k.doorKey === currentRoomId
+  );
+
+  // Player is outside near a door (e.g. approaching meeting room, manager office, tech server)
+  const isOutsideNearbyDoor = Boolean(nearbyDoor && nearbyDoor !== roomDoorKey);
+  const isNearbyDoorOpen = nearbyDoor ? isDoorOpen(doors, nearbyDoor) : false;
+
+  // Count occupants inside the nearby door's room
+  let nearbyDoorOccupants = 0;
+  if (nearbyDoor) {
+    for (const peer of Object.values(peersRef.current)) {
+      const peerRoom = getRoomAt(peer.x, peer.y);
+      if (peerRoom?.id === nearbyDoor) {
+        nearbyDoorOccupants++;
+      }
+    }
+  }
+
+  const handleToggleDoor = (doorKey) => {
+    if (!doorKey) return;
+    const currentOpen = isDoorOpen(doorsRef.current, doorKey);
+    const nextOpen = !currentOpen;
+
+    socketRef.current?.emit('toggle-door', {
+      roomId: ROOM_ID,
+      doorKey,
+      isOpen: nextOpen,
+    });
+  };
+
+  const handleKnockDoor = (doorKey) => {
+    if (!doorKey) return;
+    socketRef.current?.emit('knock-door', {
+      roomId: ROOM_ID,
+      doorKey,
+    });
+    setMyKnockStatus({ doorKey, status: 'waiting' });
+    const dName = DOORS[doorKey]?.name || doorKey;
+    showToast(`🔔 You knocked on the ${dName} door! Waiting for occupants...`, 'info');
+  };
+
+  const handleCancelKnock = (doorKey) => {
+    if (!doorKey) return;
+    socketRef.current?.emit('cancel-knock', {
+      roomId: ROOM_ID,
+      doorKey,
+    });
+    setMyKnockStatus(null);
+    showToast('Knock cancelled.', 'info');
+  };
+
+  const handleWelcomeVisitor = (doorKey, visitorId) => {
+    if (!doorKey || !visitorId) return;
+    socketRef.current?.emit('welcome-visitor', {
+      roomId: ROOM_ID,
+      doorKey,
+      visitorId,
+    });
+    setPendingKnockRequests((prev) => prev.filter((r) => r.visitorId !== visitorId));
+    showToast('🚪 Welcomed visitor in! Door opened.', 'success');
+  };
+
+  const handleDeclineVisitor = (doorKey, visitorId) => {
+    if (!doorKey || !visitorId) return;
+    socketRef.current?.emit('decline-visitor', {
+      roomId: ROOM_ID,
+      doorKey,
+      visitorId,
+    });
+    setPendingKnockRequests((prev) => prev.filter((r) => r.visitorId !== visitorId));
+    showToast('🔒 Visitor entry request declined.', 'info');
+  };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'12px', padding:'16px' }}>
@@ -660,6 +1077,39 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
             ProxiSpeak — Virtual Office
           </h2>
         </div>
+
+        {/* Current Room Badge */}
+        <div style={{
+          background: currentRoom.isIsolated ? 'rgba(14, 165, 233, 0.15)' : '#1e293b',
+          border: currentRoom.isIsolated ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid #334155',
+          borderRadius: '20px',
+          padding: '5px 16px',
+          fontSize: '13px',
+          color: currentRoom.isIsolated ? '#7dd3fc' : '#94a3b8',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          transition: 'all 0.2s ease',
+        }}>
+          <span>{currentRoom.isIsolated ? '🔒' : '📍'}</span>
+          <span style={{ fontWeight: 600, color: currentRoom.isIsolated ? '#38bdf8' : '#f8fafc' }}>
+            {currentRoom.name}
+          </span>
+          {currentRoom.isIsolated && (
+            <span style={{
+              fontSize: '10px',
+              background: '#0284c7',
+              color: '#ffffff',
+              padding: '2px 7px',
+              borderRadius: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.04em'
+            }}>
+              SOUNDPROOF
+            </span>
+          )}
+        </div>
+
         <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:'20px',
           padding:'5px 16px', fontSize:'13px', color:'#94a3b8', display:'flex', alignItems:'center', gap:'8px' }}>
           <span>Logged in as</span>
@@ -669,6 +1119,146 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
 
       {/* Canvas Area with Floating HUD Controls */}
       <div style={{ position: 'relative' }}>
+        {/* Door Event Toast Banner */}
+        {doorToast && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '16px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background:
+                doorToast.type === 'alert'
+                  ? 'rgba(239, 68, 68, 0.95)'
+                  : doorToast.type === 'success'
+                  ? 'rgba(16, 185, 129, 0.95)'
+                  : doorToast.type === 'warn'
+                  ? 'rgba(245, 158, 11, 0.95)'
+                  : 'rgba(30, 41, 59, 0.95)',
+              color: '#ffffff',
+              padding: '8px 22px',
+              borderRadius: '25px',
+              fontWeight: 600,
+              fontSize: '13px',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              zIndex: 30,
+              pointerEvents: 'none',
+            }}
+          >
+            <span>{doorToast.msg}</span>
+          </div>
+        )}
+
+        {/* Interactive Knock-to-Enter Approval Modal (Only for Members Currently Inside the Room) */}
+        {currentRoomKnocks.length > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              top: doorToast ? '68px' : '16px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(15, 23, 42, 0.96)',
+              border: '2px solid #38bdf8',
+              borderRadius: '16px',
+              padding: '14px 22px',
+              color: '#ffffff',
+              boxShadow: '0 16px 36px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.35)',
+              backdropFilter: 'blur(16px)',
+              zIndex: 35,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '10px',
+              minWidth: '340px',
+              maxWidth: '480px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '20px' }}>🔔</span>
+              <span style={{ fontWeight: 700, fontSize: '14px', color: '#38bdf8' }}>
+                Visitor Knocking at Door ({currentRoomKnocks.length})
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+              {currentRoomKnocks.map((k) => (
+                <div
+                  key={k.visitorId}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    background: 'rgba(30, 41, 59, 0.85)',
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(51, 65, 85, 0.8)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '16px' }}>👤</span>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '13px', color: '#f8fafc' }}>
+                        {k.visitorName}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                        Requests permission to enter
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={() => handleWelcomeVisitor(k.doorKey, k.visitorId)}
+                      style={{
+                        padding: '6px 14px',
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '16px',
+                        fontWeight: 600,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        boxShadow: '0 0 10px rgba(16, 185, 129, 0.4)',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="Welcome visitor into the room and open the door"
+                    >
+                      <span>🚪</span>
+                      <span>Welcome In</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDeclineVisitor(k.doorKey, k.visitorId)}
+                      style={{
+                        padding: '6px 12px',
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        border: '1px solid rgba(239, 68, 68, 0.6)',
+                        color: '#fca5a5',
+                        borderRadius: '16px',
+                        fontWeight: 500,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="Decline entry (private meeting)"
+                    >
+                      <span>Decline</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <canvas
           ref={canvasRef}
           width={W}
@@ -790,6 +1380,241 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
             <span>{isDeafened ? 'Deafened' : 'Audio On'}</span>
           </button>
 
+          {/* Room Door Control for Members Present Inside Room */}
+          {roomDoorKey && (
+            <button
+              onClick={() => handleToggleDoor(roomDoorKey)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9px 18px',
+                borderRadius: '25px',
+                border: isRoomDoorOpen ? '1px solid #f59e0b' : '1px solid #10b981',
+                background: isRoomDoorOpen
+                  ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(180, 83, 9, 0.45))'
+                  : 'linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.45))',
+                color: '#ffffff',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: isRoomDoorOpen
+                  ? '0 0 12px rgba(245, 158, 11, 0.35)'
+                  : '0 0 16px rgba(16, 185, 129, 0.45)',
+              }}
+              title={
+                isRoomDoorOpen
+                  ? 'Close the door to make this room private and soundproof'
+                  : 'Open the door to welcome other members in'
+              }
+            >
+              <span style={{ fontSize: '15px' }}>{isRoomDoorOpen ? '🔒' : '🚪'}</span>
+              <span>
+                {isRoomDoorOpen
+                  ? `Close Door (${DOORS[roomDoorKey]?.name || 'Room'})`
+                  : `Open Door (${DOORS[roomDoorKey]?.name || 'Room'})`}
+              </span>
+            </button>
+          )}
+
+          {/* Door Controls for Members Approaching from Outside */}
+          {isOutsideNearbyDoor && (
+            <>
+              {/* Case 1: Room is EMPTY -> First member can open door directly (Rule 1) */}
+              {nearbyDoorOccupants === 0 && (
+                <button
+                  onClick={() => handleToggleDoor(nearbyDoor)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '9px 18px',
+                    borderRadius: '25px',
+                    border: isNearbyDoorOpen ? '1px solid #f59e0b' : '1px solid #10b981',
+                    background: isNearbyDoorOpen
+                      ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(180, 83, 9, 0.45))'
+                      : 'linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.45))',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: isNearbyDoorOpen
+                      ? '0 0 12px rgba(245, 158, 11, 0.35)'
+                      : '0 0 16px rgba(16, 185, 129, 0.45)',
+                  }}
+                  title={
+                    isNearbyDoorOpen
+                      ? `Close the empty ${DOORS[nearbyDoor]?.name || 'room'} door`
+                      : `Open the ${DOORS[nearbyDoor]?.name || 'room'} door to enter`
+                  }
+                >
+                  <span style={{ fontSize: '15px' }}>{isNearbyDoorOpen ? '🔒' : '🚪'}</span>
+                  <span>
+                    {isNearbyDoorOpen
+                      ? `Close Door (${DOORS[nearbyDoor]?.name || 'Room'})`
+                      : `Open Door (${DOORS[nearbyDoor]?.name || 'Room'})`}
+                  </span>
+                </button>
+              )}
+
+              {/* Case 2: Room is OCCUPIED -> Additional members MUST knock to enter (Rule 2) */}
+              {nearbyDoorOccupants > 0 && (
+                <>
+                  {/* If door is closed */}
+                  {!isNearbyDoorOpen && (
+                    <>
+                      {/* Sub-case 2a: Visitor has been welcomed by an inside occupant (Rule 5) */}
+                      {welcomedDoors[nearbyDoor] ? (
+                        <button
+                          onClick={() => handleToggleDoor(nearbyDoor)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '9px 18px',
+                            borderRadius: '25px',
+                            border: '1px solid #10b981',
+                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.55))',
+                            color: '#ffffff',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            boxShadow: '0 0 18px rgba(16, 185, 129, 0.6)',
+                          }}
+                          title="You were welcomed in! Click to open the door and enter"
+                        >
+                          <span style={{ fontSize: '15px' }}>🚪</span>
+                          <span>Enter Room (Welcomed In!)</span>
+                        </button>
+                      ) : myKnockStatus?.doorKey === nearbyDoor && myKnockStatus?.status === 'waiting' ? (
+                        /* Sub-case 2b: Visitor has knocked and is waiting for occupants */
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '8px 14px',
+                              borderRadius: '20px',
+                              background: 'rgba(245, 158, 11, 0.2)',
+                              border: '1px solid rgba(245, 158, 11, 0.5)',
+                              color: '#fbbf24',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <span>⏳</span>
+                            <span>Waiting for Occupants...</span>
+                          </div>
+                          <button
+                            onClick={() => handleCancelKnock(nearbyDoor)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '20px',
+                              border: '1px solid #64748b',
+                              background: 'rgba(30, 41, 59, 0.8)',
+                              color: '#94a3b8',
+                              fontSize: '11px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                            }}
+                            title="Cancel knocking"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : myKnockStatus?.doorKey === nearbyDoor && myKnockStatus?.status === 'declined' ? (
+                        /* Sub-case 2c: Visitor knock was declined */
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '8px 14px',
+                              borderRadius: '20px',
+                              background: 'rgba(239, 68, 68, 0.2)',
+                              border: '1px solid rgba(239, 68, 68, 0.5)',
+                              color: '#fca5a5',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <span>🔒</span>
+                            <span>Meeting Private (Declined)</span>
+                          </div>
+                          <button
+                            onClick={() => handleKnockDoor(nearbyDoor)}
+                            style={{
+                              padding: '8px 14px',
+                              borderRadius: '20px',
+                              border: '1px solid #38bdf8',
+                              background: 'rgba(14, 165, 233, 0.2)',
+                              color: '#38bdf8',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                            title="Knock again"
+                          >
+                            Knock Again
+                          </button>
+                        </div>
+                      ) : (
+                        /* Sub-case 2d: Default for occupied room: MUST KNOCK TO ENTER (Rule 2 & 6) */
+                        <button
+                          onClick={() => handleKnockDoor(nearbyDoor)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '9px 18px',
+                            borderRadius: '25px',
+                            border: '1px solid #38bdf8',
+                            background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(2, 132, 199, 0.55))',
+                            color: '#ffffff',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 0 16px rgba(56, 189, 248, 0.5)',
+                          }}
+                          title={`Room is occupied (${nearbyDoorOccupants} inside). Knock to request entry.`}
+                        >
+                          <span style={{ fontSize: '15px' }}>🔔</span>
+                          <span>Knock to Enter ({DOORS[nearbyDoor]?.name || 'Room'})</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {/* If door is open while room is occupied */}
+                  {isNearbyDoorOpen && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 16px',
+                        borderRadius: '20px',
+                        background: 'rgba(16, 185, 129, 0.2)',
+                        border: '1px solid rgba(16, 185, 129, 0.5)',
+                        color: '#6ee7b7',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span>🚪</span>
+                      <span>Door Open — Step Inside</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
           {/* In-Earshot Proximity Counter */}
           <div
             style={{
@@ -816,9 +1641,27 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
             <span>{inEarshotCount} in earshot</span>
           </div>
 
-          {/* Proximity Distance Hint */}
+          {/* Room Environment & Soundproof Indicator */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '20px',
+              background: currentRoom.isIsolated ? 'rgba(14, 165, 233, 0.2)' : 'rgba(30, 41, 59, 0.7)',
+              fontSize: '12px',
+              color: currentRoom.isIsolated ? '#7dd3fc' : '#cbd5e1',
+              border: currentRoom.isIsolated ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid rgba(51, 65, 85, 0.5)',
+            }}
+          >
+            <span>{currentRoom.isIsolated ? '🔒' : '📍'}</span>
+            <span>{currentRoom.name}</span>
+          </div>
+
+          {/* Proximity & Acoustic Hint */}
           <div style={{ fontSize: '11px', color: '#64748b', paddingLeft: '4px' }}>
-            🔊 Distance attenuation active
+            🔊 3D Acoustics & Wall Occlusion Active
           </div>
         </div>
       </div>

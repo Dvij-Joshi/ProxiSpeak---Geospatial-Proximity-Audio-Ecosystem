@@ -1,7 +1,7 @@
 /**
  * WebRTC Mesh Manager for ProxiSpeak
- * Handles peer connection lifecycle, STUN negotiation, microphone stream capture,
- * and live voice activity detection.
+ * Handles peer connection lifecycle, W3C Perfect Negotiation (glare-free),
+ * ICE candidate queuing, microphone capture, and live voice activity detection.
  */
 
 const ICE_CONFIG = {
@@ -17,8 +17,11 @@ class WebRTCManager {
     this.socket = null;
     this.localStream = null;
     this.peers = new Map(); // peerId -> RTCPeerConnection
+    this.peerMeta = new Map(); // peerId -> { isMakingOffer: boolean, isIgnoringOffer: boolean }
     this.iceCandidateQueues = new Map(); // peerId -> RTCIceCandidate[]
     this.isMuted = true; // default to muted
+    this.currentRoomId = 'main-office';
+
     this.onRemoteTrackCallback = null;
     this.onMuteStatusCallback = null;
     this.onVoiceActivityCallback = null;
@@ -29,6 +32,13 @@ class WebRTCManager {
     this.silenceGain = null;
     this.animFrame = null;
     this.isSpeaking = false;
+  }
+
+  getPeerMeta(peerId) {
+    if (!this.peerMeta.has(peerId)) {
+      this.peerMeta.set(peerId, { isMakingOffer: false, isIgnoringOffer: false });
+    }
+    return this.peerMeta.get(peerId);
   }
 
   /**
@@ -44,6 +54,23 @@ class WebRTCManager {
       try {
         console.log(`[WebRTC] Received offer from ${from}`);
         const pc = this.getOrCreatePeer(from, false);
+        const meta = this.getPeerMeta(from);
+
+        // Deterministic politeness: peer with lexicographically smaller socket ID yields
+        const isPolite = this.socket && this.socket.id > from;
+        const offerCollision = meta.isMakingOffer || pc.signalingState !== 'stable';
+
+        meta.isIgnoringOffer = !isPolite && offerCollision;
+        if (meta.isIgnoringOffer) {
+          console.warn(`[WebRTC] Glare detected with ${from}; impolite peer ignoring colliding offer`);
+          return;
+        }
+
+        if (offerCollision && isPolite) {
+          console.log(`[WebRTC] Glare detected with ${from}; polite peer rolling back local offer`);
+          await pc.setLocalDescription({ type: 'rollback' });
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
         // Flush any queued ICE candidates that arrived before remote description
@@ -64,8 +91,12 @@ class WebRTCManager {
         console.log(`[WebRTC] Received answer from ${from}`);
         const pc = this.peers.get(from);
         if (pc) {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          await this.flushIceCandidateQueue(from, pc);
+          if (pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            await this.flushIceCandidateQueue(from, pc);
+          } else {
+            console.warn(`[WebRTC] Ignoring answer from ${from} in state ${pc.signalingState}`);
+          }
         }
       } catch (err) {
         console.error('[WebRTC] Error handling answer from', from, err);
@@ -74,20 +105,23 @@ class WebRTCManager {
 
     this.socket.on('webrtc-ice-candidate', async ({ from, candidate }) => {
       try {
+        if (!candidate) return;
         const pc = this.peers.get(from);
-        if (pc && candidate) {
-          if (!pc.remoteDescription || !pc.remoteDescription.type) {
-            // Queue candidate until remote description is set
-            if (!this.iceCandidateQueues.has(from)) {
-              this.iceCandidateQueues.set(from, []);
-            }
-            this.iceCandidateQueues.get(from).push(candidate);
-          } else {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        if (!pc || !pc.remoteDescription || !pc.remoteDescription.type) {
+          // Queue candidate until peer connection and remote description exist
+          if (!this.iceCandidateQueues.has(from)) {
+            this.iceCandidateQueues.set(from, []);
           }
+          this.iceCandidateQueues.get(from).push(candidate);
+          return;
         }
+
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (err) {
-        console.warn('[WebRTC] Error adding ICE candidate from', from, err.message);
+        const meta = this.getPeerMeta(from);
+        if (!meta.isIgnoringOffer) {
+          console.warn('[WebRTC] Error adding ICE candidate from', from, err.message);
+        }
       }
     });
 
@@ -114,11 +148,21 @@ class WebRTCManager {
    * Requests microphone access and sends audio tracks to all peers.
    */
   async startMicrophone(sharedAudioContext = null) {
-    if (sharedAudioContext) {
+    if (sharedAudioContext && (!this.audioContext || this.audioContext.state === 'closed')) {
       this.audioContext = sharedAudioContext;
     }
 
-    if (this.localStream) return this.localStream;
+    if (this.localStream) {
+      this.isMuted = false;
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = true;
+      }
+      if (this.socket) {
+        this.socket.emit('user-mute-status', { isMuted: false, roomId: this.currentRoomId });
+      }
+      return this.localStream;
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -138,23 +182,35 @@ class WebRTCManager {
         audioTrack.enabled = true;
       }
 
-      // Attach audio track to all active peer connections and renegotiate
+      // Attach audio track to all active peer connections
       this.peers.forEach((pc, peerId) => {
-        const senders = pc.getSenders();
+        const senders = pc.getSenders ? pc.getSenders() : [];
         const audioSender = senders.find((s) => !s.track || s.track.kind === 'audio');
 
         if (audioSender && audioTrack) {
           audioSender.replaceTrack(audioTrack).then(() => {
-            console.log(`[WebRTC] Replaced track with mic for ${peerId}, initiating renegotiation offer`);
-            this.initiateOffer(peerId, pc);
+            console.log(`[WebRTC] Replaced track with mic for ${peerId}`);
           }).catch((e) => {
             console.warn('[WebRTC] replaceTrack error:', e);
           });
+
+          // Only initiate offer if transceiver was not already sendrecv
+          const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+          const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
+          if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
+            audioTransceiver.direction = 'sendrecv';
+            this.initiateOffer(peerId, pc);
+          }
         } else if (audioTrack) {
           pc.addTrack(audioTrack, this.localStream);
           this.initiateOffer(peerId, pc);
         }
       });
+
+      // Broadcast unmuted state to room
+      if (this.socket) {
+        this.socket.emit('user-mute-status', { isMuted: false, roomId: this.currentRoomId });
+      }
 
       this.setupVoiceActivityDetection(stream);
       console.log('[WebRTC] Microphone stream active');
@@ -209,6 +265,22 @@ class WebRTCManager {
       if (this.onRemoteTrackCallback) {
         this.onRemoteTrackCallback(peerId, remoteStream);
       }
+
+      // When track un-mutes in Chromium, re-trigger callback to ensure active audio pipeline
+      event.track.onunmute = () => {
+        console.log(`[WebRTC] Remote track unmuted for ${peerId}`);
+        if (this.onRemoteTrackCallback) {
+          this.onRemoteTrackCallback(peerId, remoteStream);
+        }
+      };
+
+      event.track.onmute = () => {
+        console.warn(`[WebRTC] Remote track muted by sender or network for ${peerId}`);
+      };
+
+      event.track.onended = () => {
+        console.warn(`[WebRTC] Remote track ended for ${peerId}`);
+      };
     };
 
     pc.oniceconnectionstatechange = () => {
@@ -226,17 +298,23 @@ class WebRTCManager {
    * Initiates an SDP offer to connect with a peer.
    */
   async initiateOffer(peerId, pc) {
+    const meta = this.getPeerMeta(peerId);
     try {
+      meta.isMakingOffer = true;
       if (pc.signalingState !== 'stable') {
         console.warn(`[WebRTC] Cannot initiate offer to ${peerId}, signalingState is ${pc.signalingState}`);
         return;
       }
       const offer = await pc.createOffer();
+      if (pc.signalingState !== 'stable') return;
+
       await pc.setLocalDescription(offer);
       this.socket.emit('webrtc-offer', { to: peerId, offer });
       console.log(`[WebRTC] Sent offer to ${peerId}`);
     } catch (err) {
       console.error(`[WebRTC] Failed to create offer to ${peerId}:`, err);
+    } finally {
+      meta.isMakingOffer = false;
     }
   }
 
@@ -256,6 +334,7 @@ class WebRTCManager {
       pc.close();
       this.peers.delete(peerId);
     }
+    this.peerMeta.delete(peerId);
     this.iceCandidateQueues.delete(peerId);
   }
 
@@ -264,6 +343,7 @@ class WebRTCManager {
    */
   toggleMute(roomId = 'main-office') {
     this.isMuted = !this.isMuted;
+    this.currentRoomId = roomId;
 
     if (this.localStream) {
       const audioTrack = this.localStream.getAudioTracks()[0];
@@ -307,7 +387,7 @@ class WebRTCManager {
         try { this.silenceGain.disconnect(); } catch (_e) {}
       }
 
-      // Keep persistent reference to avoid Chrome garbage collecting the source
+      // Keep persistent reference to avoid garbage collection
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 512;
@@ -323,7 +403,6 @@ class WebRTCManager {
       console.log('[WebRTC] VAD pipeline connected, AudioContext state:', this.audioContext.state);
 
       const dataArray = new Uint8Array(this.analyser.fftSize);
-      let debugCount = 0;
 
       const checkVolume = () => {
         if (!this.analyser) return;
@@ -334,13 +413,6 @@ class WebRTCManager {
           sum += Math.abs(dataArray[i] - 128);
         }
         const avg = sum / dataArray.length; // Deviation from baseline silence (128)
-
-        if (debugCount < 60) {
-          debugCount++;
-          if (debugCount % 20 === 0) {
-            console.log(`[WebRTC] VAD dev=${avg.toFixed(2)} ctx=${this.audioContext.state} muted=${this.isMuted}`);
-          }
-        }
 
         const speaking = !this.isMuted && avg > 1.5;
 
@@ -364,7 +436,7 @@ class WebRTCManager {
    * Returns current microphone voice intensity between 0 and 1.0.
    */
   getLocalVoiceIntensity() {
-    if (!this.analyser) return 0;
+    if (!this.analyser || this.isMuted) return 0;
 
     if (this.audioContext && this.audioContext.state === 'suspended') {
       this.audioContext.resume().catch(() => {});
@@ -379,7 +451,6 @@ class WebRTCManager {
     const avg = sum / dataArray.length;
     // Ambient silence is ~0.1-0.4. Soft speech is 1.2-4. Normal speech is 5-25.
     const net = Math.max(0, avg - 0.4);
-    // Smooth natural volume response
     const normalized = Math.min(1, Math.max(0, net / 10));
     return Math.pow(normalized, 0.7);
   }
@@ -404,16 +475,16 @@ class WebRTCManager {
       try { this.analyser.disconnect(); } catch (_e) {}
       this.analyser = null;
     }
-    if (this.audioContext) {
-      this.audioContext.close().catch(() => {});
-      this.audioContext = null;
-    }
+    // Do not close shared AudioContext, only release reference
+    this.audioContext = null;
+
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
     }
     this.peers.forEach((pc) => pc.close());
     this.peers.clear();
+    this.peerMeta.clear();
     this.iceCandidateQueues.clear();
   }
 }
