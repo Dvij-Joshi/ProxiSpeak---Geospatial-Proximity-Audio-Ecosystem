@@ -47,15 +47,18 @@ export default function App() {
           const data = await res.json();
           setUser(data.user);
           localStorage.setItem('proxispeak_user', JSON.stringify(data.user));
-        } else {
-          // Token expired or invalid
+        } else if (res.status === 401 || res.status === 403) {
+          // Token explicitly rejected or expired
           localStorage.removeItem('proxispeak_token');
           localStorage.removeItem('proxispeak_user');
           setUser(null);
+        } else {
+          // Temporary server error, 404 routing, or cold boot: keep cached user session
+          console.warn(`[Auth] /api/auth/me returned status ${res.status}. Retaining cached session.`);
         }
       })
       .catch((err) => {
-        console.warn('[Auth] Token check fallback to cached user:', err.message);
+        console.warn('[Auth] Token check network error, retaining cached session:', err.message);
       })
       .finally(() => {
         setAuthChecking(false);

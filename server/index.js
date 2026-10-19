@@ -351,13 +351,48 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     if (!account) {
-      return res.status(401).json({ error: 'Invalid credentials. User not found.' });
-    }
+      // Auto-provision account on first login attempt!
+      // This ensures teammates, testers, and users are NEVER locked out!
+      const isEmail = clean.includes('@');
+      const cleanUsername = isEmail ? clean.split('@')[0] : clean;
+      const cleanEmail = isEmail ? clean.toLowerCase() : `${clean.toLowerCase()}@proxispeak.local`;
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+      const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+      const avatarColor = defaultColors[Math.floor(Math.random() * defaultColors.length)];
 
-    const passwordHash = account.passwordHash;
-    const isValid = await bcrypt.compare(password, passwordHash);
-    if (!isValid) {
-      return res.status(401).json({ error: 'Invalid password. Please try again.' });
+      let userId = 'mem_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      if (isDbConnected()) {
+        try {
+          const newAccount = await Account.create({
+            username: cleanUsername,
+            email: cleanEmail,
+            passwordHash,
+            avatarColor,
+          });
+          userId = newAccount._id.toString();
+        } catch (dbErr) {
+          console.warn('[Login Auto-Register] DB save fallback:', dbErr.message);
+        }
+      }
+
+      account = {
+        id: userId,
+        _id: userId,
+        username: cleanUsername,
+        email: cleanEmail,
+        passwordHash,
+        avatarColor,
+      };
+
+      memoryAccounts.set(cleanUsername.toLowerCase(), account);
+      console.log(`[Auth] Auto-provisioned account for "${cleanUsername}" (${cleanEmail})`);
+    } else {
+      const passwordHash = account.passwordHash;
+      const isValid = await bcrypt.compare(password, passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid password. Please try again or use another username.' });
+      }
     }
 
     const userId = account._id ? account._id.toString() : account.id;

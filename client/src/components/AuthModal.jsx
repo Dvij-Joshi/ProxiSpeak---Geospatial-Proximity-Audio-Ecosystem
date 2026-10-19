@@ -10,6 +10,22 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handleGuestJoin = (e) => {
+    if (e) e.preventDefault();
+    const cleanName = username.trim() || 'Guest-' + Math.floor(1000 + Math.random() * 9000);
+    const guestUser = {
+      userId: 'guest-' + Math.random().toString(36).substring(2, 9),
+      username: cleanName,
+      email: `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '')}@guest.local`,
+      avatarColor: selectedColor || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+      isGuest: true,
+    };
+    const guestToken = 'guest-token-' + Date.now();
+    localStorage.setItem('proxispeak_token', guestToken);
+    localStorage.setItem('proxispeak_user', JSON.stringify(guestUser));
+    onAuthSuccess(guestUser);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -47,16 +63,32 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
             avatarColor: selectedColor,
           };
 
-      const res = await fetch(`${SERVER_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let res;
+      try {
+        res = await fetch(`${SERVER_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch (networkErr) {
+        console.warn('[AuthModal] Network error reaching', SERVER_URL, networkErr);
+        throw new Error(`Unable to reach server at ${SERVER_URL}. Check your network or click 'Quick Join as Guest' below.`);
+      }
 
-      const data = await res.json();
+      let data = {};
+      const responseText = await res.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch (_jsonErr) {
+        console.warn('[AuthModal] Non-JSON server response:', responseText.slice(0, 120));
+        if (!res.ok) {
+          throw new Error(`Server returned ${res.status} (${res.statusText || 'Service Temporarily Unavailable'}). Please try again or join as Guest.`);
+        }
+        throw new Error('Unexpected server response format.');
+      }
 
       if (!res.ok) {
-        throw new Error(data.error || 'Authentication failed. Please check your details.');
+        throw new Error(data.error || 'Authentication failed. Please check your credentials.');
       }
 
       // Persist auth token and user profile
@@ -181,7 +213,23 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
                 marginBottom: '16px',
               }}
             >
-              ⚠️ {error}
+              <div style={{ marginBottom: '6px' }}>⚠️ {error}</div>
+              <button
+                type="button"
+                onClick={handleGuestJoin}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#93c5fd',
+                  textDecoration: 'underline',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                👉 Or click here to enter immediately as Guest
+              </button>
             </div>
           )}
 
@@ -291,6 +339,11 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
                 boxSizing: 'border-box',
               }}
             />
+            {isLogin && (
+              <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#64748b' }}>
+                💡 Tip: If you don&apos;t have an account yet, one will be created automatically.
+              </p>
+            )}
           </div>
 
           {/* Avatar Color Picker (Registration only) */}
@@ -352,6 +405,56 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
             }}
           >
             {loading ? 'Please wait...' : isLogin ? 'Sign In →' : 'Create Account & Enter →'}
+          </button>
+
+          {/* Divider */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              margin: '16px 0',
+              color: '#64748b',
+              fontSize: '12px',
+            }}
+          >
+            <div style={{ flex: 1, height: '1px', background: '#334155' }} />
+            <span style={{ padding: '0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or</span>
+            <div style={{ flex: 1, height: '1px', background: '#334155' }} />
+          </div>
+
+          {/* Quick Join as Guest */}
+          <button
+            type="button"
+            onClick={handleGuestJoin}
+            style={{
+              width: '100%',
+              padding: '11px',
+              borderRadius: '8px',
+              border: '1px dashed #475569',
+              background: 'rgba(30, 41, 59, 0.4)',
+              color: '#94a3b8',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = '#60a5fa';
+              e.currentTarget.style.color = '#f8fafc';
+              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '#475569';
+              e.currentTarget.style.color = '#94a3b8';
+              e.currentTarget.style.background = 'rgba(30, 41, 59, 0.4)';
+            }}
+          >
+            <span>⚡</span>
+            <span>Quick Join as Guest (No Password Required)</span>
           </button>
         </form>
       </div>

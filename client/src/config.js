@@ -5,13 +5,32 @@ function resolveServerUrl() {
   if (import.meta.env.VITE_SERVER_URL) {
     return import.meta.env.VITE_SERVER_URL;
   }
-  // In the browser, check if we are developing locally
+  // In the browser, check if we are developing locally or on a local area network (LAN)
   if (typeof window !== 'undefined') {
-    const isLocal =
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1';
-    if (isLocal) {
-      return ''; // Vite proxy handles /api and /socket.io in local dev
+    const hostname = window.location.hostname;
+    const isLoopback = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isLAN =
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('172.16.') ||
+      hostname.startsWith('172.17.') ||
+      hostname.startsWith('172.18.') ||
+      hostname.startsWith('172.19.') ||
+      hostname.startsWith('172.2') ||
+      hostname.startsWith('172.3') ||
+      hostname.endsWith('.local');
+
+    if (isLoopback) {
+      // Vite dev server proxies /api and /socket.io to localhost:5000
+      if (window.location.port === '5173') {
+        return '';
+      }
+      return 'http://localhost:5000';
+    }
+
+    if (isLAN) {
+      // Connect to the local backend on the same host machine
+      return `http://${hostname}:5000`;
     }
   }
   // Default to deployed Render backend
