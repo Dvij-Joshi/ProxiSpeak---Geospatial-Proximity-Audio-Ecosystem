@@ -813,11 +813,32 @@ export default function WorldCanvas({
   const [currentRoom, setCurrentRoom] = useState({ id: 'open-workspace', name: 'Open Workspace', isIsolated: false });
   const [copiedLink, setCopiedLink] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(() => spatialAudio.isAudioUnlocked());
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagData, setDiagData] = useState(null);
 
   const isMutedRef = useRef(true);
   const isSpeakingRef = useRef(false);
   const renderRef = useRef(null);
   const offscreenRef = useRef(null);
+
+  const refreshDiagnostics = useCallback(() => {
+    const d = webrtc.getConnectionDiagnostics();
+    const audioCtxState = spatialAudio.audioCtx?.state || 'not initialized';
+    setDiagData({
+      ...d,
+      audioCtxState,
+      isAudioUnlocked: spatialAudio.isAudioUnlocked(),
+      isDeafened,
+      browserInfo: typeof navigator !== 'undefined' ? `${navigator.userAgent}` : 'Unknown',
+    });
+  }, [isDeafened]);
+
+  useEffect(() => {
+    if (!showDiagnostics) return;
+    refreshDiagnostics();
+    const timer = setInterval(refreshDiagnostics, 1000);
+    return () => clearInterval(timer);
+  }, [showDiagnostics, refreshDiagnostics]);
 
   // Copy invite link helper
   const handleCopyInviteLink = () => {
@@ -1017,6 +1038,13 @@ export default function WorldCanvas({
       onVoiceActivity: (speaking) => {
         isSpeakingRef.current = speaking;
         setIsSpeaking(speaking);
+      },
+      onMicLost: (reason) => {
+        console.warn('[WorldCanvas] Microphone lost:', reason);
+        setMicActive(false);
+        isMutedRef.current = true;
+        setIsMuted(true);
+        showToast(`⚠️ ${reason || 'Microphone disconnected.'} Click "Enable Mic" to reconnect.`, 'alert');
       },
     });
 
@@ -1768,6 +1796,169 @@ export default function WorldCanvas({
           }}
         />
 
+        {/* Connection Diagnostics Modal Overlay */}
+        {showDiagnostics && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              width: '320px',
+              maxHeight: '480px',
+              overflowY: 'auto',
+              background: 'rgba(15, 23, 42, 0.95)',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              borderRadius: '16px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.7)',
+              padding: '16px',
+              zIndex: 40,
+              color: '#e2e8f0',
+              fontSize: '12px',
+              fontFamily: 'Inter, monospace, sans-serif',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
+              <div style={{ fontWeight: 700, color: '#38bdf8', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>🛠️</span> Audio Diagnostics
+              </div>
+              <button
+                onClick={() => setShowDiagnostics(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                  padding: '2px 6px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>Microphone:</span>
+                <span style={{ fontWeight: 600, color: diagData?.hasMicrophone ? '#4ade80' : '#f87171' }}>
+                  {diagData?.hasMicrophone ? 'Active' : 'Not Connected'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>Track State:</span>
+                <span style={{ fontWeight: 600, color: diagData?.micTrackState === 'live' ? '#4ade80' : '#fbbf24' }}>
+                  {diagData?.micTrackState || 'none'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>Mute State:</span>
+                <span style={{ fontWeight: 600, color: diagData?.isMuted ? '#f87171' : '#4ade80' }}>
+                  {diagData?.isMuted ? 'Muted' : 'Unmuted'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>AudioContext:</span>
+                <span style={{ fontWeight: 600, color: diagData?.audioCtxState === 'running' ? '#4ade80' : '#fbbf24' }}>
+                  {diagData?.audioCtxState || 'unknown'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>Playback Unlocked:</span>
+                <span style={{ fontWeight: 600, color: diagData?.isAudioUnlocked ? '#4ade80' : '#f87171' }}>
+                  {diagData?.isAudioUnlocked ? 'Yes' : 'No (tap screen)'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#94a3b8' }}>Connected Peers:</span>
+                <span style={{ fontWeight: 600, color: (diagData?.peerCount || 0) > 0 ? '#38bdf8' : '#94a3b8' }}>
+                  {diagData?.peerCount || 0}
+                </span>
+              </div>
+
+              {/* Peer Connection Status List */}
+              {diagData?.peers && Object.keys(diagData.peers).length > 0 && (
+                <div style={{ marginTop: '6px', borderTop: '1px solid #1e293b', paddingTop: '6px' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Peer ICE States:</span>
+                  <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {Object.entries(diagData.peers).map(([pid, pinfo]) => (
+                      <div key={pid} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '5px 8px', borderRadius: '6px', fontSize: '11px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#cbd5e1' }}>Peer {pid.slice(0, 6)}:</span>
+                          <span style={{
+                            color: pinfo.iceState === 'connected' || pinfo.iceState === 'completed'
+                              ? '#4ade80'
+                              : pinfo.iceState === 'failed'
+                              ? '#f87171'
+                              : '#fbbf24',
+                            fontWeight: 600,
+                          }}>
+                            {pinfo.iceState}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '10px', marginTop: '2px' }}>
+                          <span>Signaling: {pinfo.signalingState}</span>
+                          <span>Sender: {pinfo.senderTrackState}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Action Recovery Buttons */}
+              <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <button
+                  onClick={() => {
+                    spatialAudio.resumeAll();
+                    setAudioUnlocked(true);
+                    refreshDiagnostics();
+                    showToast('🔊 Audio playback unlocked & resumed', 'success');
+                  }}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #38bdf8',
+                    background: 'rgba(14, 165, 233, 0.2)',
+                    color: '#38bdf8',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  🔊 Resume / Unlock Audio Playback
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const audioCtx = spatialAudio.ensureContext();
+                      await webrtc.startMicrophone(audioCtx);
+                      setMicActive(true);
+                      isMutedRef.current = false;
+                      setIsMuted(false);
+                      refreshDiagnostics();
+                      showToast('🎙️ Microphone re-acquired & tracks republished', 'success');
+                    } catch (e) {
+                      showToast(`❌ ${e.message}`, 'alert');
+                    }
+                  }}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #22c55e',
+                    background: 'rgba(34, 197, 94, 0.2)',
+                    color: '#86efac',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  🎙️ Reconnect Microphone
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Floating Glassmorphic Audio Controls HUD */}
         <div
           style={{
@@ -2132,6 +2323,32 @@ export default function WorldCanvas({
             />
             <span>{inEarshotCount} in earshot</span>
           </div>
+
+          {/* Connection Diagnostics Toggle */}
+          <button
+            onClick={() => {
+              refreshDiagnostics();
+              setShowDiagnostics((prev) => !prev);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 14px',
+              borderRadius: '25px',
+              border: showDiagnostics ? '1px solid #38bdf8' : '1px solid #334155',
+              background: showDiagnostics ? 'rgba(14, 165, 233, 0.25)' : 'rgba(30, 41, 59, 0.8)',
+              color: showDiagnostics ? '#38bdf8' : '#94a3b8',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            title="Audio & WebRTC Connection Diagnostics"
+          >
+            <span>🛠️</span>
+            <span>Diag</span>
+          </button>
 
           {/* End Call / Leave Room Button */}
           <button
