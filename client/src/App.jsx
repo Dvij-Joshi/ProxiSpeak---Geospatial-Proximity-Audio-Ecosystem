@@ -1,90 +1,169 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import AuthModal from './components/AuthModal';
+import MeetingLobby from './components/MeetingLobby';
 import WorldCanvas from './WorldCanvas';
-
-const AVATAR_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+import { SERVER_URL } from './config';
 
 export default function App() {
-  const [profile, setProfile] = useState(null);
-  const [name, setName] = useState('');
-  const [colorIdx, setColorIdx] = useState(0);
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [currentRoom, setCurrentRoom] = useState(null);
+  const [inviteRoomId, setInviteRoomId] = useState(null);
 
-  if (profile) {
-    return <WorldCanvas username={profile.name} avatarColor={profile.color} />;
+  // Check URL query parameters (?room=roomId)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if (roomParam && roomParam.trim()) {
+        setInviteRoomId(roomParam.trim());
+      }
+    } catch (_e) {}
+  }, []);
+
+  // Validate existing JWT session on boot
+  useEffect(() => {
+    const token = localStorage.getItem('proxispeak_token');
+    const cachedUser = localStorage.getItem('proxispeak_user');
+
+    if (!token) {
+      setAuthChecking(false);
+      return;
+    }
+
+    // Quick restore from cache so UI does not flicker
+    if (cachedUser) {
+      try {
+        setUser(JSON.parse(cachedUser));
+      } catch (_e) {}
+    }
+
+    // Verify token with backend
+    fetch(`${SERVER_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+          localStorage.setItem('proxispeak_user', JSON.stringify(data.user));
+        } else {
+          // Token expired or invalid
+          localStorage.removeItem('proxispeak_token');
+          localStorage.removeItem('proxispeak_user');
+          setUser(null);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Auth] Token check fallback to cached user:', err.message);
+      })
+      .finally(() => {
+        setAuthChecking(false);
+      });
+  }, []);
+
+  // If user is authenticated and there is an invite room in the URL, auto-join it
+  useEffect(() => {
+    if (user && inviteRoomId && !currentRoom) {
+      // Lookup room details from API to get the correct name & theme
+      fetch(`${SERVER_URL}/api/rooms/${encodeURIComponent(inviteRoomId)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((roomData) => {
+          if (roomData) {
+            setCurrentRoom(roomData);
+          } else {
+            // Join as dynamic room
+            setCurrentRoom({
+              roomId: inviteRoomId,
+              name: inviteRoomId.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+              theme: 'office',
+            });
+          }
+        })
+        .catch(() => {
+          setCurrentRoom({
+            roomId: inviteRoomId,
+            name: inviteRoomId,
+            theme: 'office',
+          });
+        });
+    }
+  }, [user, inviteRoomId, currentRoom]);
+
+  // Sync current room with browser URL history
+  const handleJoinRoom = (room) => {
+    setCurrentRoom(room);
+    const newUrl = `${window.location.pathname}?room=${encodeURIComponent(room.roomId)}`;
+    window.history.pushState({ roomId: room.roomId }, '', newUrl);
+  };
+
+  const handleLeaveRoom = () => {
+    setCurrentRoom(null);
+    setInviteRoomId(null);
+    window.history.pushState({}, '', window.location.pathname);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('proxispeak_token');
+    localStorage.removeItem('proxispeak_user');
+    setUser(null);
+    setCurrentRoom(null);
+    window.history.pushState({}, '', window.location.pathname);
+  };
+
+  // Loading spinner during initial auth check
+  if (authChecking) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: '#090d16',
+          color: '#94a3b8',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          gap: '16px',
+        }}
+      >
+        <div style={{ fontSize: '42px', animation: 'spin 1.5s infinite linear' }}>🎙️</div>
+        <div style={{ fontSize: '15px', color: '#cbd5e1', fontWeight: 500 }}>
+          Connecting to ProxiSpeak Network...
+        </div>
+      </div>
+    );
   }
 
+  // Step 1: User Login / Registration Modal
+  if (!user) {
+    return (
+      <AuthModal
+        defaultRoomName={inviteRoomId}
+        onAuthSuccess={(authenticatedUser) => {
+          setUser(authenticatedUser);
+        }}
+      />
+    );
+  }
+
+  // Step 3: Active Workspace & Call Canvas
+  if (currentRoom) {
+    return (
+      <WorldCanvas
+        user={user}
+        room={currentRoom}
+        onLeaveRoom={handleLeaveRoom}
+      />
+    );
+  }
+
+  // Step 2: Meeting Lobby (Browse rooms, Host meeting, Join by Code/URL)
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', height: '100vh', background: '#0f1117', gap: '0',
-    }}>
-      {/* Logo */}
-      <div style={{ fontSize: '48px', marginBottom: '8px' }}>🎙️</div>
-      <h1 style={{ fontSize: '32px', fontWeight: 700, color: '#f8fafc', marginBottom: '6px' }}>
-        ProxiSpeak
-      </h1>
-      <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '32px', textAlign: 'center' }}>
-        Geospatial Proximity Audio · Virtual Office
-      </p>
-
-      {/* Card */}
-      <div style={{
-        background: '#1e293b', borderRadius: '16px', padding: '32px',
-        width: '320px', border: '1px solid #334155',
-        boxShadow: '0 25px 50px rgba(0,0,0,0.4)',
-      }}>
-        <label style={{ display: 'block', color: '#94a3b8', fontSize: '12px', fontWeight: 600,
-          textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
-          Your Name
-        </label>
-        <input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && name.trim() && setProfile({ name: name.trim(), color: AVATAR_COLORS[colorIdx] })}
-          placeholder="Enter your name..."
-          maxLength={20}
-          style={{
-            width: '100%', padding: '10px 14px', borderRadius: '8px',
-            border: '1px solid #334155', background: '#0f172a', color: '#f8fafc',
-            fontSize: '15px', outline: 'none', marginBottom: '20px',
-          }}
-        />
-
-        <label style={{ display: 'block', color: '#94a3b8', fontSize: '12px', fontWeight: 600,
-          textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-          Avatar Colour
-        </label>
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}>
-          {AVATAR_COLORS.map((c, i) => (
-            <div
-              key={c}
-              onClick={() => setColorIdx(i)}
-              style={{
-                width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer',
-                border: i === colorIdx ? '3px solid #fff' : '3px solid transparent',
-                transition: 'border 0.15s',
-              }}
-            />
-          ))}
-        </div>
-
-        <button
-          disabled={!name.trim()}
-          onClick={() => setProfile({ name: name.trim(), color: AVATAR_COLORS[colorIdx] })}
-          style={{
-            width: '100%', padding: '12px', borderRadius: '8px', border: 'none',
-            background: name.trim() ? AVATAR_COLORS[colorIdx] : '#334155',
-            color: '#fff', fontSize: '15px', fontWeight: 600,
-            cursor: name.trim() ? 'pointer' : 'not-allowed', transition: 'background 0.2s',
-          }}
-        >
-          Join Office →
-        </button>
-      </div>
-
-      <p style={{ color: '#475569', fontSize: '12px', marginTop: '20px' }}>
-        Use <kbd style={{ background: '#1e293b', padding: '2px 6px', borderRadius: '4px', color: '#94a3b8' }}>W A S D</kbd>
-        {' '}or Arrow Keys to move
-      </p>
-    </div>
+    <MeetingLobby
+      user={user}
+      onJoinRoom={handleJoinRoom}
+      onLogout={handleLogout}
+    />
   );
 }

@@ -2,38 +2,17 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { spatialAudio, MAX_DISTANCE, DOORS, isDoorOpen, getRoomAt, playKnockSound } from './services/spatialAudio';
 import { webrtc } from './services/webrtc';
+import { SERVER_URL } from './config';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ─────────────────────────────────────────────────────────────────
 const W = 1200;
 const H = 680;
 const SPEED = 2.8;
 const R = 14; // avatar radius
-const ROOM_ID = 'main-office';
-
-// Local dev & LAN → empty string, Vite proxy routes /socket.io → localhost:5000
-// Production on Vercel/cloud → fallback to deployed Render backend
-function isLocalHost(hostname) {
-  return (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname.startsWith('192.168.') ||
-    hostname.startsWith('10.') ||
-    hostname.startsWith('172.') ||
-    hostname.endsWith('.local')
-  );
-}
-
-const DEFAULT_SERVER_URL =
-  typeof window !== 'undefined' && !isLocalHost(window.location.hostname)
-    ? 'https://proxispeak-server.onrender.com'
-    : '';
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || DEFAULT_SERVER_URL;
 const MOVE_THROTTLE_MS = 50; // emit move at most every 50ms
 
-// ─── Office Layout ────────────────────────────────────────────────────────────
-
-const ROOM_FLOORS = [
+// ─── Office Theme Layout ───────────────────────────────────────────────────────
+const OFFICE_FLOORS = [
   { x: 18, y: 18, w: W - 36, h: H - 36, color: '#f0ede8' },
   { x: 18, y: 18, w: 298, h: 248, color: '#ddedf7' },
   { x: 358, y: 18, w: 228, h: 215, color: '#f7f0e0' },
@@ -42,7 +21,7 @@ const ROOM_FLOORS = [
   { x: 942, y: 490, w: 240, h: H - 508, color: '#f0e8f8' },
 ];
 
-const ROOM_LABELS = [
+const OFFICE_LABELS = [
   { text: 'Meeting Room',     x: 167, y: 40 },
   { text: "Manager's Office", x: 472, y: 40 },
   { text: 'Tech / Server',    x: 1025, y: 40 },
@@ -51,10 +30,10 @@ const ROOM_LABELS = [
   { text: 'Open Workspace',   x: 630, y: 318 },
 ];
 
-const WALLS = [
+const OFFICE_WALLS = [
   { x: 10,      y: 10,     w: W - 20, h: 8   },
-  { x: 10,      y: 10,     w: 8,      h: H-20 },
-  { x: W - 18,  y: 10,     w: 8,      h: H-20 },
+  { x: 10,      y: 10,     w: 8,      h: H - 20 },
+  { x: W - 18,  y: 10,     w: 8,      h: H - 20 },
   { x: 10,      y: H - 18, w: W - 20, h: 8   },
   { x: 313, y: 18,  w: 8, h: 188 },
   { x: 18,  y: 261, w: 258, h: 8 },
@@ -70,7 +49,7 @@ const WALLS = [
   { x: 863, y: 155, w: 8, h: 8 },
 ];
 
-const FURNITURE = [
+const OFFICE_FURNITURE = [
   { type: 'rect',   x: 55,  y: 80,  w: 200, h: 100, color: '#b5896a', rx: 6 },
   { type: 'chair',  x: 85,  y: 68 }, { type: 'chair', x: 145, y: 68 },
   { type: 'chair',  x: 205, y: 68 }, { type: 'chair', x: 85,  y: 192 },
@@ -125,7 +104,44 @@ const FURNITURE = [
   { type: 'plant', x: 1165, y: 490, r: 12 },
 ];
 
-// ─── Drawing helpers ──────────────────────────────────────────────────────────
+// ─── Conference & Auditorium Layout ───────────────────────────────────────────
+const CONF_WALLS = [
+  { x: 10, y: 10, w: W - 20, h: 8 },
+  { x: 10, y: 10, w: 8, h: H - 20 },
+  { x: W - 18, y: 10, w: 8, h: H - 20 },
+  { x: 10, y: H - 18, w: W - 20, h: 8 },
+  // West Breakout Wing wall
+  { x: 280, y: 18, w: 8, h: 180 },
+  { x: 280, y: 280, w: 8, h: 215 },
+  // East Breakout Wing wall
+  { x: 915, y: 18, w: 8, h: 180 },
+  { x: 915, y: 280, w: 8, h: 215 },
+  // Stage barriers
+  { x: 288, y: 168, w: 240, h: 8 },
+  { x: 672, y: 168, w: 243, h: 8 },
+  // Foyer divider
+  { x: 18, y: 495, w: 460, h: 8 },
+  { x: 722, y: 495, w: 460, h: 8 },
+];
+
+// ─── Rooftop Lounge Layout ────────────────────────────────────────────────────
+const LOUNGE_WALLS = [
+  { x: 10, y: 10, w: W - 20, h: 8 },
+  { x: 10, y: 10, w: 8, h: H - 20 },
+  { x: W - 18, y: 10, w: 8, h: H - 20 },
+  { x: 10, y: H - 18, w: W - 20, h: 8 },
+  // VIP west partition
+  { x: 295, y: 18, w: 8, h: 180 },
+  { x: 295, y: 280, w: 8, h: 195 },
+  // Games east partition
+  { x: 895, y: 18, w: 8, h: 180 },
+  { x: 895, y: 280, w: 8, h: 195 },
+  // Terrace balustrade
+  { x: 18, y: 475, w: 450, h: 6 },
+  { x: 732, y: 475, w: 450, h: 6 },
+];
+
+// ─── Drawing Helpers ──────────────────────────────────────────────────────────
 function drawPlant(ctx, x, y, r) {
   ctx.beginPath(); ctx.ellipse(x + 2, y + r + 2, r * 0.5, r * 0.25, 0, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fill();
@@ -165,8 +181,67 @@ function drawScreen(ctx, x, y) {
   ctx.fillRect(x - 8, y + 23, 16, 3);
 }
 
-function drawFurniture(ctx) {
-  for (const f of FURNITURE) {
+function drawRoundTable(ctx, x, y, r, chairCount = 4, tableColor = '#b5896a') {
+  // Table shadow
+  ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fill();
+  // Table top
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = tableColor; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // Surrounding chairs
+  for (let i = 0; i < chairCount; i++) {
+    const angle = (i * Math.PI * 2) / chairCount;
+    const cx = x + Math.cos(angle) * (r + 14);
+    const cy = y + Math.sin(angle) * (r + 14);
+    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#7c6050'; ctx.fill();
+    ctx.strokeStyle = '#5a4038'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#a07860'; ctx.fill();
+  }
+}
+
+function drawParasol(ctx, x, y, color = '#06b6d4') {
+  // Shadow
+  ctx.beginPath(); ctx.ellipse(x + 4, y + 6, 28, 18, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fill();
+  // Table
+  ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2);
+  ctx.fillStyle = '#d97706'; ctx.fill();
+  // Parasol canopy
+  ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
+  // Rib segments
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * 26, y + Math.sin(a) * 26);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+}
+
+// ─── Theme Renderers ──────────────────────────────────────────────────────────
+function drawOffice(ctx) {
+  ctx.fillStyle = '#1e2030'; ctx.fillRect(0, 0, W, H);
+  for (const rf of OFFICE_FLOORS) { ctx.fillStyle = rf.color; ctx.fillRect(rf.x, rf.y, rf.w, rf.h); }
+  ctx.strokeStyle = 'rgba(0,0,0,0.05)'; ctx.lineWidth = 1;
+  for (let gx = 18; gx < W - 18; gx += 36) {
+    ctx.beginPath(); ctx.moveTo(gx, 18); ctx.lineTo(gx, H - 18); ctx.stroke();
+  }
+  for (let gy = 18; gy < H - 18; gy += 36) {
+    ctx.beginPath(); ctx.moveTo(18, gy); ctx.lineTo(W - 18, gy); ctx.stroke();
+  }
+  ctx.textAlign = 'center';
+  for (const lbl of OFFICE_LABELS) {
+    ctx.font = '600 11px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillText(lbl.text.toUpperCase(), lbl.x, lbl.y);
+  }
+  // Furniture
+  for (const f of OFFICE_FURNITURE) {
     if (f.type === 'rect') {
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.2)'; ctx.shadowBlur = 4;
@@ -187,32 +262,210 @@ function drawFurniture(ctx) {
       drawScreen(ctx, f.x, f.y);
     }
   }
+  // Walls
+  ctx.fillStyle = '#2c3050';
+  for (const w of OFFICE_WALLS) ctx.fillRect(w.x, w.y, w.w, w.h);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  for (const w of OFFICE_WALLS) ctx.fillRect(w.x, w.y, w.w, 1);
 }
 
-function drawOffice(ctx) {
-  ctx.fillStyle = '#1e2030'; ctx.fillRect(0, 0, W, H);
-  for (const rf of ROOM_FLOORS) { ctx.fillStyle = rf.color; ctx.fillRect(rf.x, rf.y, rf.w, rf.h); }
-  ctx.strokeStyle = 'rgba(0,0,0,0.05)'; ctx.lineWidth = 1;
-  for (let gx = 18; gx < W - 18; gx += 36) {
-    ctx.beginPath(); ctx.moveTo(gx, 18); ctx.lineTo(gx, H - 18); ctx.stroke();
+function drawConference(ctx) {
+  // Base floor
+  ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
+
+  // Keynote Stage floor (top center)
+  ctx.fillStyle = '#1e1b4b'; ctx.fillRect(288, 18, 624, 150);
+  ctx.fillStyle = '#312e81'; ctx.fillRect(320, 24, 560, 138);
+
+  // Auditorium Hall floor
+  ctx.fillStyle = '#181b2e'; ctx.fillRect(288, 176, 624, 318);
+
+  // Breakout pods (left and right)
+  ctx.fillStyle = '#1e2538'; ctx.fillRect(18, 18, 262, 476);
+  ctx.fillStyle = '#1e2538'; ctx.fillRect(923, 18, 259, 476);
+
+  // Networking foyer (bottom)
+  ctx.fillStyle = '#1b2034'; ctx.fillRect(18, 503, W - 36, 159);
+
+  // Stage presentation display screen
+  ctx.save();
+  ctx.shadowColor = 'rgba(56, 189, 248, 0.4)'; ctx.shadowBlur = 15;
+  drawRoundRect(ctx, 420, 36, 360, 32, 6);
+  ctx.fillStyle = '#0369a1'; ctx.fill();
+  ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font = '700 13px Inter, sans-serif'; ctx.fillStyle = '#e0f2fe'; ctx.textAlign = 'center';
+  ctx.fillText('KEYNOTE PRESENTATION • PROXISPEAK', 600, 56);
+  ctx.restore();
+
+  // Speaker podium
+  drawRoundRect(ctx, 350, 92, 54, 42, 4);
+  ctx.fillStyle = '#4f46e5'; ctx.fill();
+  ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.font = '14px sans-serif'; ctx.fillText('🎙️', 377, 118);
+
+  // Auditorium Seating rows (left and right banks, center aisle)
+  const rows = 4, cols = 5;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = 350 + c * 34;
+      const cy = 240 + r * 56;
+      ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.fillStyle = '#4338ca'; ctx.fill();
+      ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+      ctx.fillStyle = '#6366f1'; ctx.fill();
+    }
   }
-  for (let gy = 18; gy < H - 18; gy += 36) {
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = 680 + c * 34;
+      const cy = 240 + r * 56;
+      ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.fillStyle = '#4338ca'; ctx.fill();
+      ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+      ctx.fillStyle = '#6366f1'; ctx.fill();
+    }
+  }
+
+  // Breakout Pods tables and whiteboards
+  drawRoundTable(ctx, 149, 140, 44, 6, '#334155');
+  drawRoundTable(ctx, 149, 340, 44, 6, '#334155');
+  drawScreen(ctx, 149, 36);
+
+  drawRoundTable(ctx, 1052, 140, 44, 6, '#334155');
+  drawRoundTable(ctx, 1052, 340, 44, 6, '#334155');
+  drawScreen(ctx, 1052, 36);
+
+  // Networking Foyer - Refreshment counter & cocktail tables
+  drawRoundRect(ctx, 90, 560, 180, 44, 6);
+  ctx.fillStyle = '#475569'; ctx.fill();
+  ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#f8fafc'; ctx.fillText('☕ Refreshments Bar', 180, 586);
+
+  for (const hx of [420, 600, 780, 980]) {
+    drawRoundTable(ctx, hx, 580, 20, 3, '#64748b');
+  }
+
+  // Plants
+  drawPlant(ctx, 310, 40, 15);
+  drawPlant(ctx, 890, 40, 15);
+  drawPlant(ctx, 298, 460, 14);
+  drawPlant(ctx, 902, 460, 14);
+  drawPlant(ctx, 40, 530, 14);
+  drawPlant(ctx, 1150, 530, 14);
+
+  // Room section labels
+  ctx.font = '700 11px Inter, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.textAlign = 'center';
+  ctx.fillText('BREAKOUT POD A', 149, 235);
+  ctx.fillText('BREAKOUT POD B', 1052, 235);
+  ctx.fillText('MAIN AUDITORIUM SEATING', 600, 205);
+  ctx.fillText('NETWORKING FOYER', 600, 535);
+
+  // Walls
+  ctx.fillStyle = '#312e81';
+  for (const w of CONF_WALLS) ctx.fillRect(w.x, w.y, w.w, w.h);
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  for (const w of CONF_WALLS) ctx.fillRect(w.x, w.y, w.w, 1);
+}
+
+function drawLounge(ctx) {
+  // Base floor
+  ctx.fillStyle = '#1c1917'; ctx.fillRect(0, 0, W, H);
+
+  // VIP Lounge Booths (West)
+  ctx.fillStyle = '#292524'; ctx.fillRect(18, 18, 277, 457);
+
+  // Central Bar Area
+  ctx.fillStyle = '#262220'; ctx.fillRect(303, 18, 592, 457);
+
+  // Games & Rec (East)
+  ctx.fillStyle = '#202624'; ctx.fillRect(903, 18, 279, 457);
+
+  // Sunset Terrace Deck (South)
+  ctx.fillStyle = '#1c2820'; ctx.fillRect(18, 481, W - 36, 181);
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
+  for (let gy = 485; gy < H - 18; gy += 14) {
     ctx.beginPath(); ctx.moveTo(18, gy); ctx.lineTo(W - 18, gy); ctx.stroke();
   }
-  ctx.textAlign = 'center';
-  for (const lbl of ROOM_LABELS) {
-    ctx.font = '600 11px Inter, sans-serif';
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillText(lbl.text.toUpperCase(), lbl.x, lbl.y);
+
+  // Central Bar Counter
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 8;
+  drawRoundRect(ctx, 390, 80, 420, 50, 8);
+  ctx.fillStyle = '#b45309'; ctx.fill();
+  ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+
+  // Bar stools
+  for (let i = 0; i < 8; i++) {
+    const sx = 420 + i * 50;
+    ctx.beginPath(); ctx.arc(sx, 146, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#92400e'; ctx.fill();
+    ctx.strokeStyle = '#fef3c7'; ctx.lineWidth = 1.5; ctx.stroke();
   }
-  drawFurniture(ctx);
-  ctx.fillStyle = '#2c3050';
-  for (const w of WALLS) ctx.fillRect(w.x, w.y, w.w, w.h);
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  for (const w of WALLS) ctx.fillRect(w.x, w.y, w.w, 1);
+
+  // Back bar shelf
+  drawRoundRect(ctx, 420, 32, 360, 24, 4);
+  ctx.fillStyle = '#451a03'; ctx.fill();
+  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#fef3c7'; ctx.textAlign = 'center';
+  ctx.fillText('🍸 ROOFTOP ESPRESSO & COCKTAIL BAR 🍹', 600, 48);
+
+  // West VIP Booths
+  drawRoundRect(ctx, 50, 90, 160, 45, 8);
+  ctx.fillStyle = '#ea580c'; ctx.fill();
+  drawRoundRect(ctx, 50, 135, 45, 80, 8);
+  ctx.fillStyle = '#ea580c'; ctx.fill();
+  drawRoundTable(ctx, 135, 160, 24, 3, '#78350f');
+
+  drawRoundRect(ctx, 50, 270, 160, 45, 8);
+  ctx.fillStyle = '#ea580c'; ctx.fill();
+  drawRoundRect(ctx, 50, 315, 45, 80, 8);
+  ctx.fillStyle = '#ea580c'; ctx.fill();
+  drawRoundTable(ctx, 135, 340, 24, 3, '#78350f');
+
+  // East Games Room - Billiards Table
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 6;
+  drawRoundRect(ctx, 960, 100, 165, 95, 4);
+  ctx.fillStyle = '#15803d'; ctx.fill();
+  ctx.strokeStyle = '#78350f'; ctx.lineWidth = 7; ctx.stroke();
+  for (const [px, py] of [
+    [960, 100], [1042, 100], [1125, 100],
+    [960, 195], [1042, 195], [1125, 195],
+  ]) {
+    ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#1c1917'; ctx.fill();
+  }
+  ctx.restore();
+
+  drawRoundTable(ctx, 1042, 320, 32, 4, '#78350f');
+
+  // Sunset Terrace - Parasol patio tables
+  drawParasol(ctx, 230, 570, '#06b6d4');
+  drawParasol(ctx, 600, 570, '#f59e0b');
+  drawParasol(ctx, 970, 570, '#ec4899');
+
+  for (let px = 60; px < W - 50; px += 90) {
+    drawPlant(ctx, px, 475, 12);
+  }
+
+  // Room section labels
+  ctx.font = '700 11px Inter, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.textAlign = 'center';
+  ctx.fillText('VIP FIRESIDE BOOTHS', 156, 45);
+  ctx.fillText('GAMES & BILLIARDS', 1042, 45);
+  ctx.fillText('SUNSET OPEN-AIR TERRACE', 600, 508);
+
+  // Walls
+  ctx.fillStyle = '#451a03';
+  for (const w of LOUNGE_WALLS) ctx.fillRect(w.x, w.y, w.w, w.h);
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  for (const w of LOUNGE_WALLS) ctx.fillRect(w.x, w.y, w.w, 1);
 }
 
-// ─── Dynamic Doors Drawing ───────────────────────────────────────────────────
+// ─── Dynamic Doors Drawing (Office Environment) ──────────────────────────────
 function drawDoors(ctx, doors = {}) {
   for (const [key, door] of Object.entries(DOORS)) {
     const isOpen = isDoorOpen(doors, key);
@@ -252,7 +505,7 @@ function drawDoors(ctx, doors = {}) {
       const midX = wall.x + wall.w / 2;
       const midY = wall.y + wall.h / 2;
       ctx.fillStyle = '#16a34a';
-      ctx.fillText('🔓 OPEN', midX, midY + (wall.h > wall.w ? 0 : -8));
+      ctx.fillText('🚪 OPEN', midX, midY + (wall.h > wall.w ? 0 : -8));
       ctx.restore();
     } else {
       // Draw closed door: solid wooden panel barrier
@@ -291,32 +544,66 @@ function drawDoors(ctx, doors = {}) {
   }
 }
 
-// ─── Collision (Checking Walls + Closed Doors) ───────────────────────────────
-function collidesWithWall(nx, ny, walls, doors = {}) {
-  // 1. Regular office walls
+// ─── Theme Registry ───────────────────────────────────────────────────────────
+const THEMES = {
+  office: {
+    id: 'office',
+    name: 'Corporate Office',
+    icon: '🏢',
+    badgeColor: '#3b82f6',
+    spawn: { x: 620, y: 390 },
+    draw: drawOffice,
+    walls: OFFICE_WALLS,
+    hasDoors: true,
+  },
+  conference: {
+    id: 'conference',
+    name: 'Conference & Auditorium',
+    icon: '🏛️',
+    badgeColor: '#8b5cf6',
+    spawn: { x: 600, y: 570 },
+    draw: drawConference,
+    walls: CONF_WALLS,
+    hasDoors: false,
+  },
+  lounge: {
+    id: 'lounge',
+    name: 'Rooftop Social Lounge',
+    icon: '☕',
+    badgeColor: '#10b981',
+    spawn: { x: 600, y: 360 },
+    draw: drawLounge,
+    walls: LOUNGE_WALLS,
+    hasDoors: false,
+  },
+};
+
+// ─── Collision (Checking Theme Walls + Closed Doors) ──────────────────────────
+function collidesWithWall(nx, ny, walls, doors = {}, checkDoors = true) {
   for (const w of walls) {
     const cx = Math.max(w.x, Math.min(nx, w.x + w.w));
     const cy = Math.max(w.y, Math.min(ny, w.y + w.h));
     if ((nx - cx) ** 2 + (ny - cy) ** 2 < R * R) return true;
   }
 
-  // 2. Closed doors act as solid physical barriers
-  for (const [key, d] of Object.entries(DOORS)) {
-    const isOpen = isDoorOpen(doors, key);
-    if (!isOpen && d.wall) {
-      const w = d.wall;
-      const cx = Math.max(w.x, Math.min(nx, w.x + w.w));
-      const cy = Math.max(w.y, Math.min(ny, w.y + w.h));
-      if ((nx - cx) ** 2 + (ny - cy) ** 2 < R * R) return true;
+  if (checkDoors) {
+    for (const [key, d] of Object.entries(DOORS)) {
+      const isOpen = isDoorOpen(doors, key);
+      if (!isOpen && d.wall) {
+        const w = d.wall;
+        const cx = Math.max(w.x, Math.min(nx, w.x + w.w));
+        const cy = Math.max(w.y, Math.min(ny, w.y + w.h));
+        if ((nx - cx) ** 2 + (ny - cy) ** 2 < R * R) return true;
+      }
     }
   }
 
   return false;
 }
 
-// ─── Avatar drawing with Audio Visualizers ─────────────────────────────────────
+// ─── Avatar Drawing with Voice Visualizers & Acoustics ────────────────────────
 function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = false, isSpeaking = false, volumeGain = 0, voiceIntensity = 0, acousticInfo = null) {
-  // Proximity earshot ring (only drawn around local player)
+  // Proximity earshot ring (only local player)
   if (isMe) {
     ctx.beginPath();
     ctx.arc(x, y, MAX_DISTANCE, 0, Math.PI * 2);
@@ -326,7 +613,6 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Soft audio range gradient
     const grad = ctx.createRadialGradient(x, y, 15, x, y, MAX_DISTANCE);
     grad.addColorStop(0, 'rgba(59, 130, 246, 0.05)');
     grad.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
@@ -424,12 +710,12 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
     if (acousticInfo) {
       if (acousticInfo.status === 'blocked-wall' || acousticInfo.status === 'door-closed') {
         ctx.fillStyle = '#ef4444';
-        const label = acousticInfo.status === 'door-closed' ? 'Closed Door' : 'Soundproof';
-        ctx.fillText(`🔒 ${acousticInfo.remoteRoom?.name || 'Room'} (${label})`, x, y + R + 15);
+        const stLabel = acousticInfo.status === 'door-closed' ? 'Closed Door' : 'Soundproof';
+        ctx.fillText(`🔒 ${acousticInfo.remoteRoom?.name || 'Room'} (${stLabel})`, x, y + R + 15);
       } else if (acousticInfo.status === 'in-room') {
         const volPct = Math.round(volumeGain * 100);
         ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
-        ctx.fillText(`🔊 ${volPct}% · ${acousticInfo.remoteRoom.name}`, x, y + R + 15);
+        ctx.fillText(`🔊 ${volPct}% • ${acousticInfo.remoteRoom.name}`, x, y + R + 15);
       } else if (acousticInfo.status === 'doorway') {
         const volPct = Math.round(volumeGain * 100);
         ctx.fillStyle = '#38bdf8';
@@ -456,10 +742,27 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
   }
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
+// ─── Main Component ────────────────────────────────────────────────────────────
+export default function WorldCanvas({
+  user,
+  username: propUsername,
+  avatarColor: propAvatarColor,
+  room,
+  roomId: propRoomId,
+  roomName: propRoomName,
+  theme: propTheme,
+  onLeaveRoom,
+  onLeave,
+}) {
+  const username = user?.username || propUsername || 'Anonymous';
+  const avatarColor = user?.avatarColor || propAvatarColor || '#3b82f6';
+  const roomId = room?.roomId || propRoomId || 'main-office';
+  const roomName = room?.name || propRoomName || 'Workspace';
+  const themeKey = (room?.theme && THEMES[room.theme]) ? room.theme : (propTheme && THEMES[propTheme] ? propTheme : 'office');
+  const activeTheme = THEMES[themeKey] || THEMES.office;
+
   const canvasRef   = useRef(null);
-  const stateRef    = useRef({ x: 620, y: 390, keys: {}, moving: false });
+  const stateRef    = useRef({ x: activeTheme.spawn.x, y: activeTheme.spawn.y, keys: {}, moving: false });
   const peersRef    = useRef({}); // { socketId: { x, y, username, avatarColor, isMuted } }
   const peerVolumesRef = useRef({}); // peerId -> volume
   const peerIntensitiesRef = useRef({}); // peerId -> voiceIntensity
@@ -470,7 +773,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const socketRef   = useRef(null);
   const lastEmitRef = useRef(0);
 
-  // Door States & Toast Notifications (All rooms start open and accessible for first-time access)
+  // Door States & Toast Notifications
   const [doors, setDoors] = useState({
     'meeting-room': { isOpen: true, accessed: false, changedBy: 'System' },
     'manager-office': { isOpen: true, accessed: false, changedBy: 'System' },
@@ -508,26 +811,58 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const [localIntensityState, setLocalIntensityState] = useState(0);
   const [inEarshotCount, setInEarshotCount] = useState(0);
   const [currentRoom, setCurrentRoom] = useState({ id: 'open-workspace', name: 'Open Workspace', isIsolated: false });
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const isMutedRef = useRef(true);
   const isSpeakingRef = useRef(false);
   const renderRef = useRef(null);
   const offscreenRef = useRef(null);
 
-  // Render loop (reads from refs so it never changes identity when mute/speech states update)
+  // Copy invite link helper
+  const handleCopyInviteLink = () => {
+    const url = `${window.location.origin}/?room=${encodeURIComponent(roomId)}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2200);
+    });
+  };
+
+  // Leave room / End call handler
+  const handleLeaveCall = useCallback(() => {
+    try {
+      webrtc.closeAll();
+      spatialAudio.destroy();
+      if (socketRef.current) {
+        socketRef.current.emit('leave-room', { roomId });
+        socketRef.current.disconnect();
+      }
+    } catch (err) {
+      console.warn('[LeaveCall] Error during cleanup:', err);
+    }
+    const leaveFn = onLeaveRoom || onLeave;
+    if (leaveFn) {
+      leaveFn();
+    } else {
+      window.location.reload();
+    }
+  }, [roomId, onLeaveRoom, onLeave]);
+
+  // Render loop
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const s = stateRef.current;
 
-    // 1. Static office layer
+    // 1. Static themed canvas background layer
     if (offscreenRef.current) {
       ctx.drawImage(offscreenRef.current, 0, 0);
     }
 
-    // 1b. Dynamic Doors layer
-    drawDoors(ctx, doorsRef.current);
+    // 1b. Dynamic Doors layer (active in office layout)
+    if (activeTheme.hasDoors) {
+      drawDoors(ctx, doorsRef.current);
+    }
 
     // 2. Draw remote peers with acoustic occlusion information
     for (const [peerId, peer] of Object.entries(peersRef.current)) {
@@ -587,7 +922,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'right';
     ctx.fillStyle = connected ? '#86efac' : '#fca5a5';
     ctx.fillText(connected ? 'Connected' : 'Offline', W - 36, H - 20);
-  }, [username, avatarColor]);
+  }, [username, avatarColor, activeTheme]);
 
   renderRef.current = render;
 
@@ -608,7 +943,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
         alert('Microphone permission required for voice audio: ' + (err.message || err));
       }
     } else {
-      const newMuted = webrtc.toggleMute(ROOM_ID);
+      const newMuted = webrtc.toggleMute(roomId);
       isMutedRef.current = newMuted;
       setIsMuted(newMuted);
     }
@@ -621,15 +956,14 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     setIsDeafened(nextDeafened);
   };
 
-  // ── Voice intensity polling (decoupled from RAF loop) ─────────────────
+  // Voice intensity polling
   useEffect(() => {
     let lastLog = 0;
     let prevBucket = -1;
     const timer = setInterval(() => {
       const v = webrtc.getLocalVoiceIntensity();
       localIntensityRef.current = v;
-      // Only re-render React HUD when intensity bucket changes (avoids 20 full re-renders/sec)
-      const bucket = Math.round(v * 20); // 5% step buckets
+      const bucket = Math.round(v * 20);
       if (bucket !== prevBucket) {
         prevBucket = bucket;
         setLocalIntensityState(v);
@@ -647,13 +981,17 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     const canvas = canvasRef.current;
     if (canvas) canvas.focus();
 
-    // ── Pre-render static office ───────────────────────────────────────────
+    // Pre-render static themed background
     const offscreen = document.createElement('canvas');
     offscreen.width = W; offscreen.height = H;
-    drawOffice(offscreen.getContext('2d'));
+    activeTheme.draw(offscreen.getContext('2d'));
     offscreenRef.current = offscreen;
 
-    // ── Socket.io connection ───────────────────────────────────────────────
+    // Reset position to theme spawn
+    stateRef.current.x = activeTheme.spawn.x;
+    stateRef.current.y = activeTheme.spawn.y;
+
+    // Socket.io connection
     const socket = io(SERVER_URL, {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: Infinity,
@@ -678,14 +1016,14 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       },
     });
 
-    // Keep Render free tier awake
+    // Keep Render backend awake
     const keepAliveTimer = setInterval(() => {
       if (SERVER_URL) {
         fetch(`${SERVER_URL}/health`).catch(() => {});
       }
     }, 2 * 60 * 1000);
 
-    // Auto-resume AudioContext on user click or keypress
+    // Auto-resume AudioContext on interaction
     const unlockAudio = () => {
       spatialAudio.ensureContext();
     };
@@ -694,10 +1032,10 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
 
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
-      socket.emit('join-room', { username, avatarColor, roomId: ROOM_ID, isMuted: true });
+      socket.emit('join-room', { username, avatarColor, roomId, isMuted: true });
     });
 
-    // Populate existing peers and initiate WebRTC connections (new joiner initiates to existing peers)
+    // Populate existing peers and initiate WebRTC connections
     socket.on('room-state', ({ selfId, users, doors: initialDoors }) => {
       if (initialDoors) {
         setDoors((prev) => {
@@ -753,7 +1091,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     });
 
     // Audio chime broadcast when someone knocks on any door
-    socket.on('door-knocked', ({ doorKey, roomKey, targetRoomKey, knockedBy }) => {
+    socket.on('door-knocked', ({ doorKey, roomKey, targetRoomKey }) => {
       const key = doorKey || roomKey || targetRoomKey;
       if (!key) return;
       const amIInside = localRoomRef.current?.id === key;
@@ -763,16 +1101,16 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     });
 
     // Received by room occupants when a visitor knocks on their door
-    socket.on('visitor-knocked', ({ doorKey, roomName, visitorId, visitorName, pendingKnocks }) => {
+    socket.on('visitor-knocked', ({ doorKey, roomName: targetRoomName, visitorName, pendingKnocks }) => {
       const amIInside = localRoomRef.current?.id === doorKey;
       if (amIInside) {
         playKnockSound();
         setPendingKnockRequests(pendingKnocks || []);
-        showToast(`🔔 ${visitorName} is knocking at the ${roomName} door!`, 'alert');
+        showToast(`🔔 ${visitorName} is knocking at the ${targetRoomName} door!`, 'alert');
       }
     });
 
-    // Updated list of pending knocks (when a visitor is approved, declined, or cancels)
+    // Updated list of pending knocks
     socket.on('pending-knocks-updated', ({ doorKey, pendingKnocks }) => {
       const amIInside = localRoomRef.current?.id === doorKey;
       if (amIInside) {
@@ -793,16 +1131,16 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     });
 
     // Received by visitor when an occupant welcomes them in
-    socket.on('visitor-welcomed', ({ doorKey, roomName, welcomedBy }) => {
+    socket.on('visitor-welcomed', ({ doorKey, roomName: targetRoomName, welcomedBy }) => {
       setWelcomedDoors((prev) => ({ ...prev, [doorKey]: true }));
       setMyKnockStatus({ doorKey, status: 'welcomed' });
-      showToast(`🎉 ${welcomedBy} welcomed you into ${roomName}! Step inside.`, 'success');
+      showToast(`🎉 ${welcomedBy} welcomed you into ${targetRoomName}! Step inside.`, 'success');
     });
 
     // Received by visitor when an occupant declines entry
-    socket.on('visitor-declined', ({ doorKey, roomName, declinedBy, reason }) => {
+    socket.on('visitor-declined', ({ doorKey, roomName: targetRoomName, declinedBy, reason }) => {
       setMyKnockStatus({ doorKey, status: 'declined' });
-      showToast(`🔒 ${declinedBy} declined entry to ${roomName}: ${reason}`, 'alert');
+      showToast(`🔒 ${declinedBy} declined entry to ${targetRoomName}: ${reason}`, 'alert');
     });
 
     // Received if an unauthorized action is denied by the server
@@ -811,7 +1149,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       showToast(`🔒 ${dName}: ${reason}`, 'alert');
     });
 
-    // Existing user gets notified of new peer (waits for new peer's offer to avoid collision)
+    // Existing user gets notified of new peer
     socket.on('user-joined', ({ id, username: uname, avatarColor: ucolor, x, y, isMuted: peerMuted }) => {
       peersRef.current[id] = {
         x,
@@ -820,7 +1158,6 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
         avatarColor: ucolor,
         isMuted: peerMuted ?? false,
       };
-      // Prepare peer connection in responder mode
       webrtc.getOrCreatePeer(id, false);
     });
 
@@ -843,6 +1180,8 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     socket.on('user-left', ({ id }) => {
       delete peersRef.current[id];
       delete peerVolumesRef.current[id];
+      delete peerIntensitiesRef.current[id];
+      delete peerAcousticsRef.current[id];
       webrtc.removePeer(id);
       spatialAudio.removePeerStream(id);
     });
@@ -864,7 +1203,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // ── 60 FPS Game & Spatial Audio Loop ──────────────────────────────────
+    // 60 FPS Game & Spatial Audio Loop
     function tick() {
       const s = stateRef.current;
       const k = s.keys;
@@ -878,16 +1217,18 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       s.moving = dx !== 0 || dy !== 0;
 
       const prevX = s.x, prevY = s.y;
-      if (dx && !collidesWithWall(s.x + dx, s.y, WALLS, doorsRef.current)) s.x += dx;
-      if (dy && !collidesWithWall(s.x, s.y + dy, WALLS, doorsRef.current)) s.y += dy;
+      const checkDoors = Boolean(activeTheme.hasDoors);
+      if (dx && !collidesWithWall(s.x + dx, s.y, activeTheme.walls, doorsRef.current, checkDoors)) s.x += dx;
+      if (dy && !collidesWithWall(s.x, s.y + dy, activeTheme.walls, doorsRef.current, checkDoors)) s.y += dy;
 
-      // Update Web Audio distance attenuation, room isolation & wall raycasting based on current positions
+      // Update Web Audio distance attenuation, room isolation & wall raycasting
       const { inEarshotCount: currentInEarshot, peerVolumes, peerIntensities, peerAcoustics, localRoom } =
         spatialAudio.updatePositions(s, peersRef.current, doorsRef.current);
       peerVolumesRef.current = peerVolumes;
       peerIntensitiesRef.current = peerIntensities || {};
       peerAcousticsRef.current = peerAcoustics || {};
       setInEarshotCount((prev) => (prev !== currentInEarshot ? currentInEarshot : prev));
+
       if (localRoom && localRoom.name !== localRoomRef.current?.name) {
         const prevRoom = localRoomRef.current;
         localRoomRef.current = localRoom;
@@ -895,7 +1236,6 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
 
         // If player stepped into a room that they knocked on or were welcomed into:
         if (localRoom.id && DOORS[localRoom.id]) {
-          // If we had permission or knock status for this room, consume it
           setWelcomedDoors((prev) => {
             if (prev[localRoom.id]) {
               const next = { ...prev };
@@ -912,7 +1252,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
           doorAutoCloseTimerRef.current = setTimeout(() => {
             if (localRoomRef.current?.id === enteredRoomKey && isDoorOpen(doorsRef.current, enteredRoomKey)) {
               socketRef.current?.emit('toggle-door', {
-                roomId: ROOM_ID,
+                roomId,
                 doorKey: enteredRoomKey,
                 isOpen: false,
               });
@@ -928,21 +1268,26 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       }
 
       // Check for nearby door proximity (within 95px of door midpoint)
-      let detectedNearbyDoor = null;
-      for (const [key, d] of Object.entries(DOORS)) {
-        if (d.wall) {
-          const dcx = d.wall.x + d.wall.w / 2;
-          const dcy = d.wall.y + d.wall.h / 2;
-          const dist = Math.hypot(s.x - dcx, s.y - dcy);
-          if (dist < 95) {
-            detectedNearbyDoor = key;
-            break;
+      if (activeTheme.hasDoors) {
+        let detectedNearbyDoor = null;
+        for (const [key, d] of Object.entries(DOORS)) {
+          if (d.wall) {
+            const dcx = d.wall.x + d.wall.w / 2;
+            const dcy = d.wall.y + d.wall.h / 2;
+            const dist = Math.hypot(s.x - dcx, s.y - dcy);
+            if (dist < 95) {
+              detectedNearbyDoor = key;
+              break;
+            }
           }
         }
-      }
-      if (detectedNearbyDoor !== nearbyDoorRef.current) {
-        nearbyDoorRef.current = detectedNearbyDoor;
-        setNearbyDoor(detectedNearbyDoor);
+        if (detectedNearbyDoor !== nearbyDoorRef.current) {
+          nearbyDoorRef.current = detectedNearbyDoor;
+          setNearbyDoor(detectedNearbyDoor);
+        }
+      } else if (nearbyDoorRef.current) {
+        nearbyDoorRef.current = null;
+        setNearbyDoor(null);
       }
 
       // Auto-cancel knock if visitor walked away (> 160px) from door
@@ -953,7 +1298,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
           const dcy = targetDoor.wall.y + targetDoor.wall.h / 2;
           const dist = Math.hypot(s.x - dcx, s.y - dcy);
           if (dist > 160) {
-            socketRef.current?.emit('cancel-knock', { roomId: ROOM_ID, doorKey: myKnockStatusRef.current.doorKey });
+            socketRef.current?.emit('cancel-knock', { roomId, doorKey: myKnockStatusRef.current.doorKey });
             setMyKnockStatus(null);
             showToast('Knock cancelled because you walked away.', 'info');
           }
@@ -962,7 +1307,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
 
       const now = Date.now();
       if ((s.x !== prevX || s.y !== prevY) && now - lastEmitRef.current >= MOVE_THROTTLE_MS) {
-        socket.emit('move', { x: s.x, y: s.y, roomId: ROOM_ID });
+        socket.emit('move', { x: s.x, y: s.y, roomId });
         lastEmitRef.current = now;
       }
 
@@ -981,27 +1326,25 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
       window.removeEventListener('keydown', unlockAudio);
       cancelAnimationFrame(rafRef.current);
       clearInterval(keepAliveTimer);
+      if (doorAutoCloseTimerRef.current) clearTimeout(doorAutoCloseTimerRef.current);
       socket.disconnect();
       webrtc.closeAll();
       spatialAudio.destroy();
     };
-  }, [username, avatarColor]);
+  }, [username, avatarColor, roomId, activeTheme, showToast]);
 
-  // ── Door Interaction Calculations ──────────────────────────────────────────
+  // Door Interaction Calculations
   const currentRoomId = currentRoom?.id || localRoomRef.current?.id;
   const roomDoorKey = currentRoomId && DOORS[currentRoomId] ? currentRoomId : null;
   const isRoomDoorOpen = roomDoorKey ? isDoorOpen(doors, roomDoorKey) : false;
 
-  // Filter pending knocks specifically for the room where the local member is currently present
   const currentRoomKnocks = (pendingKnockRequests || []).filter(
     (k) => k.doorKey === currentRoomId
   );
 
-  // Player is outside near a door (e.g. approaching meeting room, manager office, tech server)
   const isOutsideNearbyDoor = Boolean(nearbyDoor && nearbyDoor !== roomDoorKey);
   const isNearbyDoorOpen = nearbyDoor ? isDoorOpen(doors, nearbyDoor) : false;
 
-  // Count occupants inside the nearby door's room
   let nearbyDoorOccupants = 0;
   if (nearbyDoor) {
     for (const peer of Object.values(peersRef.current)) {
@@ -1018,7 +1361,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
     const nextOpen = !currentOpen;
 
     socketRef.current?.emit('toggle-door', {
-      roomId: ROOM_ID,
+      roomId,
       doorKey,
       isOpen: nextOpen,
     });
@@ -1027,7 +1370,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const handleKnockDoor = (doorKey) => {
     if (!doorKey) return;
     socketRef.current?.emit('knock-door', {
-      roomId: ROOM_ID,
+      roomId,
       doorKey,
     });
     setMyKnockStatus({ doorKey, status: 'waiting' });
@@ -1038,7 +1381,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const handleCancelKnock = (doorKey) => {
     if (!doorKey) return;
     socketRef.current?.emit('cancel-knock', {
-      roomId: ROOM_ID,
+      roomId,
       doorKey,
     });
     setMyKnockStatus(null);
@@ -1048,7 +1391,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const handleWelcomeVisitor = (doorKey, visitorId) => {
     if (!doorKey || !visitorId) return;
     socketRef.current?.emit('welcome-visitor', {
-      roomId: ROOM_ID,
+      roomId,
       doorKey,
       visitorId,
     });
@@ -1059,7 +1402,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
   const handleDeclineVisitor = (doorKey, visitorId) => {
     if (!doorKey || !visitorId) return;
     socketRef.current?.emit('decline-visitor', {
-      roomId: ROOM_ID,
+      roomId,
       doorKey,
       visitorId,
     });
@@ -1069,51 +1412,156 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'12px', padding:'16px' }}>
-      {/* Top Header */}
-      <div style={{ display:'flex', alignItems:'center', gap:'16px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-          <span style={{ fontSize:'24px' }}>🎙️</span>
-          <h2 style={{ fontWeight:700, fontSize:'20px', color:'#f8fafc', letterSpacing:'-0.02em' }}>
-            ProxiSpeak — Virtual Office
-          </h2>
+      {/* Top Header Bar */}
+      <div
+        style={{
+          display:'flex',
+          alignItems:'center',
+          justifyContent:'space-between',
+          width: '100%',
+          maxWidth: `${W}px`,
+          padding: '4px 8px',
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* Left: Meeting Branding & Info */}
+        <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+          <span style={{ fontSize:'26px' }}>{activeTheme.icon}</span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ fontWeight:700, fontSize:'19px', color:'#f8fafc', letterSpacing:'-0.02em', margin: 0 }}>
+                {roomName}
+              </h2>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  backgroundColor: `${activeTheme.badgeColor}22`,
+                  color: activeTheme.badgeColor,
+                  border: `1px solid ${activeTheme.badgeColor}55`,
+                }}
+              >
+                {activeTheme.name}
+              </span>
+            </div>
+            <div style={{ fontSize:'12px', color:'#64748b', marginTop: '2px' }}>
+              Room ID: <code style={{ color:'#94a3b8', background:'#1e293b', padding:'1px 6px', borderRadius:'4px' }}>{roomId}</code>
+            </div>
+          </div>
         </div>
 
-        {/* Current Room Badge */}
-        <div style={{
-          background: currentRoom.isIsolated ? 'rgba(14, 165, 233, 0.15)' : '#1e293b',
-          border: currentRoom.isIsolated ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid #334155',
-          borderRadius: '20px',
-          padding: '5px 16px',
-          fontSize: '13px',
-          color: currentRoom.isIsolated ? '#7dd3fc' : '#94a3b8',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          transition: 'all 0.2s ease',
-        }}>
-          <span>{currentRoom.isIsolated ? '🔒' : '📍'}</span>
-          <span style={{ fontWeight: 600, color: currentRoom.isIsolated ? '#38bdf8' : '#f8fafc' }}>
-            {currentRoom.name}
-          </span>
-          {currentRoom.isIsolated && (
-            <span style={{
-              fontSize: '10px',
-              background: '#0284c7',
-              color: '#ffffff',
-              padding: '2px 7px',
-              borderRadius: '10px',
-              fontWeight: 700,
-              letterSpacing: '0.04em'
-            }}>
-              SOUNDPROOF
+        {/* Center: Current Room Status */}
+        {activeTheme.hasDoors && (
+          <div
+            style={{
+              background: currentRoom.isIsolated ? 'rgba(14, 165, 233, 0.15)' : '#1e293b',
+              border: currentRoom.isIsolated ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid #334155',
+              borderRadius: '20px',
+              padding: '5px 16px',
+              fontSize: '13px',
+              color: currentRoom.isIsolated ? '#7dd3fc' : '#94a3b8',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <span>{currentRoom.isIsolated ? '🔒' : '📍'}</span>
+            <span style={{ fontWeight: 600, color: currentRoom.isIsolated ? '#38bdf8' : '#f8fafc' }}>
+              {currentRoom.name}
             </span>
-          )}
-        </div>
+            {currentRoom.isIsolated && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  background: '#0284c7',
+                  color: '#ffffff',
+                  padding: '2px 7px',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                SOUNDPROOF
+              </span>
+            )}
+          </div>
+        )}
 
-        <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:'20px',
-          padding:'5px 16px', fontSize:'13px', color:'#94a3b8', display:'flex', alignItems:'center', gap:'8px' }}>
-          <span>Logged in as</span>
-          <span style={{ color: avatarColor, fontWeight: 600 }}>{username}</span>
+        {/* Right: Actions & User Badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Copy Invite Link Button */}
+          <button
+            onClick={handleCopyInviteLink}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              background: copiedLink ? '#10b981' : '#1e293b',
+              border: '1px solid #334155',
+              color: '#f8fafc',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            title="Copy meeting invite link to clipboard"
+          >
+            <span>{copiedLink ? '✓' : '🔗'}</span>
+            <span>{copiedLink ? 'Link Copied!' : 'Copy Invite Link'}</span>
+          </button>
+
+          {/* User Profile Badge */}
+          <div
+            style={{
+              background:'#1e293b',
+              border:'1px solid #334155',
+              borderRadius:'20px',
+              padding:'6px 14px',
+              fontSize:'13px',
+              color:'#94a3b8',
+              display:'flex',
+              alignItems:'center',
+              gap:'8px',
+            }}
+          >
+            <div
+              style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: avatarColor,
+              }}
+            />
+            <span style={{ color: '#f8fafc', fontWeight: 600 }}>{username}</span>
+          </div>
+
+          {/* Header Leave Room Button */}
+          <button
+            onClick={handleLeaveCall}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              background: '#dc2626',
+              border: 'none',
+              color: '#ffffff',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            title="Leave meeting and return to lobby"
+          >
+            <span>📞</span>
+            <span>Leave</span>
+          </button>
         </div>
       </div>
 
@@ -1270,7 +1718,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
             outline:'none',
             border:'2px solid #1e293b',
             boxShadow:'0 24px 60px rgba(0,0,0,0.6)',
-            cursor:'none',
+            cursor:'default',
             maxWidth:'100%',
           }}
         />
@@ -1285,12 +1733,12 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            background: 'rgba(15, 23, 42, 0.88)',
+            background: 'rgba(15, 23, 42, 0.90)',
             backdropFilter: 'blur(12px)',
-            padding: '8px 18px',
+            padding: '8px 20px',
             borderRadius: '40px',
             border: '1px solid rgba(51, 65, 85, 0.7)',
-            boxShadow: '0 12px 30px rgba(0,0,0,0.45)',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
             zIndex: 10,
           }}
         >
@@ -1376,12 +1824,12 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
             }}
             title={isDeafened ? 'Click to un-deafen' : 'Click to mute all incoming audio'}
           >
-            <span>{isDeafened ? '🔕' : '🎧'}</span>
+            <span>{isDeafened ? '🔇' : '🎧'}</span>
             <span>{isDeafened ? 'Deafened' : 'Audio On'}</span>
           </button>
 
-          {/* Room Door Control for Members Present Inside Room */}
-          {roomDoorKey && (
+          {/* Room Door Control for Members Present Inside Room (Office layout) */}
+          {activeTheme.hasDoors && roomDoorKey && (
             <button
               onClick={() => handleToggleDoor(roomDoorKey)}
               style={{
@@ -1418,10 +1866,10 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
             </button>
           )}
 
-          {/* Door Controls for Members Approaching from Outside */}
-          {isOutsideNearbyDoor && (
+          {/* Door Controls for Members Approaching from Outside (Office layout) */}
+          {activeTheme.hasDoors && isOutsideNearbyDoor && (
             <>
-              {/* Case 1: Room is EMPTY -> First member can open door directly (Rule 1) */}
+              {/* Case 1: Room is EMPTY -> First member can open door directly */}
               {nearbyDoorOccupants === 0 && (
                 <button
                   onClick={() => handleToggleDoor(nearbyDoor)}
@@ -1459,13 +1907,12 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
                 </button>
               )}
 
-              {/* Case 2: Room is OCCUPIED -> Additional members MUST knock to enter (Rule 2) */}
+              {/* Case 2: Room is OCCUPIED -> Additional members MUST knock to enter */}
               {nearbyDoorOccupants > 0 && (
                 <>
-                  {/* If door is closed */}
                   {!isNearbyDoorOpen && (
                     <>
-                      {/* Sub-case 2a: Visitor has been welcomed by an inside occupant (Rule 5) */}
+                      {/* Sub-case 2a: Visitor has been welcomed by an inside occupant */}
                       {welcomedDoors[nearbyDoor] ? (
                         <button
                           onClick={() => handleToggleDoor(nearbyDoor)}
@@ -1563,7 +2010,7 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
                           </button>
                         </div>
                       ) : (
-                        /* Sub-case 2d: Default for occupied room: MUST KNOCK TO ENTER (Rule 2 & 6) */
+                        /* Sub-case 2d: Default for occupied room: MUST KNOCK TO ENTER */
                         <button
                           onClick={() => handleKnockDoor(nearbyDoor)}
                           style={{
@@ -1641,28 +2088,28 @@ export default function WorldCanvas({ username, avatarColor = '#3b82f6' }) {
             <span>{inEarshotCount} in earshot</span>
           </div>
 
-          {/* Room Environment & Soundproof Indicator */}
-          <div
+          {/* End Call / Leave Room Button */}
+          <button
+            onClick={handleLeaveCall}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 14px',
-              borderRadius: '20px',
-              background: currentRoom.isIsolated ? 'rgba(14, 165, 233, 0.2)' : 'rgba(30, 41, 59, 0.7)',
-              fontSize: '12px',
-              color: currentRoom.isIsolated ? '#7dd3fc' : '#cbd5e1',
-              border: currentRoom.isIsolated ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid rgba(51, 65, 85, 0.5)',
+              padding: '9px 18px',
+              borderRadius: '25px',
+              border: 'none',
+              background: '#dc2626',
+              color: '#ffffff',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 0.15s ease',
             }}
+            title="End call and leave room"
           >
-            <span>{currentRoom.isIsolated ? '🔒' : '📍'}</span>
-            <span>{currentRoom.name}</span>
-          </div>
-
-          {/* Proximity & Acoustic Hint */}
-          <div style={{ fontSize: '11px', color: '#64748b', paddingLeft: '4px' }}>
-            🔊 3D Acoustics & Wall Occlusion Active
-          </div>
+            <span>📞</span>
+            <span>End Call</span>
+          </button>
         </div>
       </div>
     </div>

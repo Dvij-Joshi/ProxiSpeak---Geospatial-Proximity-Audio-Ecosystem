@@ -1,15 +1,25 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
+if (!process.env.MONGODB_URI) {
+  dotenv.config({ path: 'atlas-credentials.env' });
+}
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import { connectDB } from './db.js';
 import User from './models/User.js';
+import Account from './models/Account.js';
+import Room from './models/Room.js';
 
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'proxispeak_jwt_secret_dev_key_2026';
 
 // ── Allowed origins ────────────────────────────────────────────────────────────
-// Always allow localhost dev + the deployed Vercel frontend
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:4173',
@@ -22,7 +32,7 @@ const ALLOWED_ORIGINS = [
 const app = express();
 
 app.use(cors({
-  origin: true, // Allow any requesting origin
+  origin: true,
   credentials: true,
 }));
 app.use(express.json());
@@ -39,9 +49,14 @@ const io = new Server(httpServer, {
   pingInterval: 10000,
 });
 
-// ── In-memory room state (fast, no DB latency for joins) ──────────────────────
-// roomId → Map<socketId, { username, avatarColor, x, y }>
+// ── Dual Layer Storage (MongoDB + In-Memory Fallback) ─────────────────────────
 const rooms = new Map();
+const memoryAccounts = new Map(); // cleanUsernameLower -> account object
+const memoryRooms = new Map();    // roomId -> room object
+
+function isDbConnected() {
+  return mongoose.connection.readyState === 1;
+}
 
 // roomId → Map<roomKey, boolean> (true = open, false = closed)
 const roomDoors = new Map();
@@ -125,10 +140,395 @@ function getRoomDoors(roomId) {
   return roomDoors.get(roomId);
 }
 
-// ── REST endpoints ─────────────────────────────────────────────────────────────
-app.get('/health', (_req, res) =>
-  res.json({ status: 'ok', ts: Date.now(), rooms: rooms.size })
-);
+// Predefined official workspaces
+const DEFAULT_ROOMS = [
+  {
+    roomId: 'main-office',
+    name: 'Corporate Office',
+    theme: 'office',
+    description: 'Executive suites, conference tables, and open team desks.',
+    createdBy: 'system',
+    isPublic: true,
+  },
+  {
+    roomId: 'conference-hall',
+    name: 'Conference & Breakout Center',
+    theme: 'conference',
+    description: 'Keynote stage, presentation hall, and discussion breakouts.',
+    createdBy: 'system',
+    isPublic: true,
+  },
+  {
+    roomId: 'rooftop-lounge',
+    name: 'Rooftop Social Lounge',
+    theme: 'lounge',
+    description: 'Casual coffee bar, sofa booths, and open air terrace.',
+    createdBy: 'system',
+    isPublic: true,
+  },
+];
+
+// Initialize default rooms in memory
+for (const r of DEFAULT_ROOMS) {
+  memoryRooms.set(r.roomId, r);
+}
+
+// ── Health Diagnostics ───────────────────────────────────────────────────────
+const healthHandler = (_req, res) => {
+  const dbConnected = isDbConnected();
+  res.json({
+    status: 'ok',
+    service: 'ProxiSpeak API Server',
+    database: dbConnected ? 'connected (MongoDB Atlas)' : 'in-memory mode (Atlas unavailable)',
+    dbReadyState: mongoose.connection.readyState,
+    registeredAccountsInMemory: memoryAccounts.size,
+    activeRoomCount: rooms.size,
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
+
+// ── Auth Endpoints ────────────────────────────────────────────────────────────
+
+// Register a new account
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, email, password, avatarColor = '#3b82f6' } = req.body;
+
+    if (!username || username.trim().length < 2) {
+      return res.status(400).json({ error: 'Username must be at least 2 characters long' });
+    }
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Please provide a valid email address' });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const cleanUsername = username.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check existing in memory
+    for (const acc of memoryAccounts.values()) {
+      if (acc.username.toLowerCase() === cleanUsername.toLowerCase()) {
+        return res.status(400).json({ error: 'Username is already taken' });
+      }
+      if (acc.email.toLowerCase() === cleanEmail) {
+        return res.status(400).json({ error: 'Email is already registered' });
+      }
+    }
+
+    // Check existing in MongoDB if connected
+    if (isDbConnected()) {
+      try {
+        const existingUser = await Account.findOne({
+          $or: [{ username: cleanUsername }, { email: cleanEmail }],
+        });
+        if (existingUser) {
+          if (existingUser.username.toLowerCase() === cleanUsername.toLowerCase()) {
+            return res.status(400).json({ error: 'Username is already taken' });
+          }
+          return res.status(400).json({ error: 'Email is already registered' });
+        }
+      } catch (dbErr) {
+        console.warn('[Register] DB lookup failed, falling back to memory:', dbErr.message);
+      }
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    let userId = 'mem_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+
+    // Save to DB if connected
+    if (isDbConnected()) {
+      try {
+        const account = await Account.create({
+          username: cleanUsername,
+          email: cleanEmail,
+          passwordHash,
+          avatarColor,
+        });
+        userId = account._id.toString();
+      } catch (dbErr) {
+        console.warn('[Register] DB save failed, persisting to memory cache:', dbErr.message);
+      }
+    }
+
+    // Always mirror to memory store for zero-latency retrieval & fallback
+    memoryAccounts.set(cleanUsername.toLowerCase(), {
+      id: userId,
+      username: cleanUsername,
+      email: cleanEmail,
+      passwordHash,
+      avatarColor,
+    });
+
+    const token = jwt.sign(
+      { id: userId, username: cleanUsername, email: cleanEmail },
+      JWT_SECRET,
+      { expiresIn: '14d' }
+    );
+
+    res.status(201).json({
+      token,
+      user: {
+        id: userId,
+        username: cleanUsername,
+        email: cleanEmail,
+        avatarColor,
+      },
+    });
+  } catch (err) {
+    console.error('[Register Error]', err);
+    res.status(500).json({ error: 'Failed to create account: ' + (err.message || 'Server error') });
+  }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Please enter your username/email and password' });
+    }
+
+    const clean = identifier.trim();
+    let account = null;
+
+    // Check DB first if connected
+    if (isDbConnected()) {
+      try {
+        account = await Account.findOne({
+          $or: [{ username: clean }, { email: clean.toLowerCase() }],
+        });
+      } catch (dbErr) {
+        console.warn('[Login] DB lookup failed, checking memory store:', dbErr.message);
+      }
+    }
+
+    // Check memory store if not found in DB
+    if (!account) {
+      const cleanLower = clean.toLowerCase();
+      for (const acc of memoryAccounts.values()) {
+        if (acc.username.toLowerCase() === cleanLower || acc.email.toLowerCase() === cleanLower) {
+          account = acc;
+          break;
+        }
+      }
+    }
+
+    if (!account) {
+      return res.status(401).json({ error: 'Invalid credentials. User not found.' });
+    }
+
+    const passwordHash = account.passwordHash;
+    const isValid = await bcrypt.compare(password, passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid password. Please try again.' });
+    }
+
+    const userId = account._id ? account._id.toString() : account.id;
+    const token = jwt.sign(
+      { id: userId, username: account.username, email: account.email },
+      JWT_SECRET,
+      { expiresIn: '14d' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: userId,
+        username: account.username,
+        email: account.email,
+        avatarColor: account.avatarColor,
+      },
+    });
+  } catch (err) {
+    console.error('[Login Error]', err);
+    res.status(500).json({ error: 'Server error during login: ' + (err.message || 'Unknown error') });
+  }
+});
+
+// Current user profile verification
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized. Token required.' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    let account = null;
+    if (isDbConnected()) {
+      try {
+        account = await Account.findById(decoded.id).select('-passwordHash');
+      } catch (_e) {}
+    }
+
+    if (!account) {
+      for (const acc of memoryAccounts.values()) {
+        if (acc.id === decoded.id || acc.username.toLowerCase() === decoded.username.toLowerCase()) {
+          account = acc;
+          break;
+        }
+      }
+    }
+
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    res.json({
+      user: {
+        id: account._id ? account._id.toString() : account.id,
+        username: account.username,
+        email: account.email,
+        avatarColor: account.avatarColor,
+      },
+    });
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// ── Rooms Endpoints ───────────────────────────────────────────────────────────
+
+// List all active and public rooms
+app.get('/api/rooms', async (_req, res) => {
+  try {
+    let dbRooms = [];
+    if (isDbConnected()) {
+      try {
+        dbRooms = await Room.find({ isPublic: true }).sort({ createdAt: -1 }).lean();
+      } catch (dbErr) {
+        console.warn('[get-rooms] DB query failed, using memory rooms:', dbErr.message);
+      }
+    }
+
+    const allRoomsMap = new Map();
+
+    // 1. Defaults
+    for (const r of DEFAULT_ROOMS) {
+      allRoomsMap.set(r.roomId, { ...r });
+    }
+
+    // 2. Memory rooms
+    for (const r of memoryRooms.values()) {
+      allRoomsMap.set(r.roomId, { ...r });
+    }
+
+    // 3. DB rooms
+    for (const r of dbRooms) {
+      allRoomsMap.set(r.roomId, {
+        roomId: r.roomId,
+        name: r.name,
+        theme: r.theme,
+        description: `Hosted by ${r.createdBy}`,
+        createdBy: r.createdBy,
+        isPublic: r.isPublic,
+      });
+    }
+
+    // Attach real-time user count to each room
+    const result = Array.from(allRoomsMap.values()).map(r => ({
+      ...r,
+      activeUsers: getRoomUsers(r.roomId).size,
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error('[get-rooms]', err);
+    res.status(500).json({ error: 'Failed to fetch rooms' });
+  }
+});
+
+// Create a new meeting room
+app.post('/api/rooms', async (req, res) => {
+  try {
+    const { name, theme = 'office', createdBy = 'Anonymous' } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Meeting name is required' });
+    }
+
+    const validTheme = ['office', 'conference', 'lounge'].includes(theme) ? theme : 'office';
+    const code = `${name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 12)}-${Math.random().toString(36).substring(2, 6)}`;
+
+    const roomData = {
+      roomId: code,
+      name: name.trim(),
+      theme: validTheme,
+      createdBy,
+      isPublic: true,
+      activeUsers: 0,
+    };
+
+    // Save in memory
+    memoryRooms.set(code, roomData);
+
+    // Save in DB if connected
+    if (isDbConnected()) {
+      try {
+        await Room.create(roomData);
+      } catch (dbErr) {
+        console.warn('[create-room] DB save failed, retained in memory:', dbErr.message);
+      }
+    }
+
+    res.status(201).json(roomData);
+  } catch (err) {
+    console.error('[create-room]', err);
+    res.status(500).json({ error: 'Failed to create room' });
+  }
+});
+
+// Get specific room details
+app.get('/api/rooms/:roomId', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+
+    // Check memory rooms (includes defaults)
+    if (memoryRooms.has(roomId)) {
+      const room = memoryRooms.get(roomId);
+      return res.json({
+        ...room,
+        activeUsers: getRoomUsers(roomId).size,
+      });
+    }
+
+    // Check DB if connected
+    if (isDbConnected()) {
+      try {
+        const dbRoom = await Room.findOne({ roomId }).lean();
+        if (dbRoom) {
+          return res.json({
+            roomId: dbRoom.roomId,
+            name: dbRoom.name,
+            theme: dbRoom.theme,
+            createdBy: dbRoom.createdBy,
+            activeUsers: getRoomUsers(roomId).size,
+          });
+        }
+      } catch (_e) {}
+    }
+
+    // Fallback room object for ad-hoc custom shared links
+    res.json({
+      roomId,
+      name: roomId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      theme: 'office',
+      createdBy: 'custom',
+      activeUsers: getRoomUsers(roomId).size,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch room' });
+  }
+});
 
 app.get('/api/room/:roomId/users', (req, res) => {
   const users = getRoomUsers(req.params.roomId);
@@ -491,9 +891,27 @@ io.on('connection', (socket) => {
     const remainingKnocks = [...knocks.values()];
     for (const occ of occupants) {
       io.to(occ.socketId).emit('pending-knocks-updated', {
-        doorKey: key,
         pendingKnocks: remainingKnocks,
       });
+    }
+  });
+
+  // ── leave-room (End Call) ───────────────────────────────────────────────────
+  socket.on('leave-room', async ({ roomId } = {}) => {
+    try {
+      const rId = roomId || socket.data.roomId;
+      const username = socket.data.username;
+      if (rId) {
+        const roomUsers = getRoomUsers(rId);
+        roomUsers.delete(socket.id);
+        socket.leave(rId);
+        io.to(rId).emit('user-left', { id: socket.id });
+        console.log(`[Room] "${username}" left room "${rId}" | online: ${roomUsers.size}`);
+        socket.data.roomId = null;
+      }
+      await User.findOneAndDelete({ socketId: socket.id }).catch(() => {});
+    } catch (err) {
+      console.error('[leave-room]', err);
     }
   });
 
