@@ -1,10 +1,24 @@
 // ─── Client Configuration ──────────────────────────────────────────────────
-export const DEFAULT_SERVER_URL =
-  typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? 'https://proxispeak-server.onrender.com'
-    : '';
+export const PRODUCTION_SERVER_URL = 'https://proxispeak-server.onrender.com';
 
-export const SERVER_URL = import.meta.env.VITE_SERVER_URL || DEFAULT_SERVER_URL;
+function resolveServerUrl() {
+  if (import.meta.env.VITE_SERVER_URL) {
+    return import.meta.env.VITE_SERVER_URL;
+  }
+  // In the browser, check if we are developing locally
+  if (typeof window !== 'undefined') {
+    const isLocal =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+    if (isLocal) {
+      return ''; // Vite proxy handles /api and /socket.io in local dev
+    }
+  }
+  // Default to deployed Render backend
+  return PRODUCTION_SERVER_URL;
+}
+
+export const SERVER_URL = resolveServerUrl();
 
 export const AVATAR_COLORS = [
   '#3b82f6', // Electric Blue
@@ -16,3 +30,4 @@ export const AVATAR_COLORS = [
   '#06b6d4', // Cyan
   '#84cc16', // Lime
 ];
+

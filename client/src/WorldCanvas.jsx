@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { spatialAudio, MAX_DISTANCE } from './services/spatialAudio';
 import { webrtc } from './services/webrtc';
+import { SERVER_URL } from './config';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const W = 1200;
@@ -9,12 +10,6 @@ const H = 680;
 const SPEED = 2.8;
 const R = 14; // avatar radius
 
-const DEFAULT_SERVER_URL =
-  typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? 'https://proxispeak-server.onrender.com'
-    : '';
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || DEFAULT_SERVER_URL;
 const MOVE_THROTTLE_MS = 50; // emit move at most every 50ms
 
 // ─── Office Theme Layout ──────────────────────────────────────────────────────
