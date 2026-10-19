@@ -1193,7 +1193,7 @@ export default function WorldCanvas({
         avatarColor: ucolor,
         isMuted: peerMuted ?? false,
       };
-      webrtc.getOrCreatePeer(id, false);
+      webrtc.connectToPeer(id);
     });
 
     // Peer moves
@@ -1927,34 +1927,54 @@ export default function WorldCanvas({
                 >
                   🔊 Resume / Unlock Audio Playback
                 </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const audioCtx = spatialAudio.ensureContext();
-                      await webrtc.startMicrophone(audioCtx);
-                      setMicActive(true);
-                      isMutedRef.current = false;
-                      setIsMuted(false);
+                  <button
+                    onClick={async () => {
+                      try {
+                        const audioCtx = spatialAudio.ensureContext();
+                        await webrtc.startMicrophone(audioCtx);
+                        setMicActive(true);
+                        isMutedRef.current = false;
+                        setIsMuted(false);
+                        refreshDiagnostics();
+                        showToast('🎙️ Microphone re-acquired & unmuted', 'success');
+                      } catch (e) {
+                        showToast(`❌ ${e.message}`, 'alert');
+                      }
+                    }}
+                    style={{
+                      padding: '7px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #22c55e',
+                      background: 'rgba(34, 197, 94, 0.2)',
+                      color: '#86efac',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🎙️ Reconnect Microphone
+                  </button>
+                  <button
+                    onClick={() => {
+                      webrtc.reconnectAllPeers();
+                      spatialAudio.resumeAll();
                       refreshDiagnostics();
-                      showToast('🎙️ Microphone re-acquired & tracks republished', 'success');
-                    } catch (e) {
-                      showToast(`❌ ${e.message}`, 'alert');
-                    }
-                  }}
-                  style={{
-                    padding: '7px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #22c55e',
-                    background: 'rgba(34, 197, 94, 0.2)',
-                    color: '#86efac',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  🎙️ Reconnect Microphone
-                </button>
-              </div>
+                      showToast('⚡ Reconnecting all peer connections cleanly...', 'info');
+                    }}
+                    style={{
+                      padding: '7px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #f59e0b',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      color: '#fbbf24',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ⚡ Force Reconnect All Peers
+                  </button>
+                </div>
             </div>
           </div>
         )}

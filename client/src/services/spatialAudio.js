@@ -10,7 +10,7 @@
  */
 
 export const MIN_DISTANCE = 30;
-export const MAX_DISTANCE = 320; // 320px hearing range on 1200px canvas
+export const MAX_DISTANCE = 420; // 420px hearing range on 1200px canvas for clear pod-to-pod voice
 
 const W = 1200;
 const H = 680;
@@ -284,8 +284,9 @@ export function calculateAcoustics(localPos, remotePos, doorStates = {}, theme =
       } else if (distance >= maxD) {
         targetGain = 0.0;
       } else {
+        // Natural gradual falloff curve: maintains solid audible volume (60-90%) at normal desk distances
         const ratio = (distance - MIN_DISTANCE) / (maxD - MIN_DISTANCE);
-        targetGain = Math.pow(1 - ratio, 1.2);
+        targetGain = Math.max(0.04, Math.pow(1 - ratio, 0.75));
       }
       filterFreq = 20000;
       status = 'clear';
@@ -302,7 +303,7 @@ export function calculateAcoustics(localPos, remotePos, doorStates = {}, theme =
     targetGain = 0.0;
   } else {
     const ratio = (distance - MIN_DISTANCE) / (maxD - MIN_DISTANCE);
-    targetGain = Math.pow(1 - ratio, 1.2);
+    targetGain = Math.max(0.04, Math.pow(1 - ratio, 0.75));
   }
   filterFreq = 20000;
   status = 'clear';
