@@ -812,6 +812,7 @@ export default function WorldCanvas({
   const [inEarshotCount, setInEarshotCount] = useState(0);
   const [currentRoom, setCurrentRoom] = useState({ id: 'open-workspace', name: 'Open Workspace', isIsolated: false });
   const [copiedLink, setCopiedLink] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(() => spatialAudio.isAudioUnlocked());
 
   const isMutedRef = useRef(true);
   const isSpeakingRef = useRef(false);
@@ -928,24 +929,26 @@ export default function WorldCanvas({
 
   // Audio Control Handlers
   const handleToggleMic = async () => {
-    const audioCtx = spatialAudio.ensureContext();
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
-    }
+    spatialAudio.resumeAll();
+    setAudioUnlocked(true);
 
     if (!micActive) {
       try {
+        const audioCtx = spatialAudio.ensureContext();
         await webrtc.startMicrophone(audioCtx);
         setMicActive(true);
         isMutedRef.current = false;
         setIsMuted(false);
+        showToast('🎙️ Microphone active! Connected to meeting voice.', 'success');
       } catch (err) {
-        alert('Microphone permission required for voice audio: ' + (err.message || err));
+        showToast(`❌ ${err.message || 'Microphone access failed'}`, 'alert');
+        alert(err.message || 'Microphone permission required for voice audio.');
       }
     } else {
       const newMuted = webrtc.toggleMute(roomId);
       isMutedRef.current = newMuted;
       setIsMuted(newMuted);
+      showToast(newMuted ? '🔇 Microphone muted' : '🎙️ Microphone unmuted', newMuted ? 'info' : 'success');
     }
   };
 
@@ -1002,6 +1005,7 @@ export default function WorldCanvas({
 
     // Initialize WebRTC signaling
     webrtc.init(socket, {
+      roomId: roomId,
       onRemoteTrack: (peerId, stream) => {
         spatialAudio.attachPeerStream(peerId, stream);
       },
@@ -1023,16 +1027,19 @@ export default function WorldCanvas({
       }
     }, 2 * 60 * 1000);
 
-    // Auto-resume AudioContext on interaction
+    // Auto-resume AudioContext and audio elements on user interaction
     const unlockAudio = () => {
-      spatialAudio.ensureContext();
+      spatialAudio.resumeAll();
+      setAudioUnlocked(true);
     };
     window.addEventListener('click', unlockAudio);
     window.addEventListener('keydown', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+    window.addEventListener('pointerdown', unlockAudio);
 
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
-      socket.emit('join-room', { username, avatarColor, roomId, isMuted: true });
+      socket.emit('join-room', { username, avatarColor, roomId, isMuted: isMutedRef.current });
     });
 
     // Populate existing peers and initiate WebRTC connections
@@ -1222,8 +1229,9 @@ export default function WorldCanvas({
       if (dy && !collidesWithWall(s.x, s.y + dy, activeTheme.walls, doorsRef.current, checkDoors)) s.y += dy;
 
       // Update Web Audio distance attenuation, room isolation & wall raycasting
+      const themeKey = activeTheme?.id || 'office';
       const { inEarshotCount: currentInEarshot, peerVolumes, peerIntensities, peerAcoustics, localRoom } =
-        spatialAudio.updatePositions(s, peersRef.current, doorsRef.current);
+        spatialAudio.updatePositions(s, peersRef.current, doorsRef.current, themeKey);
       peerVolumesRef.current = peerVolumes;
       peerIntensitiesRef.current = peerIntensities || {};
       peerAcousticsRef.current = peerAcoustics || {};
@@ -1324,6 +1332,8 @@ export default function WorldCanvas({
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('pointerdown', unlockAudio);
       cancelAnimationFrame(rafRef.current);
       clearInterval(keepAliveTimer);
       if (doorAutoCloseTimerRef.current) clearTimeout(doorAutoCloseTimerRef.current);
@@ -1704,6 +1714,41 @@ export default function WorldCanvas({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Browser Autoplay / Audio Unlock Banner */}
+        {!audioUnlocked && (
+          <div
+            onClick={() => {
+              spatialAudio.resumeAll();
+              setAudioUnlocked(true);
+            }}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 35,
+              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(79, 70, 229, 0.95))',
+              color: '#ffffff',
+              padding: '10px 24px',
+              borderRadius: '24px',
+              boxShadow: '0 8px 25px rgba(37, 99, 235, 0.55)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer',
+              border: '1px solid rgba(255, 255, 255, 0.35)',
+              backdropFilter: 'blur(10px)',
+              transition: 'transform 0.15s ease',
+            }}
+            title="Click to unlock meeting voice playback"
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1.03)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1)'; }}
+          >
+            <span style={{ fontSize: '18px' }}>🔊</span>
+            <span style={{ fontSize: '13px', fontWeight: 600 }}>Click anywhere on screen to enable meeting audio</span>
           </div>
         )}
 

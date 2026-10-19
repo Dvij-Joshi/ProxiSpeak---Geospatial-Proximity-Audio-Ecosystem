@@ -191,6 +191,35 @@ const healthHandler = (_req, res) => {
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
+// ── WebRTC ICE Servers Configuration (STUN / TURN) ────────────────────────────
+app.get('/api/ice-servers', (_req, res) => {
+  const iceServers = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  ];
+
+  if (process.env.TURN_SERVER) {
+    const turnConfig = {
+      urls: process.env.TURN_SERVER.split(',').map((s) => s.trim()),
+    };
+    if (process.env.TURN_USERNAME) turnConfig.username = process.env.TURN_USERNAME;
+    if (process.env.TURN_CREDENTIAL) turnConfig.credential = process.env.TURN_CREDENTIAL;
+    iceServers.push(turnConfig);
+  } else {
+    // High-availability public TURN fallback for cross-NAT / mobile hotspot / hosted environments
+    iceServers.push({
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    });
+  }
+
+  res.json({ iceServers });
+});
+
 // ── Auth Endpoints ────────────────────────────────────────────────────────────
 
 // Register a new account
@@ -545,10 +574,11 @@ io.on('connection', (socket) => {
       // Randomised spawn so players don't stack on top of each other
       const spawnX = 560 + Math.floor(Math.random() * 120);
       const spawnY = 340 + Math.floor(Math.random() * 100);
+      const userMuted = typeof isMuted === 'boolean' ? isMuted : true;
 
       // In-memory state
       const roomUsers = getRoomUsers(roomId);
-      roomUsers.set(socket.id, { username, avatarColor, x: spawnX, y: spawnY, isMuted });
+      roomUsers.set(socket.id, { username, avatarColor, x: spawnX, y: spawnY, isMuted: userMuted });
 
       socket.join(roomId);
       socket.data.roomId  = roomId;
@@ -565,7 +595,7 @@ io.on('connection', (socket) => {
           avatarColor: u.avatarColor,
           x: u.x,
           y: u.y,
-          isMuted:     u.isMuted ?? true,
+          isMuted:     typeof u.isMuted === 'boolean' ? u.isMuted : true,
         })),
         doors: Object.fromEntries(getRoomDoors(roomId)),
       });
@@ -577,10 +607,10 @@ io.on('connection', (socket) => {
         avatarColor,
         x: spawnX,
         y: spawnY,
-        isMuted,
+        isMuted: userMuted,
       });
 
-      console.log(`[Room] "${username}" joined "${roomId}" | online: ${roomUsers.size}`);
+      console.log(`[Room] "${username}" joined "${roomId}" (muted: ${userMuted}) | online: ${roomUsers.size}`);
 
       // Persist to MongoDB Atlas (fire-and-forget — never blocks the join)
       User.findOneAndUpdate(
@@ -640,13 +670,16 @@ io.on('connection', (socket) => {
   });
 
   // ── Microphone Mute Status ──────────────────────────────────────────────────
-  socket.on('user-mute-status', ({ isMuted, roomId = 'main-office' }) => {
-    const roomUsers = getRoomUsers(roomId);
+  socket.on('user-mute-status', ({ isMuted, roomId }) => {
+    const targetRoomId = (roomId && roomId !== 'main-office') ? roomId : (socket.data.roomId || roomId || 'main-office');
+    const roomUsers = getRoomUsers(targetRoomId);
     const user = roomUsers.get(socket.id);
+    const mutedBool = Boolean(isMuted);
     if (user) {
-      user.isMuted = isMuted;
+      user.isMuted = mutedBool;
     }
-    socket.to(roomId).emit('user-mute-status', { id: socket.id, isMuted });
+    socket.to(targetRoomId).emit('user-mute-status', { id: socket.id, isMuted: mutedBool });
+    console.log(`[Mute] "${socket.data.username || socket.id}" in "${targetRoomId}" is now ${mutedBool ? 'MUTED' : 'UNMUTED'}`);
   });
 
   // ── Toggle Room Door (Open / Close) with Unauthorized Entry Prevention ──────

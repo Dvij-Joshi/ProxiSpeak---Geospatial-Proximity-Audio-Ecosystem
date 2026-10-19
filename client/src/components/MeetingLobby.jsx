@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SERVER_URL } from '../config';
+import { spatialAudio } from '../services/spatialAudio';
 
 const THEME_OPTIONS = [
   {
@@ -86,6 +87,7 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout }) {
       return;
     }
 
+    spatialAudio.resumeAll();
     onJoinRoom({
       roomId: code,
       name: code.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
@@ -97,6 +99,7 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout }) {
     e.preventDefault();
     if (!newRoomName.trim()) return;
 
+    spatialAudio.resumeAll();
     setCreating(true);
     try {
       const res = await fetch(`${SERVER_URL}/api/rooms`, {
@@ -384,7 +387,10 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout }) {
                 return (
                   <div
                     key={r.roomId}
-                    onClick={() => onJoinRoom(r)}
+                    onClick={() => {
+                      spatialAudio.resumeAll();
+                      onJoinRoom(r);
+                    }}
                     style={{
                       background: 'rgba(30, 41, 59, 0.5)',
                       border: '1px solid rgba(51, 65, 85, 0.6)',

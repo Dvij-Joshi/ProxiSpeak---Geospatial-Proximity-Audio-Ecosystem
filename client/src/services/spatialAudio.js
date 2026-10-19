@@ -2,16 +2,15 @@
  * Spatial Audio & Acoustic Environment Engine for ProxiSpeak
  * Features:
  *  - 3D Euclidean distance attenuation with natural logarithmic falloff
- *  - Stereo panning (left/right ear binaural positioning)
- *  - Wall & Obstacle Raycasting Occlusion
+ *  - Multi-theme acoustic mapping (Corporate Office, Conference Auditorium, Rooftop Lounge)
  *  - Interactive Room Doors (Open to welcome members, Close for private soundproof meetings)
- *  - Doorway acoustic diffraction (sound enters/exits through open doorways)
- *  - BiquadFilterNode low-pass acoustic muffling through partitions
- *  - Chromium WebRTC audio keep-alive without decoder mute
+ *  - Wall & Obstacle Raycasting Occlusion & Low-pass acoustic muffling
+ *  - Resilient Dual-Engine Playback (Web Audio API 3D Panning + HTML5 Audio Element Fallback)
+ *  - Comprehensive Browser Autoplay Recovery & Audio Unlock
  */
 
-export const MIN_DISTANCE = 25;
-export const MAX_DISTANCE = 130;
+export const MIN_DISTANCE = 30;
+export const MAX_DISTANCE = 320; // 320px hearing range on 1200px canvas
 
 const W = 1200;
 const H = 680;
@@ -78,40 +77,70 @@ export const ROOMS = [
     id: 'meeting-room',
     name: 'Meeting Room',
     bounds: { x1: 18, y1: 18, x2: 320, y2: 268 },
-    isIsolated: true, // Meeting room has soundproof walls
-    maxDistance: 270,  // Everyone in meeting room hears clearly across table
+    isIsolated: true,
+    maxDistance: 360,
   },
   {
     id: 'manager-office',
     name: "Manager's Office",
     bounds: { x1: 350, y1: 18, x2: 590, y2: 235 },
     isIsolated: true,
-    maxDistance: 230,
+    maxDistance: 320,
   },
   {
     id: 'tech-server',
     name: 'Tech / Server',
     bounds: { x1: 860, y1: 18, x2: 1182, y2: 245 },
     isIsolated: false,
-    maxDistance: 240,
+    maxDistance: 320,
   },
   {
     id: 'lounge-break',
     name: 'Lounge & Break',
     bounds: { x1: 18, y1: 485, x2: 300, y2: 670 },
     isIsolated: false,
-    maxDistance: 220,
+    maxDistance: 320,
   },
   {
     id: 'print-copy',
     name: 'Print / Copy',
     bounds: { x1: 935, y1: 480, x2: 1182, y2: 670 },
     isIsolated: false,
-    maxDistance: 200,
+    maxDistance: 300,
   },
 ];
 
-export function getRoomAt(x, y) {
+export function getRoomAt(x, y, theme = 'office') {
+  if (theme === 'conference') {
+    if (x >= 280 && x <= 920 && y <= 170) {
+      return { id: 'keynote-stage', name: 'Keynote Stage (PA Broadcast)', isIsolated: false, isStage: true, maxDistance: 900 };
+    }
+    if (x >= 280 && x <= 920 && y > 170 && y <= 495) {
+      return { id: 'auditorium-hall', name: 'Auditorium Hall', isIsolated: false, maxDistance: 450 };
+    }
+    if (x < 280 && y <= 495) {
+      return { id: 'breakout-a', name: 'Breakout Pod A', isIsolated: true, maxDistance: 320 };
+    }
+    if (x > 915 && y <= 495) {
+      return { id: 'breakout-b', name: 'Breakout Pod B', isIsolated: true, maxDistance: 320 };
+    }
+    return { id: 'conf-foyer', name: 'Networking Foyer', isIsolated: false, maxDistance: 350 };
+  }
+
+  if (theme === 'lounge') {
+    if (x < 295 && y <= 475) {
+      return { id: 'vip-booths', name: 'VIP Fireside Booths', isIsolated: true, maxDistance: 320 };
+    }
+    if (x > 895 && y <= 475) {
+      return { id: 'games-rec', name: 'Games & Rec Room', isIsolated: true, maxDistance: 320 };
+    }
+    if (y > 475) {
+      return { id: 'sunset-terrace', name: 'Sunset Open-Air Terrace', isIsolated: false, maxDistance: 380 };
+    }
+    return { id: 'cocktail-bar', name: 'Central Espresso Bar', isIsolated: false, maxDistance: 380 };
+  }
+
+  // Office default
   for (const room of ROOMS) {
     if (
       x >= room.bounds.x1 &&
@@ -122,7 +151,7 @@ export function getRoomAt(x, y) {
       return room;
     }
   }
-  return { id: 'open-workspace', name: 'Open Workspace', isIsolated: false, maxDistance: 130 };
+  return { id: 'open-workspace', name: 'Open Workspace', isIsolated: false, maxDistance: MAX_DISTANCE };
 }
 
 function lineSegmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
@@ -135,22 +164,17 @@ function lineSegmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
   return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 }
 
-/**
- * Determines if a room door is open.
- * Defaults to true (accessible/open) for all rooms if never accessed or unconfigured.
- */
 export function isDoorOpen(doorStates, doorKey) {
   if (!doorStates || !doorKey) return true;
   const d = doorStates[doorKey];
   if (typeof d === 'boolean') return d;
   if (typeof d?.isOpen === 'boolean') return d.isOpen;
-  return true; // Default open for first-time access and empty rooms
+  return true;
 }
 
 export function countWallIntersections(x1, y1, x2, y2, doorStates = {}) {
   let count = 0;
   for (const w of WALLS) {
-    // Only check interior walls (ignore outer boundary walls)
     if (w.w === W - 20 || w.h === H - 20) continue;
 
     const hit =
@@ -162,10 +186,9 @@ export function countWallIntersections(x1, y1, x2, y2, doorStates = {}) {
     if (hit) count++;
   }
 
-  // Closed door barriers act as solid acoustic walls
-  Object.entries(DOORS).forEach(([roomKey, door]) => {
-    const isClosed = !isDoorOpen(doorStates, roomKey);
-    if (isClosed) {
+  Object.entries(DOORS).forEach(([key, door]) => {
+    const isOpen = isDoorOpen(doorStates, key);
+    if (!isOpen && door.wall) {
       const dw = door.wall;
       const hit =
         lineSegmentsIntersect(x1, y1, x2, y2, dw.x, dw.y, dw.x + dw.w, dw.y) ||
@@ -180,97 +203,137 @@ export function countWallIntersections(x1, y1, x2, y2, doorStates = {}) {
   return count;
 }
 
-export function calculateAcoustics(localPos, remotePos, doorStates = {}) {
+export function calculateAcoustics(localPos, remotePos, doorStates = {}, theme = 'office') {
   const dx = remotePos.x - localPos.x;
   const dy = remotePos.y - localPos.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
+  const distance = Math.hypot(dx, dy);
 
-  const localRoom = getRoomAt(localPos.x, localPos.y);
-  const remoteRoom = getRoomAt(remotePos.x, remotePos.y);
-  const wallHits = countWallIntersections(localPos.x, localPos.y, remotePos.x, remotePos.y, doorStates);
+  const localRoom = getRoomAt(localPos.x, localPos.y, theme);
+  const remoteRoom = getRoomAt(remotePos.x, remotePos.y, theme);
 
   let targetGain = 0;
   let filterFreq = 20000;
   let status = 'clear';
 
-  const sameRoom = localRoom.id === remoteRoom.id && localRoom.id !== 'open-workspace';
+  // Special Conference Stage PA System broadcast:
+  if (theme === 'conference' && remoteRoom.isStage) {
+    if (localRoom.id === 'auditorium-hall' || localRoom.isStage) {
+      targetGain = 1.0;
+      filterFreq = 20000;
+      status = 'stage-broadcast';
+      return { distance, wallHits: 0, localRoom, remoteRoom, targetGain, filterFreq, status, dx, dy };
+    }
+  }
 
+  // Same enclosed room
+  const sameRoom = localRoom.id === remoteRoom.id && localRoom.id !== 'open-workspace';
   if (sameRoom) {
-    // 1. Both participants in the same enclosed room
-    const maxD = localRoom.maxDistance;
+    const maxD = localRoom.maxDistance || 360;
     if (distance <= MIN_DISTANCE) {
       targetGain = 1.0;
     } else if (distance >= maxD) {
       targetGain = 0.0;
     } else {
       const ratio = (distance - MIN_DISTANCE) / (maxD - MIN_DISTANCE);
-      // High intelligibility within room with natural acoustic presence
-      targetGain = Math.max(0.18, Math.pow(1 - ratio, 1.25));
+      targetGain = Math.max(0.25, Math.pow(1 - ratio, 1.15));
     }
     filterFreq = 20000;
     status = 'in-room';
-  } else if ((localRoom.isIsolated || remoteRoom.isIsolated) && localRoom.id !== remoteRoom.id) {
-    // 2. One person is inside an isolated room (Meeting Room / Manager's Office), the other is outside
-    const isolatedRoom = localRoom.isIsolated ? localRoom : remoteRoom;
-    const isDoorClosed = !isDoorOpen(doorStates, isolatedRoom.id);
-
-    if (isDoorClosed || wallHits > 0) {
-      // Soundproof wall or closed door blocks speech transmission completely
-      targetGain = 0.0;
-      filterFreq = 300;
-      status = isDoorClosed ? 'door-closed' : 'blocked-wall';
-    } else {
-      // Line of sight passes through the open doorway
-      const doorwayMaxD = 145;
-      if (distance < doorwayMaxD) {
-        const ratio = distance / doorwayMaxD;
-        targetGain = Math.pow(1 - ratio, 1.4) * 0.65; // Doorway acoustic diffraction
-        filterFreq = 1800; // Mild doorway diffraction
-        status = 'doorway';
-      } else {
-        targetGain = 0.0;
-        status = 'blocked-wall';
-      }
-    }
-  } else if (wallHits > 0) {
-    // 3. Non-isolated partition or interior obstacles
-    const maxD = 130;
-    if (distance < maxD) {
-      const baseGain = Math.pow(1 - distance / maxD, 1.4);
-      // Heavy wall absorption & muffled low-pass filter
-      targetGain = baseGain * Math.pow(0.18, wallHits);
-      filterFreq = Math.max(350, Math.round(20000 / Math.pow(4.5, wallHits)));
-      status = 'occluded';
-    } else {
-      targetGain = 0.0;
-      status = 'clear';
-    }
-  } else {
-    // 4. Open workspace direct line of sight
-    const maxD = 130;
-    if (distance <= MIN_DISTANCE) {
-      targetGain = 1.0;
-    } else if (distance >= maxD) {
-      targetGain = 0.0;
-    } else {
-      const ratio = (distance - MIN_DISTANCE) / (maxD - MIN_DISTANCE);
-      targetGain = Math.pow(1 - ratio, 1.35);
-    }
-    filterFreq = 20000;
-    status = 'clear';
+    return { distance, wallHits: 0, localRoom, remoteRoom, targetGain, filterFreq, status, dx, dy };
   }
 
-  return {
-    distance,
-    wallHits,
-    localRoom,
-    remoteRoom,
-    targetGain,
-    filterFreq,
-    status,
-    dx,
-    dy,
-  };
+  // Office layout acoustic raycasting with doors
+  if (theme === 'office') {
+    const wallHits = countWallIntersections(localPos.x, localPos.y, remotePos.x, remotePos.y, doorStates);
+
+    if ((localRoom.isIsolated || remoteRoom.isIsolated) && localRoom.id !== remoteRoom.id) {
+      const isolatedRoom = localRoom.isIsolated ? localRoom : remoteRoom;
+      const isDoorClosed = !isDoorOpen(doorStates, isolatedRoom.id);
+
+      if (isDoorClosed || wallHits > 0) {
+        targetGain = 0.0;
+        filterFreq = 300;
+        status = isDoorClosed ? 'door-closed' : 'blocked-wall';
+      } else {
+        const doorwayMaxD = 220;
+        if (distance < doorwayMaxD) {
+          const ratio = distance / doorwayMaxD;
+          targetGain = Math.pow(1 - ratio, 1.25) * 0.75;
+          filterFreq = 2200;
+          status = 'doorway';
+        } else {
+          targetGain = 0.0;
+          status = 'blocked-wall';
+        }
+      }
+    } else if (wallHits > 0) {
+      const maxD = MAX_DISTANCE;
+      if (distance < maxD) {
+        const baseGain = Math.pow(1 - distance / maxD, 1.2);
+        targetGain = baseGain * Math.pow(0.35, wallHits);
+        filterFreq = Math.max(450, Math.round(20000 / Math.pow(3.5, wallHits)));
+        status = 'occluded';
+      } else {
+        targetGain = 0.0;
+        status = 'clear';
+      }
+    } else {
+      const maxD = MAX_DISTANCE;
+      if (distance <= MIN_DISTANCE) {
+        targetGain = 1.0;
+      } else if (distance >= maxD) {
+        targetGain = 0.0;
+      } else {
+        const ratio = (distance - MIN_DISTANCE) / (maxD - MIN_DISTANCE);
+        targetGain = Math.pow(1 - ratio, 1.2);
+      }
+      filterFreq = 20000;
+      status = 'clear';
+    }
+
+    return { distance, wallHits, localRoom, remoteRoom, targetGain, filterFreq, status, dx, dy };
+  }
+
+  // Conference & Lounge general spaces
+  const maxD = localRoom.maxDistance || MAX_DISTANCE;
+  if (distance <= MIN_DISTANCE) {
+    targetGain = 1.0;
+  } else if (distance >= maxD) {
+    targetGain = 0.0;
+  } else {
+    const ratio = (distance - MIN_DISTANCE) / (maxD - MIN_DISTANCE);
+    targetGain = Math.pow(1 - ratio, 1.2);
+  }
+  filterFreq = 20000;
+  status = 'clear';
+
+  return { distance, wallHits: 0, localRoom, remoteRoom, targetGain, filterFreq, status, dx, dy };
+}
+
+export function playKnockSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    for (let i = 0; i < 3; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(220 + i * 35, now + i * 0.14);
+      osc.frequency.exponentialRampToValueAtTime(80, now + i * 0.14 + 0.07);
+
+      gain.gain.setValueAtTime(0.45, now + i * 0.14);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.14 + 0.09);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + i * 0.14);
+      osc.stop(now + i * 0.14 + 0.1);
+    }
+    setTimeout(() => ctx.close().catch(() => {}), 600);
+  } catch (_e) {}
 }
 
 class SpatialAudioManager {
@@ -282,9 +345,6 @@ class SpatialAudioManager {
     this.keepAliveGain = null;
   }
 
-  /**
-   * Starts a silent oscillator keep-alive to prevent the browser from putting AudioContext to sleep.
-   */
   startKeepAlive(ctx) {
     if (this.keepAliveOsc || !ctx || ctx.state === 'closed') return;
     try {
@@ -293,21 +353,17 @@ class SpatialAudioManager {
       this.keepAliveOsc.frequency.value = 100;
 
       this.keepAliveGain = ctx.createGain();
-      // Tiny inaudible signal keeps Web Audio hardware pipeline alive forever
       this.keepAliveGain.gain.setValueAtTime(0.00001, ctx.currentTime);
 
       this.keepAliveOsc.connect(this.keepAliveGain);
       this.keepAliveGain.connect(ctx.destination);
       this.keepAliveOsc.start();
-      console.log('[SpatialAudio] Silent keep-alive oscillator active (prevents AudioContext sleep/suspend)');
+      console.log('[SpatialAudio] Silent keep-alive oscillator active');
     } catch (e) {
       console.warn('[SpatialAudio] Keepalive oscillator error:', e);
     }
   }
 
-  /**
-   * Initializes or resumes the AudioContext (safe to call on any user gesture).
-   */
   ensureContext() {
     try {
       if (!this.audioCtx || this.audioCtx.state === 'closed') {
@@ -323,9 +379,7 @@ class SpatialAudioManager {
         }
       }
       if (this.audioCtx && this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume().catch((err) => {
-          console.warn('[SpatialAudio] Could not resume audio context:', err);
-        });
+        this.audioCtx.resume().catch(() => {});
       }
       if (this.audioCtx && this.audioCtx.state === 'running') {
         this.startKeepAlive(this.audioCtx);
@@ -336,22 +390,43 @@ class SpatialAudioManager {
     return this.audioCtx;
   }
 
+  isAudioUnlocked() {
+    return Boolean(this.audioCtx && this.audioCtx.state === 'running');
+  }
+
+  /**
+   * Resumes AudioContext and triggers play() on all peer audio elements.
+   * MUST be invoked directly from user gestures (click/keydown/tap).
+   */
+  resumeAll() {
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().then(() => {
+        console.log('[SpatialAudio] AudioContext resumed via user gesture');
+      }).catch(() => {});
+    }
+    this.peers.forEach((peer) => {
+      if (peer.audioEl && peer.audioEl.paused) {
+        peer.audioEl.play().catch(() => {});
+      }
+    });
+  }
+
   /**
    * Attaches an incoming remote MediaStream to the audio pipeline.
-   * Web Audio API handles:
-   *   source -> BiquadFilterNode (occlusion/muffle) -> GainNode (distance) -> StereoPannerNode (3D) -> destination
+   * Supports resilient dual-engine playback:
+   *   1. Web Audio API with stereo panning & acoustic filter
+   *   2. Direct HTMLAudioElement fallback
    */
   attachPeerStream(peerId, mediaStream) {
     console.log(`[SpatialAudio] Attaching stream for peer ${peerId}`);
     const ctx = this.ensureContext();
 
-    // Avoid tearing down and recreating active audio graphs on subsequent track events
     const existing = this.peers.get(peerId);
-    if (existing && existing.source && existing.stream) {
+    if (existing && existing.stream) {
       const existingTrack = existing.stream.getAudioTracks()[0];
       const newTrack = mediaStream.getAudioTracks()[0];
       if (existingTrack && newTrack && existingTrack.id === newTrack.id) {
-        console.log(`[SpatialAudio] Track ${newTrack.id} already active for ${peerId}, preserving pipeline.`);
+        console.log(`[SpatialAudio] Track ${newTrack.id} already active for ${peerId}`);
         if (existing.audioEl && existing.audioEl.paused) {
           existing.audioEl.play().catch(() => {});
         }
@@ -362,20 +437,21 @@ class SpatialAudioManager {
     this.removePeerStream(peerId);
 
     try {
-      // 1. Direct HTMLAudioElement (keeps Chromium RTP decoder active without echo)
+      // 1. HTMLAudioElement (keeps Chromium RTP decoder active and serves as fail-safe fallback)
       const audioEl = document.createElement('audio');
       audioEl.srcObject = mediaStream;
       audioEl.autoplay = true;
-      audioEl.muted = false; // MUST be false so Chromium does not hardware-mute the WebRTC decoder!
-      audioEl.volume = 0.0001; // Tiny volume keeps Chrome's media clock ticking
+      audioEl.playsInline = true;
       audioEl.setAttribute('playsinline', 'true');
+      audioEl.muted = false;
+      audioEl.volume = 0.0001; // Tiny volume keeps decoder active without echo when Web Audio is running
       document.body.appendChild(audioEl);
 
       audioEl.play().catch((err) => {
         console.warn(`[SpatialAudio] Autoplay pending user interaction for ${peerId}:`, err.message);
       });
 
-      // 2. Web Audio API pipeline with acoustic filter
+      // 2. Web Audio API pipeline
       let source = null;
       let filterNode = null;
       let gainNode = null;
@@ -387,26 +463,21 @@ class SpatialAudioManager {
         try {
           source = ctx.createMediaStreamSource(mediaStream);
 
-          // Acoustic Low-pass Filter Node for wall muffling
           filterNode = ctx.createBiquadFilter();
           filterNode.type = 'lowpass';
           filterNode.frequency.setValueAtTime(20000, ctx.currentTime);
           filterNode.Q.setValueAtTime(1.0, ctx.currentTime);
 
-          // Distance Attenuation Gain Node
           gainNode = ctx.createGain();
           gainNode.gain.setValueAtTime(0, ctx.currentTime);
 
-          // Voice Intensity Analyser Node (connected to raw source)
           analyser = ctx.createAnalyser();
           analyser.fftSize = 64;
           source.connect(analyser);
 
-          // Connect source -> filterNode -> gainNode
           source.connect(filterNode);
           filterNode.connect(gainNode);
 
-          // 3D Stereo Panning
           if (typeof ctx.createStereoPanner === 'function') {
             pannerNode = ctx.createStereoPanner();
             pannerNode.pan.setValueAtTime(0, ctx.currentTime);
@@ -418,7 +489,7 @@ class SpatialAudioManager {
 
           usingWebAudio = true;
         } catch (webaudioErr) {
-          console.warn('[SpatialAudio] Web Audio node setup skipped, using native audio fallback:', webaudioErr.message);
+          console.warn('[SpatialAudio] Web Audio setup skipped, using native audio fallback:', webaudioErr.message);
           usingWebAudio = false;
         }
       }
@@ -442,29 +513,28 @@ class SpatialAudioManager {
 
   /**
    * Updates volumes, low-pass filters, and panning for all peers based on Euclidean distance,
-   * room/wall acoustic raycasting, and interactive door states.
+   * active canvas theme, and interactive door states.
    */
-  updatePositions(localPos, peersMap, doorStates = {}) {
+  updatePositions(localPos, peersMap, doorStates = {}, theme = 'office') {
     if (!localPos || !peersMap) {
-      return { inEarshotCount: 0, peerVolumes: {}, peerIntensities: {}, peerAcoustics: {}, localRoom: getRoomAt(0, 0) };
+      return { inEarshotCount: 0, peerVolumes: {}, peerIntensities: {}, peerAcoustics: {}, localRoom: getRoomAt(0, 0, theme) };
     }
 
     const ctx = this.audioCtx;
-    if (ctx && ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
     const now = ctx ? ctx.currentTime : 0;
+    const isWebAudioLive = Boolean(ctx && ctx.state === 'running');
+
     let inEarshotCount = 0;
     const peerVolumes = {};
     const peerIntensities = {};
     const peerAcoustics = {};
 
-    const localRoom = getRoomAt(localPos.x, localPos.y);
+    const localRoom = getRoomAt(localPos.x, localPos.y, theme);
 
     Object.entries(peersMap).forEach(([peerId, remotePos]) => {
       if (!remotePos) return;
 
-      const acoustic = calculateAcoustics(localPos, remotePos, doorStates);
+      const acoustic = calculateAcoustics(localPos, remotePos, doorStates, theme);
       let targetGain = this.isDeafened ? 0 : acoustic.targetGain;
       const targetFilterFreq = this.isDeafened ? 350 : acoustic.filterFreq;
 
@@ -474,39 +544,34 @@ class SpatialAudioManager {
         effectiveGain: targetGain,
       };
 
-      // In earshot if audible
       if (targetGain > 0.04) {
         inEarshotCount++;
       }
 
-      // Update Web Audio pipeline
       const peer = this.peers.get(peerId);
       if (peer) {
-        if (peer.usingWebAudio && peer.gainNode && ctx && ctx.state === 'running') {
-          // Smooth volume ramp
+        if (peer.usingWebAudio && peer.gainNode && isWebAudioLive) {
           peer.gainNode.gain.setTargetAtTime(targetGain, now, 0.03);
 
-          // Smooth lowpass filter ramp (muffles sound through walls)
           if (peer.filterNode) {
             peer.filterNode.frequency.setTargetAtTime(targetFilterFreq, now, 0.03);
           }
 
-          // 3D Stereo panning
           if (peer.pannerNode) {
-            const panValue = Math.max(-1, Math.min(1, acoustic.dx / 130));
+            const panValue = Math.max(-1, Math.min(1, acoustic.dx / (MAX_DISTANCE * 0.75)));
             peer.pannerNode.pan.setTargetAtTime(panValue, now, 0.03);
           }
 
-          // Keep audio element active with tiny non-zero volume so Chrome never considers it inaudible
+          // In Web Audio mode, audioEl keeps decoder alive
           if (peer.audioEl) {
             peer.audioEl.muted = false;
             peer.audioEl.volume = targetGain > 0.04 ? 0.0001 : 0;
-            if (peer.audioEl.paused) {
+            if (peer.audioEl.paused && targetGain > 0.04) {
               peer.audioEl.play().catch(() => {});
             }
           }
         } else if (peer.audioEl) {
-          // Direct audio element fail-safe (if Web Audio is suspended or unavailable)
+          // Direct audio element fallback if Web Audio is suspended/unsupported
           peer.audioEl.muted = this.isDeafened;
           peer.audioEl.volume = this.isDeafened ? 0 : Math.max(0, Math.min(1, targetGain));
           if (targetGain > 0.04 && peer.audioEl.paused) {
@@ -535,9 +600,6 @@ class SpatialAudioManager {
     return { inEarshotCount, peerVolumes, peerIntensities, peerAcoustics, localRoom };
   }
 
-  /**
-   * Cleans up audio nodes and hidden audio element when a peer leaves.
-   */
   removePeerStream(peerId) {
     const peer = this.peers.get(peerId);
     if (!peer) return;
@@ -553,17 +615,12 @@ class SpatialAudioManager {
         peer.audioEl.srcObject = null;
         peer.audioEl.remove();
       }
-    } catch (_e) {
-      // already disconnected
-    }
+    } catch (_e) {}
 
     this.peers.delete(peerId);
     console.log(`[SpatialAudio] Cleaned up peer audio: ${peerId}`);
   }
 
-  /**
-   * Toggles deafen state (muting all incoming peer audio).
-   */
   setDeafened(deafened) {
     this.isDeafened = Boolean(deafened);
     this.peers.forEach((peer) => {
@@ -577,9 +634,6 @@ class SpatialAudioManager {
     return this.isDeafened;
   }
 
-  /**
-   * Disposes the entire audio context and all peer connections.
-   */
   destroy() {
     if (this.keepAliveOsc) {
       try {
@@ -604,41 +658,3 @@ class SpatialAudioManager {
 
 export const spatialAudio = new SpatialAudioManager();
 
-/**
- * Synthesizes a realistic double wooden door knock sound using Web Audio API.
- * Completely self-contained without external audio assets.
- */
-export function playKnockSound() {
-  try {
-    const ctx = spatialAudio.ensureContext();
-    if (!ctx) return;
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-
-    const now = ctx.currentTime;
-    [0, 0.13].forEach((offset) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const filter = ctx.createBiquadFilter();
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(160, now + offset);
-      osc.frequency.exponentialRampToValueAtTime(38, now + offset + 0.08);
-
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(450, now + offset);
-      filter.Q.setValueAtTime(3.0, now + offset);
-
-      gain.gain.setValueAtTime(0.4, now + offset);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.08);
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(now + offset);
-      osc.stop(now + offset + 0.09);
-    });
-  } catch (e) {
-    console.warn('[KnockSound] AudioContext error:', e);
-  }
-}
