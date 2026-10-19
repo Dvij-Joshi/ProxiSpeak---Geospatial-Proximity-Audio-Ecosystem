@@ -339,10 +339,12 @@ export function playKnockSound() {
 class SpatialAudioManager {
   constructor() {
     this.audioCtx = null;
-    this.peers = new Map(); // peerId -> { source, filterNode, gainNode, pannerNode, analyser, stream, audioEl, usingWebAudio }
+    this.peers = new Map();
     this.isDeafened = false;
     this.keepAliveOsc = null;
     this.keepAliveGain = null;
+    // iOS Safari treats audioEl.volume < 1.0 as silent and won't decode RTP audio
+    this._isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   }
 
   startKeepAlive(ctx) {
@@ -399,23 +401,31 @@ class SpatialAudioManager {
    * MUST be invoked directly from user gestures (click/keydown/tap).
    */
   resumeAll() {
+    // Ensure context exists (critical for Safari where it may not be created yet)
+    this.ensureContext();
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
       this.audioCtx.resume().then(() => {
         console.log('[SpatialAudio] AudioContext resumed via user gesture');
       }).catch(() => {});
     }
     this.peers.forEach((peer) => {
-      if (peer.audioEl && peer.audioEl.paused) {
-        peer.audioEl.play().catch(() => {});
+      if (peer.audioEl) {
+        if (peer.audioEl.paused) {
+          peer.audioEl.play().catch(() => {});
+        }
+        // On iOS, ensure audio element is not stuck muted
+        if (this._isIOS && !peer.usingWebAudio) {
+          peer.audioEl.muted = false;
+        }
       }
     });
   }
 
   /**
    * Attaches an incoming remote MediaStream to the audio pipeline.
-   * Supports resilient dual-engine playback:
+   * Supports resilient dual-engine playback with iOS-specific handling:
    *   1. Web Audio API with stereo panning & acoustic filter
-   *   2. Direct HTMLAudioElement fallback
+   *   2. Direct HTMLAudioElement fallback (primary on iOS when Web Audio unavailable)
    */
   attachPeerStream(peerId, mediaStream) {
     console.log(`[SpatialAudio] Attaching stream for peer ${peerId}`);
@@ -437,21 +447,27 @@ class SpatialAudioManager {
     this.removePeerStream(peerId);
 
     try {
-      // 1. HTMLAudioElement (keeps Chromium RTP decoder active and serves as fail-safe fallback)
+      // Detect iOS for audio element volume workarounds
+      // iOS Safari ignores volume values < 1.0 and treats near-zero as silent
+      const isiOS = this._isIOS;
+
+      // 1. HTMLAudioElement — keeps Chromium RTP decoder active; primary output on iOS
       const audioEl = document.createElement('audio');
       audioEl.srcObject = mediaStream;
       audioEl.autoplay = true;
       audioEl.playsInline = true;
       audioEl.setAttribute('playsinline', 'true');
       audioEl.muted = false;
-      audioEl.volume = 0.0001; // Tiny volume keeps decoder active without echo when Web Audio is running
+      // iOS: must set volume=1.0 so the audio element actually decodes & plays.
+      // Non-iOS: 0.0001 keeps the decoder alive without audible echo while Web Audio handles output.
+      audioEl.volume = isiOS ? 1.0 : 0.0001;
       document.body.appendChild(audioEl);
 
       audioEl.play().catch((err) => {
         console.warn(`[SpatialAudio] Autoplay pending user interaction for ${peerId}:`, err.message);
       });
 
-      // 2. Web Audio API pipeline
+      // 2. Web Audio API pipeline (spatial panning, distance attenuation, wall muffling)
       let source = null;
       let filterNode = null;
       let gainNode = null;
@@ -488,9 +504,20 @@ class SpatialAudioManager {
           }
 
           usingWebAudio = true;
+
+          // When Web Audio is active and handling output, mute the audioEl on iOS
+          // to prevent double-playback (echo). On non-iOS the 0.0001 volume is fine.
+          if (isiOS) {
+            audioEl.muted = true;
+          }
         } catch (webaudioErr) {
           console.warn('[SpatialAudio] Web Audio setup skipped, using native audio fallback:', webaudioErr.message);
           usingWebAudio = false;
+          // Restore iOS audio element to full volume for direct playback
+          if (isiOS) {
+            audioEl.muted = false;
+            audioEl.volume = 1.0;
+          }
         }
       }
 
@@ -505,7 +532,7 @@ class SpatialAudioManager {
         usingWebAudio,
       });
 
-      console.log(`[SpatialAudio] Audio pipeline active for ${peerId} (WebAudio: ${usingWebAudio})`);
+      console.log(`[SpatialAudio] Audio pipeline active for ${peerId} (WebAudio: ${usingWebAudio}, iOS: ${isiOS})`);
     } catch (err) {
       console.error(`[SpatialAudio] Failed to attach stream for ${peerId}:`, err);
     }
@@ -564,8 +591,13 @@ class SpatialAudioManager {
 
           // In Web Audio mode, audioEl keeps decoder alive
           if (peer.audioEl) {
-            peer.audioEl.muted = false;
-            peer.audioEl.volume = targetGain > 0.04 ? 0.0001 : 0;
+            if (this._isIOS) {
+              // iOS: mute the element to avoid double-playback echo; Web Audio handles output
+              peer.audioEl.muted = true;
+            } else {
+              peer.audioEl.muted = false;
+              peer.audioEl.volume = targetGain > 0.04 ? 0.0001 : 0;
+            }
             if (peer.audioEl.paused && targetGain > 0.04) {
               peer.audioEl.play().catch(() => {});
             }
@@ -573,7 +605,13 @@ class SpatialAudioManager {
         } else if (peer.audioEl) {
           // Direct audio element fallback if Web Audio is suspended/unsupported
           peer.audioEl.muted = this.isDeafened;
-          peer.audioEl.volume = this.isDeafened ? 0 : Math.max(0, Math.min(1, targetGain));
+          if (this._isIOS) {
+            // iOS ignores fractional volume; use muted property for on/off control
+            peer.audioEl.volume = 1.0;
+            peer.audioEl.muted = this.isDeafened || targetGain < 0.04;
+          } else {
+            peer.audioEl.volume = this.isDeafened ? 0 : Math.max(0, Math.min(1, targetGain));
+          }
           if (targetGain > 0.04 && peer.audioEl.paused) {
             peer.audioEl.play().catch(() => {});
           }
