@@ -816,6 +816,8 @@ export default function WorldCanvas({
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [diagData, setDiagData] = useState(null);
 
+  const [isPttActive, setIsPttActive] = useState(false);
+  const isPttActiveRef = useRef(false);
   const isMutedRef = useRef(true);
   const isSpeakingRef = useRef(false);
   const renderRef = useRef(null);
@@ -928,15 +930,16 @@ export default function WorldCanvas({
 
     // 4. Movement guide bottom-left
     const userCount = Object.keys(peersRef.current).length + 1;
-    ctx.fillStyle = 'rgba(15,17,23,0.75)';
-    drawRoundRect(ctx, 16, H - 50, 270, 34, 6);
+    ctx.fillStyle = 'rgba(15,17,23,0.85)';
+    drawRoundRect(ctx, 16, H - 56, 310, 42, 6);
     ctx.fill();
     ctx.font = '12px Inter, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.textAlign = 'left';
-    ctx.fillText('W A S D  /  ↑ ↓ ← →  to move', 26, H - 32);
+    ctx.fillText('W A S D to move · [M] Mute · [D] Deafen', 26, H - 36);
     ctx.fillStyle = '#64748b';
-    ctx.fillText(`👥 ${userCount} user${userCount !== 1 ? 's' : ''} in room`, 26, H - 18);
+    ctx.font = '11px Inter, sans-serif';
+    ctx.fillText(`👥 ${userCount} in room · Hold [Space] Push-to-Talk`, 26, H - 20);
 
     // 5. Connection indicator bottom-right
     const connected = socketRef.current?.connected;
@@ -1248,13 +1251,50 @@ export default function WorldCanvas({
 
     // Keyboard handlers
     const onKeyDown = (e) => {
+      // Don't trigger hotkeys if user is focused inside a text input
+      const isInput = ['INPUT', 'TEXTAREA'].includes(e.target?.tagName);
+      if (isInput) return;
+
       stateRef.current.keys[e.key] = true;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
+
+      // Hotkey: M -> Toggle Microphone Mute
+      if (e.key === 'm' || e.key === 'M') {
+        handleToggleMic();
+        return;
+      }
+
+      // Hotkey: D -> Toggle Deafen
+      if (e.key === 'd' || e.key === 'D') {
+        handleToggleDeafen();
+        return;
+      }
+
+      // Hotkey: Spacebar (held) -> Push-To-Talk Walkie-Talkie
+      if (e.key === ' ' && !e.repeat && isMutedRef.current) {
+        isPttActiveRef.current = true;
+        setIsPttActive(true);
+        webrtc.toggleMute(roomId);
+        isMutedRef.current = false;
+        setIsMuted(false);
+        playUiChime('unmute');
+      }
     };
+
     const onKeyUp = (e) => {
       stateRef.current.keys[e.key] = false;
+
+      // Release Spacebar -> Return to Muted
+      if (e.key === ' ' && isPttActiveRef.current) {
+        isPttActiveRef.current = false;
+        setIsPttActive(false);
+        webrtc.toggleMute(roomId);
+        isMutedRef.current = true;
+        setIsMuted(true);
+        playUiChime('mute');
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -2054,6 +2094,29 @@ export default function WorldCanvas({
               {!micActive ? 'Enable Mic' : isMuted ? 'Muted' : (isSpeaking ? 'Speaking...' : 'Mic On')}
             </span>
           </button>
+
+          {/* Push-to-Talk Active Badge */}
+          {isPttActive && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                background: 'rgba(234, 179, 8, 0.25)',
+                border: '1px solid #eab308',
+                color: '#fde047',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                boxShadow: '0 0 14px rgba(234, 179, 8, 0.5)',
+              }}
+            >
+              <span>🎙️</span>
+              <span>PTT ACTIVE</span>
+            </div>
+          )}
 
           {/* Live Mic Voice Intensity Meter */}
           {micActive && !isMuted && (
