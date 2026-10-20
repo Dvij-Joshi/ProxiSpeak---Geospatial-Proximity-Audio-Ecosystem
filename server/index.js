@@ -218,9 +218,12 @@ async function fetchMeteredIceServers() {
   }
 
   try {
-    const res = await fetch(
-      `https://proxispeak.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`
-    );
+    const rawDomain = (process.env.METERED_DOMAIN || 'proxispeak').trim();
+    const cleanDomain = rawDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    const appDomain = cleanDomain.includes('.metered.live') ? cleanDomain : `${cleanDomain}.metered.live`;
+    const url = `https://${appDomain}/api/v1/turn/credentials?apiKey=${apiKey.trim()}`;
+
+    const res = await fetch(url);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       console.warn(`[ICE] Metered API returned ${res.status}: ${body}`);
