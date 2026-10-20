@@ -17,19 +17,10 @@
 import { SERVER_URL } from '../config';
 
 const DEFAULT_ICE_SERVERS = [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302', 'stun:stun4.l.google.com:19302'] },
-  { urls: ['stun:stun.services.mozilla.com:3478'] },
-  {
-    urls: [
-      'turn:openrelay.metered.ca:80',
-      'turn:openrelay.metered.ca:443',
-      'turn:openrelay.metered.ca:443?transport=tcp',
-      'turns:openrelay.metered.ca:443?transport=tcp',
-      'turns:openrelay.metered.ca:5349',
-    ],
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
+  // High-availability public STUN servers for peer discovery
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
+  { urls: ['stun:stun.cloudflare.com:3478'] },
+  { urls: ['stun:stun.nextcloud.com:443'] },
 ];
 
 // Detect iOS for audio session workarounds
@@ -326,9 +317,16 @@ class WebRTCManager {
           });
         } else {
           try { pc.addTrack(newTrack, stream); } catch (_e) {}
-          if (pc.signalingState === 'stable') {
-            this.initiateOffer(peerId, pc);
-          }
+        }
+
+        const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
+        const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
+        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
+          audioTransceiver.direction = 'sendrecv';
+        }
+
+        if (pc.signalingState === 'stable') {
+          this.initiateOffer(peerId, pc);
         }
       });
     }
@@ -409,25 +407,40 @@ class WebRTCManager {
         }
       }
 
-      // Hot-swap audio track to all active peer connections
-      // If transceiver already exists, replaceTrack() updates RTP immediately WITHOUT renegotiation!
+      // Hot-swap audio track to all active peer connections & trigger renegotiation
       this.peers.forEach((pc, peerId) => {
         const senders = pc.getSenders();
         let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
 
         if (audioSender && audioTrack) {
           audioSender.replaceTrack(audioTrack).then(() => {
-            console.log(`[WebRTC] Hot-swapped live mic track to existing sender for ${peerId}`);
+            console.log(`[WebRTC] Replaced track with live mic for ${peerId}`);
           }).catch((e) => {
             console.warn('[WebRTC] replaceTrack error:', e);
           });
         } else if (audioTrack) {
           try {
             pc.addTrack(audioTrack, this.localStream);
-            if (pc.signalingState === 'stable') {
+          } catch (_e) {}
+        }
+
+        // CRITICAL: Ensure transceiver direction is sendrecv
+        const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
+        const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
+        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
+          console.log(`[WebRTC] Upgrading transceiver direction to sendrecv for ${peerId}`);
+          audioTransceiver.direction = 'sendrecv';
+        }
+
+        // CRITICAL: Initiate renegotiation so the remote peer updates its SDP from recvonly to sendrecv
+        if (pc.signalingState === 'stable') {
+          this.initiateOffer(peerId, pc);
+        } else {
+          setTimeout(() => {
+            if (this.peers.has(peerId) && pc.signalingState === 'stable') {
               this.initiateOffer(peerId, pc);
             }
-          } catch (_e) {}
+          }, 400);
         }
       });
 

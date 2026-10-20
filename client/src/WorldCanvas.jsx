@@ -1065,6 +1065,23 @@ export default function WorldCanvas({
     window.addEventListener('touchstart', unlockAudio);
     window.addEventListener('pointerdown', unlockAudio);
 
+    // Auto-recover audio & mic when returning from background (screen lock / app switch on mobile)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[WorldCanvas] Page became visible, auto-resuming audio...');
+        spatialAudio.resumeAll();
+        if (webrtc.localStream) {
+          const t = webrtc.localStream.getAudioTracks()[0];
+          if (!t || t.readyState === 'ended') {
+            console.warn('[WorldCanvas] Mic track ended during backgrounding, re-acquiring...');
+            const ctx = spatialAudio.ensureContext();
+            webrtc.startMicrophone(ctx).catch(() => {});
+          }
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
       socket.emit('join-room', { username, avatarColor, roomId, isMuted: isMutedRef.current });
@@ -1362,6 +1379,7 @@ export default function WorldCanvas({
       window.removeEventListener('keydown', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
       window.removeEventListener('pointerdown', unlockAudio);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       cancelAnimationFrame(rafRef.current);
       clearInterval(keepAliveTimer);
       if (doorAutoCloseTimerRef.current) clearTimeout(doorAutoCloseTimerRef.current);

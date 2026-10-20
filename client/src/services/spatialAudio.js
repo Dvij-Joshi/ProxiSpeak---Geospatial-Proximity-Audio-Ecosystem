@@ -499,17 +499,24 @@ class SpatialAudioManager {
             pannerNode = ctx.createStereoPanner();
             pannerNode.pan.setValueAtTime(0, ctx.currentTime);
             gainNode.connect(pannerNode);
-            pannerNode.connect(ctx.destination);
+            // On iOS Safari, Web Audio API output is muted by the hardware silent switch
+            // and WebKit createMediaStreamSource often outputs silence.
+            // Therefore, on iOS, HTMLAudioElement is the primary audible output.
+            if (!isiOS) {
+              pannerNode.connect(ctx.destination);
+            }
           } else {
-            gainNode.connect(ctx.destination);
+            if (!isiOS) {
+              gainNode.connect(ctx.destination);
+            }
           }
 
-          usingWebAudio = true;
+          usingWebAudio = !isiOS;
 
-          // When Web Audio is active and handling output, mute the audioEl on iOS
-          // to prevent double-playback (echo). On non-iOS the 0.0001 volume is fine.
+          // On iOS, keep audioEl UNMUTED as primary audio engine
           if (isiOS) {
-            audioEl.muted = true;
+            audioEl.muted = false;
+            audioEl.volume = 1.0;
           }
         } catch (webaudioErr) {
           console.warn('[SpatialAudio] Web Audio setup skipped, using native audio fallback:', webaudioErr.message);
@@ -593,8 +600,9 @@ class SpatialAudioManager {
           // In Web Audio mode, audioEl keeps decoder alive
           if (peer.audioEl) {
             if (this._isIOS) {
-              // iOS: mute the element to avoid double-playback echo; Web Audio handles output
-              peer.audioEl.muted = true;
+              // iOS: audioEl is the primary playback device! Control muted status by distance
+              peer.audioEl.volume = 1.0;
+              peer.audioEl.muted = this.isDeafened || targetGain < 0.04;
             } else {
               peer.audioEl.muted = false;
               peer.audioEl.volume = targetGain > 0.04 ? 0.0001 : 0;

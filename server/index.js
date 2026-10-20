@@ -192,11 +192,69 @@ app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
 // ── WebRTC ICE Servers Configuration (STUN / TURN) ────────────────────────────
-app.get('/api/ice-servers', (_req, res) => {
+//
+// TURN relay is REQUIRED for cross-device/cross-network audio (different WiFi,
+// mobile data, different cities). Without it, only same-device/same-LAN works.
+//
+// Configuration priority:
+//   1. METERED_API_KEY  → Dynamic Metered.ca TURN credentials (free 20 GB/month)
+//   2. TURN_SERVER + TURN_USERNAME + TURN_CREDENTIAL → Custom / self-hosted TURN
+//   3. (No TURN configured) → STUN-only fallback with a prominent warning
+//
+// Get a free Metered API key at: https://www.metered.ca/stun-turn
+// Set it as:  METERED_API_KEY=your_api_key_here  in .env or Render env vars
+
+// Cache Metered TURN credentials for 12 hours (they are valid for 24h)
+let _meteredCache = { iceServers: null, fetchedAt: 0 };
+const METERED_CACHE_TTL = 12 * 60 * 60 * 1000;
+
+async function fetchMeteredIceServers() {
+  const apiKey = process.env.METERED_API_KEY;
+  if (!apiKey) return null;
+
+  // Return cache if still valid
+  if (_meteredCache.iceServers && (Date.now() - _meteredCache.fetchedAt) < METERED_CACHE_TTL) {
+    return _meteredCache.iceServers;
+  }
+
+  try {
+    const res = await fetch(
+      `https://proxispeak.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.warn(`[ICE] Metered API returned ${res.status}: ${body}`);
+      return _meteredCache.iceServers; // return stale cache if available
+    }
+    const credentials = await res.json();
+    if (Array.isArray(credentials) && credentials.length > 0) {
+      _meteredCache = { iceServers: credentials, fetchedAt: Date.now() };
+      console.log(`[ICE] Metered TURN credentials refreshed (${credentials.length} servers)`);
+      return credentials;
+    }
+  } catch (err) {
+    console.error('[ICE] Failed to fetch Metered TURN credentials:', err.message);
+  }
+  return _meteredCache.iceServers; // return stale cache on error
+}
+
+app.get('/api/ice-servers', async (_req, res) => {
   const iceServers = [
+    // Reliable public STUN servers (peer discovery only — no relay)
     { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    { urls: ['stun:stun.cloudflare.com:3478'] },
   ];
 
+  // Priority 1: Metered.ca dynamic TURN credentials (free 20 GB/month)
+  if (process.env.METERED_API_KEY) {
+    const meteredServers = await fetchMeteredIceServers();
+    if (meteredServers && meteredServers.length > 0) {
+      iceServers.push(...meteredServers);
+      return res.json({ iceServers });
+    }
+  }
+
+  // Priority 2: Custom TURN server from env vars (self-hosted Coturn, Twilio, etc.)
   if (process.env.TURN_SERVER) {
     const turnConfig = {
       urls: process.env.TURN_SERVER.split(',').map((s) => s.trim()),
@@ -204,19 +262,15 @@ app.get('/api/ice-servers', (_req, res) => {
     if (process.env.TURN_USERNAME) turnConfig.username = process.env.TURN_USERNAME;
     if (process.env.TURN_CREDENTIAL) turnConfig.credential = process.env.TURN_CREDENTIAL;
     iceServers.push(turnConfig);
-  } else {
-    // High-availability public TURN fallback for cross-NAT / mobile hotspot / hosted environments
-    iceServers.push({
-      urls: [
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:443',
-        'turn:openrelay.metered.ca:443?transport=tcp',
-      ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    });
+    return res.json({ iceServers });
   }
 
+  // Priority 3: No TURN configured — STUN-only (same-network connections only!)
+  console.warn(
+    '[ICE] ⚠️  No TURN server configured! Cross-device/cross-network audio WILL FAIL.\n' +
+    '     Get a free API key at https://www.metered.ca/stun-turn\n' +
+    '     Then set METERED_API_KEY=your_key in your .env or Render env vars.'
+  );
   res.json({ iceServers });
 });
 
