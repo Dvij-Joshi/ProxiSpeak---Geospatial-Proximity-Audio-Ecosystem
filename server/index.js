@@ -4,6 +4,8 @@ if (!process.env.MONGODB_URI) {
   dotenv.config({ path: 'atlas-credentials.env' });
 }
 
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -49,10 +51,78 @@ const io = new Server(httpServer, {
   pingInterval: 10000,
 });
 
-// ── Dual Layer Storage (MongoDB + In-Memory Fallback) ─────────────────────────
+// ── Dual Layer Storage (MongoDB + Persistent Disk Cache + In-Memory Fallback) ─
 const rooms = new Map();
 const memoryAccounts = new Map(); // cleanUsernameLower -> account object
 const memoryRooms = new Map();    // roomId -> room object
+
+const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
+const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
+
+// Initialize persistent cache from disk
+function loadCachedAccounts() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (fs.existsSync(ACCOUNTS_FILE)) {
+      const raw = fs.readFileSync(ACCOUNTS_FILE, 'utf8');
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        for (const acc of list) {
+          if (acc && acc.username) {
+            memoryAccounts.set(acc.username.toLowerCase(), acc);
+          }
+        }
+        console.log(`[Cache] Loaded ${memoryAccounts.size} persistent account(s) from disk cache.`);
+      }
+    }
+  } catch (err) {
+    console.warn('[Cache] Failed to load accounts disk cache:', err.message);
+  }
+}
+
+function saveAccountToCache(account) {
+  try {
+    const key = account.username.toLowerCase();
+    memoryAccounts.set(key, account);
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const all = Array.from(memoryAccounts.values());
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(all, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[Cache] Failed to persist account to disk:', err.message);
+  }
+}
+
+async function syncCachedAccountsToDb() {
+  if (!isDbConnected() || memoryAccounts.size === 0) return;
+  try {
+    for (const acc of memoryAccounts.values()) {
+      try {
+        const existing = await Account.findByCredentials(acc.username);
+        if (!existing) {
+          const created = await Account.create({
+            username: acc.username,
+            usernameLower: acc.username.toLowerCase(),
+            email: acc.email,
+            passwordHash: acc.passwordHash,
+            avatarColor: acc.avatarColor,
+          });
+          acc._id = created._id;
+          acc.id = created._id.toString();
+          acc.savedInDb = true;
+          console.log(`[Sync] Backfilled cached user "${acc.username}" into MongoDB.`);
+        }
+      } catch (_e) {}
+    }
+  } catch (err) {
+    console.warn('[Sync] Syncing cached accounts error:', err.message);
+  }
+}
+
+loadCachedAccounts();
 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
@@ -179,7 +249,7 @@ const healthHandler = (_req, res) => {
   res.json({
     status: 'ok',
     service: 'ProxiSpeak API Server',
-    database: dbConnected ? 'connected (MongoDB Atlas)' : 'in-memory mode (Atlas unavailable)',
+    database: dbConnected ? 'connected (MongoDB)' : 'in-memory/file mode (MongoDB offline)',
     dbReadyState: mongoose.connection.readyState,
     registeredAccountsInMemory: memoryAccounts.size,
     activeRoomCount: rooms.size,
@@ -192,19 +262,6 @@ app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
 // ── WebRTC ICE Servers Configuration (STUN / TURN) ────────────────────────────
-//
-// TURN relay is REQUIRED for cross-device/cross-network audio (different WiFi,
-// mobile data, different cities). Without it, only same-device/same-LAN works.
-//
-// Configuration priority:
-//   1. METERED_API_KEY  → Dynamic Metered.ca TURN credentials (free 20 GB/month)
-//   2. TURN_SERVER + TURN_USERNAME + TURN_CREDENTIAL → Custom / self-hosted TURN
-//   3. (No TURN configured) → STUN-only fallback with a prominent warning
-//
-// Get a free Metered API key at: https://www.metered.ca/stun-turn
-// Set it as:  METERED_API_KEY=your_api_key_here  in .env or Render env vars
-
-// Cache Metered TURN credentials for 12 hours (they are valid for 24h)
 let _meteredCache = { iceServers: null, fetchedAt: 0 };
 const METERED_CACHE_TTL = 12 * 60 * 60 * 1000;
 
@@ -212,7 +269,6 @@ async function fetchMeteredIceServers() {
   const apiKey = process.env.METERED_API_KEY;
   if (!apiKey) return null;
 
-  // Return cache if still valid
   if (_meteredCache.iceServers && (Date.now() - _meteredCache.fetchedAt) < METERED_CACHE_TTL) {
     return _meteredCache.iceServers;
   }
@@ -227,7 +283,7 @@ async function fetchMeteredIceServers() {
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       console.warn(`[ICE] Metered API returned ${res.status}: ${body}`);
-      return _meteredCache.iceServers; // return stale cache if available
+      return _meteredCache.iceServers;
     }
     const credentials = await res.json();
     if (Array.isArray(credentials) && credentials.length > 0) {
@@ -238,17 +294,15 @@ async function fetchMeteredIceServers() {
   } catch (err) {
     console.error('[ICE] Failed to fetch Metered TURN credentials:', err.message);
   }
-  return _meteredCache.iceServers; // return stale cache on error
+  return _meteredCache.iceServers;
 }
 
 app.get('/api/ice-servers', async (_req, res) => {
   const iceServers = [
-    // Reliable public STUN servers (peer discovery only — no relay)
     { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
     { urls: ['stun:stun.cloudflare.com:3478'] },
   ];
 
-  // Priority 1: Metered.ca dynamic TURN credentials (free 20 GB/month)
   if (process.env.METERED_API_KEY) {
     const meteredServers = await fetchMeteredIceServers();
     if (meteredServers && meteredServers.length > 0) {
@@ -257,7 +311,6 @@ app.get('/api/ice-servers', async (_req, res) => {
     }
   }
 
-  // Priority 2: Custom TURN server from env vars (self-hosted Coturn, Twilio, etc.)
   if (process.env.TURN_SERVER) {
     const turnConfig = {
       urls: process.env.TURN_SERVER.split(',').map((s) => s.trim()),
@@ -268,12 +321,6 @@ app.get('/api/ice-servers', async (_req, res) => {
     return res.json({ iceServers });
   }
 
-  // Priority 3: No TURN configured — STUN-only (same-network connections only!)
-  console.warn(
-    '[ICE] ⚠️  No TURN server configured! Cross-device/cross-network audio WILL FAIL.\n' +
-    '     Get a free API key at https://www.metered.ca/stun-turn\n' +
-    '     Then set METERED_API_KEY=your_key in your .env or Render env vars.'
-  );
   res.json({ iceServers });
 });
 
@@ -296,62 +343,89 @@ app.post('/api/auth/register', async (req, res) => {
 
     const cleanUsername = username.trim();
     const cleanEmail = email.trim().toLowerCase();
+    const cleanUsernameLower = cleanUsername.toLowerCase();
 
-    // Check existing in memory
-    for (const acc of memoryAccounts.values()) {
-      if (acc.username.toLowerCase() === cleanUsername.toLowerCase()) {
-        return res.status(400).json({ error: 'Username is already taken' });
-      }
-      if (acc.email.toLowerCase() === cleanEmail) {
-        return res.status(400).json({ error: 'Email is already registered' });
-      }
-    }
-
-    // Check existing in MongoDB if connected
+    // 1. Check existing in MongoDB if connected
     if (isDbConnected()) {
       try {
-        const existingUser = await Account.findOne({
-          $or: [{ username: cleanUsername }, { email: cleanEmail }],
-        });
-        if (existingUser) {
-          if (existingUser.username.toLowerCase() === cleanUsername.toLowerCase()) {
-            return res.status(400).json({ error: 'Username is already taken' });
+        const existingUser = await Account.findByCredentials(cleanUsernameLower);
+        const existingEmail = await Account.findByCredentials(cleanEmail);
+        const match = existingUser || existingEmail;
+        if (match) {
+          if (match.usernameLower === cleanUsernameLower || match.username?.toLowerCase() === cleanUsernameLower) {
+            return res.status(400).json({ error: 'Username is already taken. Please choose another username.' });
           }
-          return res.status(400).json({ error: 'Email is already registered' });
+          return res.status(400).json({ error: 'Email is already registered. Please sign in instead.' });
         }
       } catch (dbErr) {
-        console.warn('[Register] DB lookup failed, falling back to memory:', dbErr.message);
+        console.warn('[Register] DB duplicate lookup error:', dbErr.message);
       }
     }
 
-    // Hash password
+    // 2. Check existing in cache / persistent store
+    for (const acc of memoryAccounts.values()) {
+      if (acc.username.toLowerCase() === cleanUsernameLower) {
+        return res.status(400).json({ error: 'Username is already taken. Please choose another username.' });
+      }
+      if (acc.email.toLowerCase() === cleanEmail) {
+        return res.status(400).json({ error: 'Email is already registered. Please sign in instead.' });
+      }
+    }
+
+    // 3. Hash password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
-    let userId = 'mem_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
 
-    // Save to DB if connected
+    let userId = null;
+    let savedInDb = false;
+
+    // 4. Save to MongoDB if connected
     if (isDbConnected()) {
       try {
         const account = await Account.create({
           username: cleanUsername,
+          usernameLower: cleanUsernameLower,
           email: cleanEmail,
           passwordHash,
           avatarColor,
         });
         userId = account._id.toString();
+        savedInDb = true;
+        console.log(`[Register] Account registered successfully in MongoDB for "${cleanUsername}" (${cleanEmail}) [ID: ${userId}]`);
       } catch (dbErr) {
-        console.warn('[Register] DB save failed, persisting to memory cache:', dbErr.message);
+        console.error('[Register] MongoDB save error:', dbErr.message);
+        if (dbErr.code === 11000) {
+          const keyPattern = dbErr.keyPattern || {};
+          if (keyPattern.username || keyPattern.usernameLower || dbErr.message?.includes('username')) {
+            return res.status(400).json({ error: 'Username is already taken. Please choose another username.' });
+          }
+          if (keyPattern.email || dbErr.message?.includes('email')) {
+            return res.status(400).json({ error: 'Email is already registered. Please sign in instead.' });
+          }
+        }
+        return res.status(500).json({ error: 'Failed to create account in database: ' + dbErr.message });
       }
     }
 
-    // Always mirror to memory store for zero-latency retrieval & fallback
-    memoryAccounts.set(cleanUsername.toLowerCase(), {
+    // 5. Fallback if DB was unavailable
+    if (!userId) {
+      userId = 'acc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      console.warn(`[Register] MongoDB not connected — persisting account "${cleanUsername}" to disk cache.`);
+    }
+
+    const accountObj = {
       id: userId,
+      _id: userId,
       username: cleanUsername,
+      usernameLower: cleanUsernameLower,
       email: cleanEmail,
       passwordHash,
       avatarColor,
-    });
+      savedInDb,
+      createdAt: new Date().toISOString(),
+    };
+
+    saveAccountToCache(accountObj);
 
     const token = jwt.sign(
       { id: userId, username: cleanUsername, email: cleanEmail },
@@ -359,7 +433,7 @@ app.post('/api/auth/register', async (req, res) => {
       { expiresIn: '14d' }
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       token,
       user: {
         id: userId,
@@ -370,7 +444,7 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (err) {
     console.error('[Register Error]', err);
-    res.status(500).json({ error: 'Failed to create account: ' + (err.message || 'Server error') });
+    return res.status(500).json({ error: 'Failed to create account: ' + (err.message || 'Server error') });
   }
 });
 
@@ -383,72 +457,71 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const clean = identifier.trim();
+    const cleanLower = clean.toLowerCase();
     let account = null;
 
-    // Check DB first if connected
+    // 1. Lookup in MongoDB first if connected
     if (isDbConnected()) {
       try {
-        account = await Account.findOne({
-          $or: [{ username: clean }, { email: clean.toLowerCase() }],
-        });
+        account = await Account.findByCredentials(clean);
+        if (account) {
+          console.log(`[Login] Found account in MongoDB for "${clean}" -> ${account.username} (${account.email})`);
+        }
       } catch (dbErr) {
-        console.warn('[Login] DB lookup failed, checking memory store:', dbErr.message);
+        console.warn('[Login] DB lookup error:', dbErr.message);
       }
     }
 
-    // Check memory store if not found in DB
+    // 2. Lookup in memory / disk cache if not found in DB
     if (!account) {
-      const cleanLower = clean.toLowerCase();
       for (const acc of memoryAccounts.values()) {
-        if (acc.username.toLowerCase() === cleanLower || acc.email.toLowerCase() === cleanLower) {
+        if (
+          acc.username.toLowerCase() === cleanLower ||
+          acc.email.toLowerCase() === cleanLower ||
+          acc.usernameLower === cleanLower
+        ) {
           account = acc;
+          console.log(`[Login] Found account in disk cache for "${clean}" -> ${account.username}`);
           break;
         }
       }
     }
 
+    // 3. If account not found:
     if (!account) {
-      // Auto-provision account on first login attempt!
-      // This ensures teammates, testers, and users are NEVER locked out!
-      const isEmail = clean.includes('@');
-      const cleanUsername = isEmail ? clean.split('@')[0] : clean;
-      const cleanEmail = isEmail ? clean.toLowerCase() : `${clean.toLowerCase()}@proxispeak.local`;
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(password, salt);
-      const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
-      const avatarColor = defaultColors[Math.floor(Math.random() * defaultColors.length)];
+      return res.status(404).json({
+        error: 'No account found with this username or email. Please check your spelling or click Create Account to register.',
+      });
+    }
 
-      let userId = 'mem_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-      if (isDbConnected()) {
-        try {
-          const newAccount = await Account.create({
-            username: cleanUsername,
-            email: cleanEmail,
-            passwordHash,
-            avatarColor,
+    // 4. Verify password
+    const passwordHash = account.passwordHash;
+    const isValid = await bcrypt.compare(password, passwordHash);
+    if (!isValid) {
+      console.warn(`[Login] Password mismatch for "${account.username}"`);
+      return res.status(401).json({ error: 'Incorrect password. Please verify your password and try again.' });
+    }
+
+    // 5. If account was only in cache and MongoDB is now connected, backfill into MongoDB!
+    if (isDbConnected() && (!account._id || (typeof account._id === 'string' && account._id.startsWith('acc_')))) {
+      try {
+        const existingInDb = await Account.findByCredentials(clean);
+        if (!existingInDb) {
+          const newDoc = await Account.create({
+            username: account.username,
+            usernameLower: account.username.toLowerCase(),
+            email: account.email,
+            passwordHash: account.passwordHash,
+            avatarColor: account.avatarColor,
           });
-          userId = newAccount._id.toString();
-        } catch (dbErr) {
-          console.warn('[Login Auto-Register] DB save fallback:', dbErr.message);
+          account._id = newDoc._id;
+          account.id = newDoc._id.toString();
+          account.savedInDb = true;
+          saveAccountToCache(account);
+          console.log(`[Login] Successfully backfilled "${account.username}" into MongoDB [ID: ${account.id}]`);
         }
-      }
-
-      account = {
-        id: userId,
-        _id: userId,
-        username: cleanUsername,
-        email: cleanEmail,
-        passwordHash,
-        avatarColor,
-      };
-
-      memoryAccounts.set(cleanUsername.toLowerCase(), account);
-      console.log(`[Auth] Auto-provisioned account for "${cleanUsername}" (${cleanEmail})`);
-    } else {
-      const passwordHash = account.passwordHash;
-      const isValid = await bcrypt.compare(password, passwordHash);
-      if (!isValid) {
-        return res.status(401).json({ error: 'Invalid password. Please try again or use another username.' });
+      } catch (syncErr) {
+        console.warn('[Login] Sync cached account notice:', syncErr.message);
       }
     }
 
@@ -459,7 +532,7 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '14d' }
     );
 
-    res.json({
+    return res.json({
       token,
       user: {
         id: userId,
@@ -470,7 +543,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (err) {
     console.error('[Login Error]', err);
-    res.status(500).json({ error: 'Server error during login: ' + (err.message || 'Unknown error') });
+    return res.status(500).json({ error: 'Server error during login: ' + (err.message || 'Unknown error') });
   }
 });
 
@@ -488,13 +561,22 @@ app.get('/api/auth/me', async (req, res) => {
     let account = null;
     if (isDbConnected()) {
       try {
-        account = await Account.findById(decoded.id).select('-passwordHash');
+        if (mongoose.Types.ObjectId.isValid(decoded.id)) {
+          account = await Account.findById(decoded.id).select('-passwordHash');
+        }
+        if (!account && decoded.username) {
+          account = await Account.findByCredentials(decoded.username).select('-passwordHash');
+        }
       } catch (_e) {}
     }
 
     if (!account) {
       for (const acc of memoryAccounts.values()) {
-        if (acc.id === decoded.id || acc.username.toLowerCase() === decoded.username.toLowerCase()) {
+        if (
+          acc.id === decoded.id ||
+          acc.username.toLowerCase() === decoded.username?.toLowerCase() ||
+          acc.email?.toLowerCase() === decoded.email?.toLowerCase()
+        ) {
           account = acc;
           break;
         }
@@ -663,12 +745,10 @@ io.on('connection', (socket) => {
   // ── join-room ───────────────────────────────────────────────────────────────
   socket.on('join-room', async ({ username, avatarColor, roomId = 'main-office', isMuted = true }) => {
     try {
-      // Randomised spawn so players don't stack on top of each other
       const spawnX = 560 + Math.floor(Math.random() * 120);
       const spawnY = 340 + Math.floor(Math.random() * 100);
       const userMuted = typeof isMuted === 'boolean' ? isMuted : true;
 
-      // In-memory state
       const roomUsers = getRoomUsers(roomId);
       roomUsers.set(socket.id, { username, avatarColor, x: spawnX, y: spawnY, isMuted: userMuted });
 
@@ -678,7 +758,6 @@ io.on('connection', (socket) => {
       socket.data.x = spawnX;
       socket.data.y = spawnY;
 
-      // Send the new user the full room state & door states
       socket.emit('room-state', {
         selfId: socket.id,
         users: [...roomUsers.entries()].map(([id, u]) => ({
@@ -692,7 +771,6 @@ io.on('connection', (socket) => {
         doors: Object.fromEntries(getRoomDoors(roomId)),
       });
 
-      // Tell everyone else about the new arrival
       socket.to(roomId).emit('user-joined', {
         id: socket.id,
         username,
@@ -704,7 +782,6 @@ io.on('connection', (socket) => {
 
       console.log(`[Room] "${username}" joined "${roomId}" (muted: ${userMuted}) | online: ${roomUsers.size}`);
 
-      // Persist to MongoDB Atlas (fire-and-forget — never blocks the join)
       User.findOneAndUpdate(
         { socketId: socket.id },
         {
@@ -729,14 +806,11 @@ io.on('connection', (socket) => {
   socket.on('move', ({ x, y, roomId = 'main-office' }) => {
     socket.data.x = x;
     socket.data.y = y;
-    // Update in-memory position first (zero-latency for broadcast)
     const user = getRoomUsers(roomId).get(socket.id);
     if (user) { user.x = x; user.y = y; }
 
-    // Broadcast movement to every other user in the room
     socket.to(roomId).emit('user-moved', { id: socket.id, x, y });
 
-    // Async Atlas update — never blocks broadcast
     User.findOneAndUpdate(
       { socketId: socket.id },
       {
@@ -787,8 +861,6 @@ io.on('connection', (socket) => {
     const occupants = getOccupantsInRoomArea(roomId, key);
     const isUserInside = userRoom === key;
 
-    // Rule 6: Prevent Unauthorized Entry into occupied rooms
-    // If the room is occupied and an outside member attempts to open the door without permission:
     if (!isUserInside && isOpen && occupants.length > 0) {
       const permitted = hasValidPermission(roomId, key, socket.id);
       if (!permitted) {
@@ -810,7 +882,6 @@ io.on('connection', (socket) => {
     };
     doors.set(key, updated);
 
-    // Consume entry permission once used to open the door from outside
     if (!isUserInside && isOpen) {
       const perms = getEntryPermissions(roomId, key);
       perms.delete(socket.id);
@@ -834,7 +905,6 @@ io.on('connection', (socket) => {
     const roomName = ROOM_AREAS[key]?.name || key;
     const occupants = getOccupantsInRoomArea(roomId, key);
 
-    // Rule 1: If room is empty, notify visitor that they can enter directly
     if (occupants.length === 0) {
       socket.emit('knock-status', {
         doorKey: key,
@@ -844,7 +914,6 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Register pending knock
     const knocks = getPendingKnocks(roomId, key);
     knocks.set(socket.id, {
       visitorId: socket.id,
@@ -853,7 +922,6 @@ io.on('connection', (socket) => {
       timestamp: Date.now(),
     });
 
-    // Notify the visitor that knock was sent and they are waiting
     socket.emit('knock-status', {
       doorKey: key,
       status: 'waiting',
@@ -862,7 +930,6 @@ io.on('connection', (socket) => {
 
     const pendingList = [...knocks.values()];
 
-    // Rule 3: Notify only the members currently inside the room
     for (const occ of occupants) {
       io.to(occ.socketId).emit('visitor-knocked', {
         doorKey: key,
@@ -873,7 +940,6 @@ io.on('connection', (socket) => {
       });
     }
 
-    // Audio chime broadcast to office so occupants hear knock sound
     io.to(roomId).emit('door-knocked', {
       doorKey: key,
       roomKey: key,
@@ -894,7 +960,6 @@ io.on('connection', (socket) => {
     const username = socket.data.username || 'An occupant';
     const roomName = ROOM_AREAS[key]?.name || key;
 
-    // Rule 4: Only members currently inside the room can welcome visitors
     const user = getRoomUsers(roomId).get(socket.id);
     const userX = user?.x ?? socket.data.x;
     const userY = user?.y ?? socket.data.y;
@@ -908,20 +973,17 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Remove visitor from pending knocks
     const knocks = getPendingKnocks(roomId, key);
     const visitorRecord = knocks.get(visitorId);
     const visitorName = visitorRecord?.visitorName || 'Visitor';
     knocks.delete(visitorId);
 
-    // Rule 5: Grant entry permission (valid for 45s)
     const perms = getEntryPermissions(roomId, key);
     perms.set(visitorId, {
       visitorName,
       expiresAt: Date.now() + 45000,
     });
 
-    // Automatically open the door so the welcomed visitor can enter!
     const doors = getRoomDoors(roomId);
     const updated = {
       isOpen: true,
@@ -930,7 +992,6 @@ io.on('connection', (socket) => {
     };
     doors.set(key, updated);
 
-    // Broadcast door opening to the entire office
     io.to(roomId).emit('door-state-changed', {
       doorKey: key,
       roomKey: key,
@@ -939,7 +1000,6 @@ io.on('connection', (socket) => {
       changedBy: updated.changedBy,
     });
 
-    // Notify the visitor that they were welcomed in
     io.to(visitorId).emit('visitor-welcomed', {
       doorKey: key,
       roomName,
@@ -947,7 +1007,6 @@ io.on('connection', (socket) => {
       expiresIn: 45,
     });
 
-    // Update remaining pending knocks for all room occupants
     const occupants = getOccupantsInRoomArea(roomId, key);
     const remainingKnocks = [...knocks.values()];
     for (const occ of occupants) {
@@ -968,7 +1027,6 @@ io.on('connection', (socket) => {
     const username = socket.data.username || 'An occupant';
     const roomName = ROOM_AREAS[key]?.name || key;
 
-    // Security: Only members inside the room can decline visitors
     const user = getRoomUsers(roomId).get(socket.id);
     const userX = user?.x ?? socket.data.x;
     const userY = user?.y ?? socket.data.y;
@@ -978,13 +1036,11 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Remove from pending knocks
     const knocks = getPendingKnocks(roomId, key);
     const visitorRecord = knocks.get(visitorId);
     const visitorName = visitorRecord?.visitorName || 'Visitor';
     knocks.delete(visitorId);
 
-    // Notify the visitor that their request was declined
     io.to(visitorId).emit('visitor-declined', {
       doorKey: key,
       roomName,
@@ -992,7 +1048,6 @@ io.on('connection', (socket) => {
       reason: 'The room occupants are in a private meeting and declined entry.',
     });
 
-    // Update remaining knocks for occupants
     const occupants = getOccupantsInRoomArea(roomId, key);
     const remainingKnocks = [...knocks.values()];
     for (const occ of occupants) {
@@ -1050,7 +1105,6 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('user-left', { id: socket.id });
         console.log(`[Room] "${username}" left "${roomId}" | online: ${roomUsers.size}`);
 
-        // Clean up pending knocks and permissions for disconnected user
         for (const [, rKnocks] of pendingKnocks) {
           for (const [doorKey, doorKnocks] of rKnocks) {
             if (doorKnocks.has(socket.id)) {
@@ -1104,7 +1158,8 @@ function startKeepAlive() {
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
 connectDB()
-  .then(() => {
+  .then(async () => {
+    await syncCachedAccountsToDb();
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`\n✅ ProxiSpeak server running:`);
       console.log(`   Local  : http://localhost:${PORT}`);
@@ -1114,9 +1169,9 @@ connectDB()
     });
   })
   .catch(err => {
-    console.error('[DB] Atlas connection failed — starting without DB:', err.message);
+    console.error('[DB] Database connection error:', err.message);
     httpServer.listen(PORT, '0.0.0.0', () => {
-      console.log(`\n⚠️  ProxiSpeak server running (NO DB) on http://localhost:${PORT}\n`);
+      console.log(`\n⚠️  ProxiSpeak server running (PERSISTENT DISK CACHE MODE) on http://localhost:${PORT}\n`);
       startKeepAlive();
     });
   });
