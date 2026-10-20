@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { spatialAudio, MAX_DISTANCE, DOORS, isDoorOpen, getRoomAt, playKnockSound } from './services/spatialAudio';
+import { spatialAudio, MAX_DISTANCE, DOORS, isDoorOpen, getRoomAt, playKnockSound, playUiChime } from './services/spatialAudio';
 import { webrtc } from './services/webrtc';
 import { SERVER_URL } from './config';
 
@@ -820,6 +820,7 @@ export default function WorldCanvas({
   const isSpeakingRef = useRef(false);
   const renderRef = useRef(null);
   const offscreenRef = useRef(null);
+  const prevInEarshotRef = useRef(0);
 
   const refreshDiagnostics = useCallback(() => {
     const d = webrtc.getConnectionDiagnostics();
@@ -960,6 +961,7 @@ export default function WorldCanvas({
         setMicActive(true);
         isMutedRef.current = false;
         setIsMuted(false);
+        playUiChime('unmute');
         showToast('🎙️ Microphone active! Connected to meeting voice.', 'success');
       } catch (err) {
         showToast(`❌ ${err.message || 'Microphone access failed'}`, 'alert');
@@ -969,6 +971,7 @@ export default function WorldCanvas({
       const newMuted = webrtc.toggleMute(roomId);
       isMutedRef.current = newMuted;
       setIsMuted(newMuted);
+      playUiChime(newMuted ? 'mute' : 'unmute');
       showToast(newMuted ? '🔇 Microphone muted' : '🎙️ Microphone unmuted', newMuted ? 'info' : 'success');
     }
   };
@@ -978,6 +981,7 @@ export default function WorldCanvas({
     const nextDeafened = !isDeafened;
     spatialAudio.setDeafened(nextDeafened);
     setIsDeafened(nextDeafened);
+    playUiChime(nextDeafened ? 'deafen' : 'undeafen');
   };
 
   // Voice intensity polling
@@ -1279,7 +1283,10 @@ export default function WorldCanvas({
         spatialAudio.updatePositions(s, peersRef.current, doorsRef.current, themeKey);
       peerVolumesRef.current = peerVolumes;
       peerIntensitiesRef.current = peerIntensities || {};
-      peerAcousticsRef.current = peerAcoustics || {};
+      if (prevInEarshotRef.current === 0 && currentInEarshot > 0) {
+        playUiChime('peer-enter');
+      }
+      prevInEarshotRef.current = currentInEarshot;
       setInEarshotCount((prev) => (prev !== currentInEarshot ? currentInEarshot : prev));
 
       if (localRoom && localRoom.name !== localRoomRef.current?.name) {
