@@ -38,6 +38,22 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout }) {
   const [newRoomTheme, setNewRoomTheme] = useState('office');
   const [creating, setCreating] = useState(false);
 
+  // Search & Category Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedThemeFilter, setSelectedThemeFilter] = useState('all');
+
+  const filteredRooms = rooms.filter((r) => {
+    const matchesTheme = selectedThemeFilter === 'all' || r.theme === selectedThemeFilter;
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      r.name?.toLowerCase().includes(q) ||
+      r.roomId?.toLowerCase().includes(q) ||
+      r.description?.toLowerCase().includes(q) ||
+      r.createdBy?.toLowerCase().includes(q);
+    return matchesTheme && matchesSearch;
+  });
+
   // Fetch rooms list
   const fetchRooms = async () => {
     try {
@@ -368,9 +384,188 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout }) {
             </button>
           </div>
 
+          {/* Search & Category Filter Controls */}
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '12px',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '20px',
+            }}
+          >
+            {/* Category Filter Pills */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedThemeFilter('all')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: selectedThemeFilter === 'all' ? '1px solid #3b82f6' : '1px solid #334155',
+                  background: selectedThemeFilter === 'all' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(30, 41, 59, 0.6)',
+                  color: selectedThemeFilter === 'all' ? '#93c5fd' : '#94a3b8',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>All</span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    opacity: 0.8,
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                  }}
+                >
+                  {rooms.length}
+                </span>
+              </button>
+              {THEME_OPTIONS.map((theme) => {
+                const count = rooms.filter((r) => r.theme === theme.id).length;
+                const active = selectedThemeFilter === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => setSelectedThemeFilter(theme.id)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '20px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: active ? `1px solid ${theme.color}` : '1px solid #334155',
+                      background: active ? `${theme.color}25` : 'rgba(30, 41, 59, 0.6)',
+                      color: active ? '#ffffff' : '#94a3b8',
+                      transition: 'all 0.15s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>{theme.icon} {theme.name}</span>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        opacity: 0.8,
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                      }}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search Input */}
+            <div style={{ position: 'relative', minWidth: '220px', flex: '1', maxWidth: '320px' }}>
+              <span
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '13px',
+                  color: '#64748b',
+                  pointerEvents: 'none',
+                }}
+              >
+                🔍
+              </span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search workspaces or hosts..."
+                style={{
+                  width: '100%',
+                  padding: '8px 30px 8px 34px',
+                  borderRadius: '20px',
+                  background: '#0f172a',
+                  border: '1px solid #334155',
+                  color: '#f8fafc',
+                  fontSize: '13px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    padding: '2px',
+                  }}
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
           {loadingRooms ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
               Loading workspaces...
+            </div>
+          ) : filteredRooms.length === 0 ? (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '48px 20px',
+                background: 'rgba(30, 41, 59, 0.3)',
+                borderRadius: '14px',
+                border: '1px dashed #334155',
+              }}
+            >
+              <div style={{ fontSize: '32px', marginBottom: '10px' }}>🔍</div>
+              <h4 style={{ fontSize: '16px', fontWeight: 600, color: '#f8fafc', margin: '0 0 6px 0' }}>
+                No workspaces found
+              </h4>
+              <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 16px 0' }}>
+                No active rooms match your current search query or category filter.
+              </p>
+              {(searchQuery || selectedThemeFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedThemeFilter('all');
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #3b82f6',
+                    background: 'rgba(59, 130, 246, 0.15)',
+                    color: '#60a5fa',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
             </div>
           ) : (
             <div
@@ -380,7 +575,7 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout }) {
                 gap: '16px',
               }}
             >
-              {rooms.map((r) => {
+              {filteredRooms.map((r) => {
                 const themeMeta = THEME_OPTIONS.find(t => t.id === r.theme) || THEME_OPTIONS[0];
                 const isOccupied = r.activeUsers > 0;
 
