@@ -57,6 +57,7 @@ class WebRTCManager {
     this._offerRetryTimers = new Map();
     this._offerWatchdogs = new Map();
     this.peerStats = new Map();
+    this.selectedMicDeviceId = null;
 
     this.fetchIceServers();
   }
@@ -274,24 +275,98 @@ class WebRTCManager {
   /**
    * Progressive getUserMedia: tries ideal constraints first, falls back to basic.
    */
-  async _acquireMicStream() {
+  async _acquireMicStream(preferredDeviceId = null) {
+    const targetDevId = preferredDeviceId || this.selectedMicDeviceId;
+    const audioConstraints = {
+      echoCancellation: { ideal: true },
+      noiseSuppression: { ideal: true },
+      autoGainControl: { ideal: true },
+    };
+    if (targetDevId) {
+      audioConstraints.deviceId = { ideal: targetDevId };
+    }
+
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: { ideal: true },
-          noiseSuppression: { ideal: true },
-          autoGainControl: { ideal: true },
-        },
+        audio: audioConstraints,
         video: false,
       });
     } catch (err) {
       console.warn('[WebRTC] Ideal mic constraints failed:', err.name, '— retrying with basic constraints');
       if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError' ||
           err.name === 'NotSupportedError' || err.name === 'TypeError') {
-        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const fallbackAudio = targetDevId ? { deviceId: { ideal: targetDevId } } : true;
+        return await navigator.mediaDevices.getUserMedia({ audio: fallbackAudio, video: false });
       }
       throw err;
     }
+  }
+
+  /**
+   * Enumerates available microphone hardware devices.
+   */
+  async getAudioInputDevices() {
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.enumerateDevices !== 'function') {
+      return [];
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices
+        .filter((d) => d.kind === 'audioinput')
+        .map((d, index) => ({
+          deviceId: d.deviceId,
+          label: d.label || `Microphone ${index + 1}`,
+          groupId: d.groupId,
+        }));
+    } catch (err) {
+      console.warn('[WebRTC] Error enumerating audio devices:', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Seamlessly switches to a selected microphone device without dropping peer connections.
+   */
+  async switchAudioInputDevice(deviceId) {
+    console.log('[WebRTC] Switching microphone device to:', deviceId);
+    this.selectedMicDeviceId = deviceId;
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((t) => t.stop());
+      this.localStream = null;
+    }
+    const stream = await this._acquireMicStream(deviceId);
+    this.localStream = stream;
+    const newTrack = stream.getAudioTracks()[0];
+    if (newTrack) {
+      newTrack.enabled = !this.isMuted;
+      this._monitorTrack(newTrack);
+
+      this.peers.forEach((pc, peerId) => {
+        const senders = pc.getSenders();
+        let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
+        if (audioSender) {
+          audioSender.replaceTrack(newTrack).catch((e) => {
+            console.warn(`[WebRTC] replaceTrack error for ${peerId}:`, e);
+          });
+        } else {
+          try { pc.addTrack(newTrack, stream); } catch (_e) {}
+        }
+
+        const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
+        const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
+        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
+          audioTransceiver.direction = 'sendrecv';
+        }
+
+        if (pc.signalingState === 'stable') {
+          this.initiateOffer(peerId, pc);
+        }
+      });
+    }
+
+    this.setupVoiceActivityDetection(stream);
+    console.log('[WebRTC] Successfully switched microphone device');
+    return stream;
   }
 
   /**

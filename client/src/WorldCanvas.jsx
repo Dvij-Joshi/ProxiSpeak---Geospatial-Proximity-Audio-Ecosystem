@@ -815,6 +815,8 @@ export default function WorldCanvas({
   const [audioUnlocked, setAudioUnlocked] = useState(() => spatialAudio.isAudioUnlocked());
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [diagData, setDiagData] = useState(null);
+  const [micDevices, setMicDevices] = useState([]);
+  const [selectedMicId, setSelectedMicId] = useState('');
 
   const isMutedRef = useRef(true);
   const isSpeakingRef = useRef(false);
@@ -835,6 +837,9 @@ export default function WorldCanvas({
 
   useEffect(() => {
     if (!showDiagnostics) return;
+    webrtc.getAudioInputDevices().then((devs) => {
+      if (devs && devs.length) setMicDevices(devs);
+    });
     webrtc.updateAllPeerStats().then(refreshDiagnostics);
     const timer = setInterval(() => {
       webrtc.updateAllPeerStats().then(refreshDiagnostics);
@@ -1928,6 +1933,47 @@ export default function WorldCanvas({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Microphone Hardware Selector */}
+              {micDevices.length > 0 && (
+                <div style={{ marginTop: '10px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px', fontWeight: 600 }}>
+                    🎙️ Microphone Device:
+                  </label>
+                  <select
+                    value={selectedMicId}
+                    onChange={async (e) => {
+                      const devId = e.target.value;
+                      setSelectedMicId(devId);
+                      try {
+                        await webrtc.switchAudioInputDevice(devId);
+                        showToast('🎙️ Switched microphone device', 'success');
+                        refreshDiagnostics();
+                      } catch (err) {
+                        showToast(`❌ Could not switch mic: ${err.message}`, 'alert');
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      color: '#f8fafc',
+                      fontSize: '11px',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">Default Microphone</option>
+                    {micDevices.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
