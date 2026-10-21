@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://proxispeak-server.onrender.com/api/:path*"
+      "destination": "https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com/api/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://proxispeak-server.onrender.com/health"
+      "destination": "https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com/health"
     }
   ]
 }

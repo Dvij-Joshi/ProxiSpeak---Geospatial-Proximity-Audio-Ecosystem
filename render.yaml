@@ -15,4 +15,4 @@ services:
       - key: CLIENT_URL
         value: https://proxi-speak-geospatial-proximity-au-kappa.vercel.app
       - key: SERVER_URL
-        value: https://proxispeak-server.onrender.com
+        value: https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com

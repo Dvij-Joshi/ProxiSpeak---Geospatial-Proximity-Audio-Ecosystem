@@ -1,5 +1,5 @@
 // ─── Client Configuration ──────────────────────────────────────────────────
-export const PRODUCTION_SERVER_URL = 'https://proxispeak-server.onrender.com';
+export const PRODUCTION_SERVER_URL = 'https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com';
 
 function resolveServerUrl() {
   if (import.meta.env.VITE_SERVER_URL) {
