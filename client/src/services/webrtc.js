@@ -56,6 +56,7 @@ class WebRTCManager {
     this._deviceChangeHandler = null;
     this._offerRetryTimers = new Map();
     this._offerWatchdogs = new Map();
+    this.peerStats = new Map();
 
     this.fetchIceServers();
   }
@@ -650,6 +651,7 @@ class WebRTCManager {
     }
     this.peerMeta.delete(peerId);
     this.iceCandidateQueues.delete(peerId);
+    this.peerStats.delete(peerId);
 
     const timer = this._offerRetryTimers.get(peerId);
     if (timer) {
@@ -684,6 +686,75 @@ class WebRTCManager {
   /**
    * Returns diagnostic info about the current audio pipeline state.
    */
+  /**
+   * Fetches real-time WebRTC stats for a peer: candidate type (STUN/TURN/host), protocol, and RTT.
+   */
+  async updatePeerStats(peerId) {
+    const pc = this.peers.get(peerId);
+    if (!pc || pc.connectionState === 'closed') return null;
+
+    try {
+      const stats = await pc.getStats();
+      let activeCandidatePair = null;
+      let localCandidate = null;
+      let remoteCandidate = null;
+
+      stats.forEach((report) => {
+        if (report.type === 'transport' && report.selectedCandidatePairId) {
+          activeCandidatePair = stats.get(report.selectedCandidatePairId);
+        }
+      });
+
+      if (!activeCandidatePair) {
+        stats.forEach((report) => {
+          if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
+            activeCandidatePair = report;
+          }
+        });
+      }
+
+      if (activeCandidatePair) {
+        localCandidate = stats.get(activeCandidatePair.localCandidateId);
+        remoteCandidate = stats.get(activeCandidatePair.remoteCandidateId);
+      }
+
+      const rttMs = activeCandidatePair?.currentRoundTripTime != null
+        ? Math.round(activeCandidatePair.currentRoundTripTime * 1000)
+        : null;
+
+      const rawType = localCandidate?.candidateType || remoteCandidate?.candidateType || 'unknown';
+      let modeLabel = 'Direct P2P';
+      if (rawType === 'relay') modeLabel = 'TURN Relay';
+      else if (rawType === 'srflx' || rawType === 'prflx') modeLabel = 'STUN P2P';
+      else if (rawType === 'host') modeLabel = 'Local / LAN';
+
+      const info = {
+        candidateType: rawType,
+        modeLabel,
+        protocol: (localCandidate?.protocol || 'udp').toUpperCase(),
+        rtt: rttMs,
+        bytesReceived: activeCandidatePair?.bytesReceived || 0,
+        bytesSent: activeCandidatePair?.bytesSent || 0,
+      };
+
+      this.peerStats.set(peerId, info);
+      return info;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  /**
+   * Refreshes stats for all active WebRTC peers.
+   */
+  async updateAllPeerStats() {
+    const promises = Array.from(this.peers.keys()).map((id) => this.updatePeerStats(id));
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Returns diagnostic info about the current audio pipeline state.
+   */
   getConnectionDiagnostics() {
     const micTrack = this.localStream?.getAudioTracks()[0];
     const peerDiag = {};
@@ -695,6 +766,7 @@ class WebRTCManager {
         signalingState: pc.signalingState,
         hasSender: Boolean(audioSender),
         senderTrackState: audioSender?.track?.readyState || 'none',
+        stats: this.peerStats.get(id) || null,
       };
     });
     return {
@@ -843,6 +915,7 @@ class WebRTCManager {
     this.peers.clear();
     this.peerMeta.clear();
     this.iceCandidateQueues.clear();
+    this.peerStats.clear();
   }
 }
 

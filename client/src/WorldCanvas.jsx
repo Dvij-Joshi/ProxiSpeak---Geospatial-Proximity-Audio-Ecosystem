@@ -835,8 +835,10 @@ export default function WorldCanvas({
 
   useEffect(() => {
     if (!showDiagnostics) return;
-    refreshDiagnostics();
-    const timer = setInterval(refreshDiagnostics, 1000);
+    webrtc.updateAllPeerStats().then(refreshDiagnostics);
+    const timer = setInterval(() => {
+      webrtc.updateAllPeerStats().then(refreshDiagnostics);
+    }, 1500);
     return () => clearInterval(timer);
   }, [showDiagnostics, refreshDiagnostics]);
 
@@ -1917,6 +1919,12 @@ export default function WorldCanvas({
                           <span>Signaling: {pinfo.signalingState}</span>
                           <span>Sender: {pinfo.senderTrackState}</span>
                         </div>
+                        {pinfo.stats && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#93c5fd', fontSize: '10px', marginTop: '3px', borderTop: '1px solid rgba(51, 65, 85, 0.4)', paddingTop: '3px' }}>
+                            <span>🌐 {pinfo.stats.modeLabel} ({pinfo.stats.protocol})</span>
+                            <span>{pinfo.stats.rtt != null ? `⚡ ${pinfo.stats.rtt}ms RTT` : '⚡ Active'}</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
