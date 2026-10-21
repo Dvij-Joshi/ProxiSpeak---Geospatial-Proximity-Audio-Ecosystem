@@ -17,6 +17,14 @@ import { connectDB } from './db.js';
 import User from './models/User.js';
 import Account from './models/Account.js';
 import Room from './models/Room.js';
+import {
+  generalApiLimiter,
+  authLimiter,
+  roomCreationLimiter,
+  securityHeadersMiddleware,
+  socketConnectionLimiter,
+  createSocketEventThrottler,
+} from './security.js';
 
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'proxispeak_jwt_secret_dev_key_2026';
@@ -33,13 +41,33 @@ const ALLOWED_ORIGINS = [
 // ── Express + HTTP + Socket.io ────────────────────────────────────────────────
 const app = express();
 
+// Disable x-powered-by header (prevents backend fingerprinting)
+app.disable('x-powered-by');
+
+// Trust first proxy (Render, Vercel, Cloudflare, Nginx) so client IP detection is accurate
+app.set('trust proxy', 1);
+
+// Security headers (Anti-Clickjacking, Anti-Sniffing, XSS filtering)
+app.use(securityHeadersMiddleware);
+
 app.use(cors({
   origin: true,
   credentials: true,
 }));
-app.use(express.json());
+
+// Payload size limit to prevent memory exhaustion / DoS attacks
+app.use(express.json({ limit: '25kb' }));
+
+// Apply general API rate limiting to all /api/ endpoints
+app.use('/api/', generalApiLimiter);
 
 const httpServer = createServer(app);
+
+// Slowloris attack defense: drop stale / hanging HTTP sockets
+httpServer.headersTimeout = 20000;
+httpServer.requestTimeout = 30000;
+httpServer.keepAliveTimeout = 5000;
+
 const io = new Server(httpServer, {
   cors: {
     origin: '*',
@@ -49,7 +77,11 @@ const io = new Server(httpServer, {
   transports: ['websocket', 'polling'],
   pingTimeout: 20000,
   pingInterval: 10000,
+  maxHttpBufferSize: 32 * 1024, // 32 KB maximum payload size per packet
 });
+
+// Socket connection concurrency limiter (prevents connection exhaustion)
+io.use(socketConnectionLimiter);
 
 // ── Dual Layer Storage (MongoDB + Persistent Disk Cache + In-Memory Fallback) ─
 const rooms = new Map();
@@ -324,10 +356,10 @@ app.get('/api/ice-servers', async (_req, res) => {
   res.json({ iceServers });
 });
 
-// ── Auth Endpoints ────────────────────────────────────────────────────────────
+// ── Auth Endpoints (Protected by Auth Rate Limiter) ───────────────────────────
 
 // Register a new account
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { username, email, password, avatarColor = '#3b82f6' } = req.body;
 
@@ -449,7 +481,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // Login
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { identifier, password } = req.body;
     if (!identifier || !password) {
@@ -651,8 +683,8 @@ app.get('/api/rooms', async (_req, res) => {
   }
 });
 
-// Create a new meeting room
-app.post('/api/rooms', async (req, res) => {
+// Create a new meeting room (Protected by room creation rate limiter)
+app.post('/api/rooms', roomCreationLimiter, async (req, res) => {
   try {
     const { name, theme = 'office', createdBy = 'Anonymous' } = req.body;
     if (!name || !name.trim()) {
@@ -741,10 +773,16 @@ app.get('/api/room/:roomId/users', (req, res) => {
 // ── Socket.io events ──────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log(`[Socket] connected  : ${socket.id}`);
+  const checkThrottle = createSocketEventThrottler();
 
-  // ── join-room ───────────────────────────────────────────────────────────────
+  // ── join-room (Anti-Spam Throttled) ─────────────────────────────────────────
   socket.on('join-room', async ({ username, avatarColor, roomId = 'main-office', isMuted = true }) => {
     try {
+      if (!checkThrottle('join-room', 4, 5000)) {
+        console.warn(`[Anti-Spam] Throttled join-room from socket ${socket.id}`);
+        return;
+      }
+
       const spawnX = 560 + Math.floor(Math.random() * 120);
       const spawnY = 340 + Math.floor(Math.random() * 100);
       const userMuted = typeof isMuted === 'boolean' ? isMuted : true;
@@ -802,8 +840,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ── move ────────────────────────────────────────────────────────────────────
+  // ── move (Anti-Spam Throttled at 45/sec) ─────────────────────────────────────
   socket.on('move', ({ x, y, roomId = 'main-office' }) => {
+    if (!checkThrottle('move', 45, 1000)) {
+      return; // Discard movement packets beyond 45/sec
+    }
+
     socket.data.x = x;
     socket.data.y = y;
     const user = getRoomUsers(roomId).get(socket.id);
@@ -822,21 +864,26 @@ io.on('connection', (socket) => {
     ).catch(err => console.error('[DB move]', err.message));
   });
 
-  // ── WebRTC Signaling Relay ──────────────────────────────────────────────────
+  // ── WebRTC Signaling Relay (Anti-Spam Throttled) ─────────────────────────────
   socket.on('webrtc-offer', ({ to, offer }) => {
+    if (!checkThrottle('webrtc', 40, 5000)) return;
     io.to(to).emit('webrtc-offer', { from: socket.id, offer });
   });
 
   socket.on('webrtc-answer', ({ to, answer }) => {
+    if (!checkThrottle('webrtc', 40, 5000)) return;
     io.to(to).emit('webrtc-answer', { from: socket.id, answer });
   });
 
   socket.on('webrtc-ice-candidate', ({ to, candidate }) => {
+    if (!checkThrottle('webrtc', 40, 5000)) return;
     io.to(to).emit('webrtc-ice-candidate', { from: socket.id, candidate });
   });
 
-  // ── Microphone Mute Status ──────────────────────────────────────────────────
+  // ── Microphone Mute Status (Anti-Spam Throttled) ────────────────────────────
   socket.on('user-mute-status', ({ isMuted, roomId }) => {
+    if (!checkThrottle('user-mute-status', 6, 2000)) return;
+
     const targetRoomId = (roomId && roomId !== 'main-office') ? roomId : (socket.data.roomId || roomId || 'main-office');
     const roomUsers = getRoomUsers(targetRoomId);
     const user = roomUsers.get(socket.id);
@@ -848,10 +895,12 @@ io.on('connection', (socket) => {
     console.log(`[Mute] "${socket.data.username || socket.id}" in "${targetRoomId}" is now ${mutedBool ? 'MUTED' : 'UNMUTED'}`);
   });
 
-  // ── Toggle Room Door (Open / Close) with Unauthorized Entry Prevention ──────
+  // ── Toggle Room Door (Anti-Spam Throttled & Unauthorized Entry Prevention) ──
   socket.on('toggle-door', ({ roomKey, doorKey, isOpen, roomId = 'main-office' }) => {
     const key = doorKey || roomKey;
     if (!key) return;
+
+    if (!checkThrottle('toggle-door', 3, 2000)) return;
 
     const username = socket.data.username || 'A member';
     const user = getRoomUsers(roomId).get(socket.id);
@@ -897,10 +946,21 @@ io.on('connection', (socket) => {
     console.log(`[Door] "${username}" ${isOpen ? 'OPENED' : 'CLOSED'} door of "${key}" in "${roomId}"`);
   });
 
-  // ── Knock on Door (Knock-to-Enter System) ────────────────────────────────────
+  // ── Knock on Door (Anti-Spam Cooldown & Knock-to-Enter System) ──────────────
   socket.on('knock-door', ({ roomKey, doorKey, roomId = 'main-office' }) => {
     const key = doorKey || roomKey;
     if (!key) return;
+
+    // Anti-Spam: Max 1 knock every 3 seconds per door per socket
+    if (!checkThrottle(`knock-door-${key}`, 1, 3000)) {
+      socket.emit('knock-status', {
+        doorKey: key,
+        status: 'throttled',
+        message: 'Please wait a moment before knocking again.',
+      });
+      return;
+    }
+
     const username = socket.data.username || 'A member';
     const roomName = ROOM_AREAS[key]?.name || key;
     const occupants = getOccupantsInRoomArea(roomId, key);
@@ -1071,6 +1131,7 @@ io.on('connection', (socket) => {
     const remainingKnocks = [...knocks.values()];
     for (const occ of occupants) {
       io.to(occ.socketId).emit('pending-knocks-updated', {
+        doorKey: key,
         pendingKnocks: remainingKnocks,
       });
     }
@@ -1161,7 +1222,7 @@ connectDB()
   .then(async () => {
     await syncCachedAccountsToDb();
     httpServer.listen(PORT, '0.0.0.0', () => {
-      console.log(`\n✅ ProxiSpeak server running:`);
+      console.log(`\n✅ ProxiSpeak server running (Anti-DDoS & Rate Limiting Active):`);
       console.log(`   Local  : http://localhost:${PORT}`);
       console.log(`   Health : http://localhost:${PORT}/health`);
       console.log(`   Allowed: ${ALLOWED_ORIGINS.join(', ')}\n`);
