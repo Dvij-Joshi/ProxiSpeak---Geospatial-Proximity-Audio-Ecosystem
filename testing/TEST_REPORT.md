@@ -23,6 +23,7 @@
 - **Actual Result:** Red banner "Server returned 500 (Internal Server Error)" (backend/.env not set up at this time)
 - **Status:** PENDING (re-test after backend setup)
 - **Bugs/Issues:** –
+- **Screenshot:** [View TC-01 Screenshot](screenshots/Screenshot%202026-10-23%20163937.png)s
 
 <!-- Copy this block for every new test case
 
