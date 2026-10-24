@@ -93,8 +93,25 @@ export default function App() {
     }
   }, [user, inviteRoomId, currentRoom]);
 
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   // Sync current room with browser URL history
   const handleJoinRoom = (room) => {
+    // If not authenticated, create guest user credentials so canvas works seamlessly
+    if (!user) {
+      const guestName = 'Guest-' + Math.floor(1000 + Math.random() * 9000);
+      const guestUser = {
+        userId: 'guest-' + Math.random().toString(36).substring(2, 9),
+        username: guestName,
+        email: `${guestName.toLowerCase()}@guest.local`,
+        avatarColor: '#FF4B2B',
+        isGuest: true,
+      };
+      localStorage.setItem('proxispeak_token', 'guest-token-' + Date.now());
+      localStorage.setItem('proxispeak_user', JSON.stringify(guestUser));
+      setUser(guestUser);
+    }
+
     setCurrentRoom(room);
     const newUrl = `${window.location.pathname}?room=${encodeURIComponent(room.roomId)}`;
     window.history.pushState({ roomId: room.roomId }, '', newUrl);
@@ -138,35 +155,84 @@ export default function App() {
     );
   }
 
-  // Step 1: User Login / Registration Modal
-  if (!user) {
-    return (
-      <AuthModal
-        defaultRoomName={inviteRoomId}
-        onAuthSuccess={(authenticatedUser) => {
-          setUser(authenticatedUser);
-        }}
-      />
-    );
-  }
-
-  // Step 3: Active Workspace & Call Canvas
+  // Active Workspace & Call Canvas
   if (currentRoom) {
+    const activeUser = user || {
+      userId: 'guest-' + Math.random().toString(36).substring(2, 9),
+      username: 'Guest-' + Math.floor(1000 + Math.random() * 9000),
+      avatarColor: '#FF4B2B',
+      isGuest: true,
+    };
+
     return (
-      <WorldCanvas
-        user={user}
-        room={currentRoom}
-        onLeaveRoom={handleLeaveRoom}
-      />
+      <div style={{ background: '#090d16', minHeight: '100vh', width: '100%' }}>
+        <WorldCanvas
+          user={activeUser}
+          room={currentRoom}
+          onLeaveRoom={handleLeaveRoom}
+        />
+      </div>
     );
   }
 
-  // Step 2: Meeting Lobby (Browse rooms, Host meeting, Join by Code/URL)
+  // Main Home Page '/' - Stitch Lumio SaaS Landing Page & Spatial Workspaces Hub
   return (
-    <MeetingLobby
-      user={user}
-      onJoinRoom={handleJoinRoom}
-      onLogout={handleLogout}
-    />
+    <>
+      <MeetingLobby
+        user={user}
+        onJoinRoom={handleJoinRoom}
+        onLogout={handleLogout}
+        onRequestAuth={() => setShowAuthModal(true)}
+      />
+
+      {/* Auth Modal Overlay */}
+      {showAuthModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div style={{ position: 'relative', width: '100%', maxWidth: '440px' }}>
+            <button
+              onClick={() => setShowAuthModal(false)}
+              style={{
+                position: 'absolute',
+                top: '-40px',
+                right: '0',
+                color: '#ffffff',
+                background: 'rgba(255, 255, 255, 0.15)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ✕
+            </button>
+            <AuthModal
+              defaultRoomName={inviteRoomId}
+              onAuthSuccess={(authenticatedUser) => {
+                setUser(authenticatedUser);
+                setShowAuthModal(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
+
