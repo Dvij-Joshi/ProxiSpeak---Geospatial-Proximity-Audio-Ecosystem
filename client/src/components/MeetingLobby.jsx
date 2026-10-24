@@ -867,83 +867,193 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
 
       {/* Host New Meeting Modal */}
       {showHostModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-2xl bg-white-card p-8 shadow-2xl border border-line/30 relative">
-            <button
-              onClick={() => setShowHostModal(false)}
-              className="absolute top-6 right-6 text-muted hover:text-on-surface cursor-pointer text-xl"
-            >
-              ✕
-            </button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#141210]/65 backdrop-blur-md animate-fade-in"
+          onClick={() => setShowHostModal(false)}
+        >
+          <div
+            className="w-full max-w-xl rounded-3xl bg-[#FAF9F6] p-6 sm:p-8 shadow-[0_30px_90px_rgba(0,0,0,0.35)] border border-[#E7E4DC] relative overflow-hidden text-[#1E1B18]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Accent Gradient Line */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent-orange via-accent-amber to-accent-orange" />
 
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-accent-orange to-accent-amber flex items-center justify-center text-white">
-                <span className="material-symbols-outlined text-[20px]">add</span>
-              </div>
+            {/* Header */}
+            <div className="flex items-start justify-between mb-5">
               <div>
-                <h3 className="font-h3 text-xl font-bold text-on-surface">Host New Workspace</h3>
-                <p className="text-xs text-muted">Launch an instant persistent acoustic room</p>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-accent-orange/10 text-accent-orange border border-accent-orange/20 mb-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-orange animate-pulse" />
+                  Spatial Soundstage Setup
+                </div>
+                <h3 className="font-h3 text-2xl font-bold tracking-tight text-[#1E1B18]">
+                  Host New Workspace
+                </h3>
+                <p className="text-xs text-[#6B645B] mt-1">
+                  Launch a persistent acoustic canvas with dynamic distance attenuation and room boundaries.
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowHostModal(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[#7C756B] hover:text-[#1E1B18] hover:bg-[#EFECE5] transition-all text-sm font-semibold cursor-pointer"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={handleCreateRoom} className="space-y-5">
+              {/* Workspace Name Input with Quick Suggestion Chips */}
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2">
-                  Workspace Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newRoomName}
-                  onChange={(e) => setNewRoomName(e.target.value)}
-                  placeholder="e.g. Design Sync, Engineering Standup"
-                  className="w-full px-4 py-3 rounded-DEFAULT bg-soft-card-2 border border-line/30 text-on-surface text-sm focus:outline-none focus:ring-2 focus:ring-accent-orange"
-                />
-              </div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-[#524B43]">
+                    Workspace Name
+                  </label>
+                  <span className="text-[10px] text-[#8C8377] font-medium">Auto-generated ID on create</span>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-[#8C8377]">
+                    🏷️
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={newRoomName}
+                    onChange={(e) => setNewRoomName(e.target.value)}
+                    placeholder="e.g. Product Design Sync, Engineering Standup"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-[#DDD9D0] text-[#1E1B18] text-sm font-medium placeholder:text-[#A0988D] focus:outline-none focus:ring-2 focus:ring-accent-orange/30 focus:border-accent-orange transition-all shadow-sm"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2">
-                  Select Acoustic Soundstage Theme
-                </label>
-                <div className="grid grid-cols-1 gap-3">
-                  {THEME_OPTIONS.map((theme) => (
-                    <div
-                      key={theme.id}
-                      onClick={() => setNewRoomTheme(theme.id)}
-                      className={`p-3.5 rounded-DEFAULT border cursor-pointer transition-all flex items-center gap-4 ${
-                        newRoomTheme === theme.id
-                          ? 'border-accent-orange bg-soft-card shadow-sm'
-                          : 'border-line/20 bg-soft-card-2 hover:bg-soft-card/60'
-                      }`}
+                {/* Quick Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                  <span className="text-[10px] text-[#8C8377] font-semibold uppercase tracking-wider mr-1">Presets:</span>
+                  {['Product Design Sync', 'Engineering Standup', 'Executive Lounge', 'Town Hall'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setNewRoomName(preset)}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#EFECE5] hover:bg-accent-orange/15 hover:text-accent-orange text-[#524B43] transition-colors cursor-pointer border border-transparent hover:border-accent-orange/30"
                     >
-                      <span className="text-2xl">{theme.icon}</span>
-                      <div className="flex-1">
-                        <div className="font-semibold text-sm text-on-surface">{theme.name}</div>
-                        <div className="text-xs text-on-surface-variant">{theme.desc}</div>
-                      </div>
-                      {newRoomTheme === theme.id && (
-                        <span className="material-symbols-outlined text-accent-orange text-[20px]">check_circle</span>
-                      )}
-                    </div>
+                      {preset}
+                    </button>
                   ))}
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowHostModal(false)}
-                  className="px-5 py-2.5 rounded-full text-xs font-semibold text-muted hover:text-on-surface cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-6 py-2.5 rounded-full bg-primary text-on-primary text-xs font-bold tracking-wider uppercase hover:bg-on-surface transition-all shadow-md cursor-pointer disabled:opacity-50"
-                >
-                  {creating ? 'Creating Soundstage...' : 'Create & Enter Canvas'}
-                </button>
+              {/* Theme Selection */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#524B43] mb-2.5">
+                  Select Acoustic Soundstage Theme
+                </label>
+                <div className="grid grid-cols-1 gap-2.5">
+                  {THEME_OPTIONS.map((theme) => {
+                    const isSelected = newRoomTheme === theme.id;
+                    const meta = {
+                      office: { tag: 'Executive & Sync', specs: 'Max 50 peers · Glass & Drywall Occlusion' },
+                      conference: { tag: 'Keynote & Broadcast', specs: 'Max 100 peers · Keynote Audio Projection' },
+                      lounge: { tag: 'Casual & Happy Hour', specs: 'Max 40 peers · Ambient Spatial Falloff' },
+                    }[theme.id] || { tag: 'Spatial Sound', specs: 'Dolby 3D HRTF Simulation' };
+
+                    return (
+                      <div
+                        key={theme.id}
+                        onClick={() => setNewRoomTheme(theme.id)}
+                        className={`group relative p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 ${
+                          isSelected
+                            ? 'border-accent-orange bg-white shadow-md ring-1 ring-accent-orange/40'
+                            : 'border-[#E5E2DC] bg-[#FAF8F5] hover:bg-white hover:border-[#D5D0C6] hover:shadow-sm'
+                        }`}
+                      >
+                        {/* Thumbnail Image */}
+                        <div className="w-16 h-16 sm:w-20 sm:h-16 rounded-xl overflow-hidden shrink-0 relative bg-neutral-200">
+                          <img
+                            src={theme.image}
+                            alt={theme.name}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                          <span className="absolute bottom-1 right-1 text-xs drop-shadow">
+                            {theme.icon}
+                          </span>
+                        </div>
+
+                        {/* Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-[#1E1B18] truncate">
+                              {theme.name}
+                            </span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-[#EFECE5] text-[#524B43] shrink-0">
+                              {meta.tag}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#6B645B] line-clamp-1 mt-0.5">
+                            {theme.desc}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-[#8C8377] mt-1 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-accent-orange/80" />
+                            <span>{meta.specs}</span>
+                          </div>
+                        </div>
+
+                        {/* Radio Check Indicator */}
+                        <div className="shrink-0 pl-1">
+                          <div
+                            className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                              isSelected
+                                ? 'bg-accent-orange text-white shadow-sm'
+                                : 'border-2 border-[#DDD9D0] bg-white group-hover:border-[#BBB5A8]'
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg className="w-3 h-3 fill-current" viewBox="0 0 20 20">
+                                <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="pt-2 border-t border-[#EAE7E0] flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 text-[11px] text-[#7C756B]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>P2P Encrypted Audio · Instant Spatial Invite</span>
+                </div>
+                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowHostModal(false)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#6B645B] hover:text-[#1E1B18] hover:bg-[#EFECE5] transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-accent-orange to-accent-amber hover:opacity-95 text-white text-xs font-bold tracking-wider uppercase transition-all shadow-md hover:shadow-lg cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {creating ? (
+                      <>
+                        <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Create & Enter Canvas</span>
+                        <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -952,11 +1062,21 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
 
       {/* Info Modals (Spatial Audio / Hardware / Docs) */}
       {activeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-xl rounded-2xl bg-white-card p-8 shadow-2xl border border-line/30 relative">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#141210]/65 backdrop-blur-md animate-fade-in"
+          onClick={() => setActiveModal(null)}
+        >
+          <div
+            className="w-full max-w-xl rounded-3xl bg-[#FAF9F6] p-6 sm:p-8 shadow-[0_30px_90px_rgba(0,0,0,0.35)] border border-[#E7E4DC] relative overflow-hidden text-[#1E1B18]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Accent Gradient Line */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent-orange via-accent-amber to-accent-orange" />
+
             <button
               onClick={() => setActiveModal(null)}
-              className="absolute top-6 right-6 text-muted hover:text-on-surface cursor-pointer text-xl"
+              className="absolute top-6 right-6 w-8 h-8 rounded-full flex items-center justify-center text-[#7C756B] hover:text-[#1E1B18] hover:bg-[#EFECE5] transition-all text-sm font-semibold cursor-pointer"
+              aria-label="Close modal"
             >
               ✕
             </button>
@@ -964,12 +1084,15 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
             {activeModal === 'spatial-audio' && (
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-accent-orange/15 text-accent-orange flex items-center justify-center">
-                    <span className="material-symbols-outlined">headphones</span>
+                  <div className="w-10 h-10 rounded-2xl bg-accent-orange/15 text-accent-orange flex items-center justify-center shadow-sm">
+                    <span className="material-symbols-outlined text-[22px]">headphones</span>
                   </div>
-                  <h3 className="font-h3 text-xl font-bold text-on-surface">Dolby 3D HRTF Spatial Audio Engine</h3>
+                  <div>
+                    <h3 className="font-h3 text-xl font-bold text-[#1E1B18]">Dolby 3D HRTF Spatial Audio Engine</h3>
+                    <p className="text-xs text-[#7C756B]">Binaural positioning and physical acoustic occlusions</p>
+                  </div>
                 </div>
-                <div className="space-y-3 text-sm text-on-surface-variant leading-relaxed">
+                <div className="space-y-3 text-sm text-[#524B43] leading-relaxed">
                   <p>
                     ProxiSpeak integrates a browser-native WebAudio spatial panner node calibrated to Head-Related Transfer Function (HRTF) impulse responses.
                   </p>
@@ -986,12 +1109,15 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
             {activeModal === 'hardware' && (
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-accent-purple/15 text-accent-purple flex items-center justify-center">
-                    <span className="material-symbols-outlined">devices</span>
+                  <div className="w-10 h-10 rounded-2xl bg-accent-purple/15 text-accent-purple flex items-center justify-center shadow-sm">
+                    <span className="material-symbols-outlined text-[22px]">devices</span>
                   </div>
-                  <h3 className="font-h3 text-xl font-bold text-on-surface">Certified Audio Hardware & Latency</h3>
+                  <div>
+                    <h3 className="font-h3 text-xl font-bold text-[#1E1B18]">Certified Audio Hardware & Latency</h3>
+                    <p className="text-xs text-[#7C756B]">Recommended gear for optimal spatial separation</p>
+                  </div>
                 </div>
-                <div className="space-y-3 text-sm text-on-surface-variant leading-relaxed">
+                <div className="space-y-3 text-sm text-[#524B43] leading-relaxed">
                   <p>
                     ProxiSpeak delivers optimal immersion with stereo headphones or binaural headsets.
                   </p>
@@ -1007,29 +1133,33 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
             {activeModal === 'docs' && (
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 text-on-surface flex items-center justify-center">
-                    <span className="material-symbols-outlined">menu_book</span>
+                  <div className="w-10 h-10 rounded-2xl bg-[#2B261F]/10 text-[#1E1B18] flex items-center justify-center shadow-sm">
+                    <span className="material-symbols-outlined text-[22px]">menu_book</span>
                   </div>
-                  <h3 className="font-h3 text-xl font-bold text-on-surface">ProxiSpeak Documentation & API</h3>
+                  <div>
+                    <h3 className="font-h3 text-xl font-bold text-[#1E1B18]">ProxiSpeak Documentation & API</h3>
+                    <p className="text-xs text-[#7C756B]">Navigation keybindings and connection protocol</p>
+                  </div>
                 </div>
-                <div className="space-y-3 text-sm text-on-surface-variant leading-relaxed">
+                <div className="space-y-3 text-sm text-[#524B43] leading-relaxed">
                   <p>
                     ProxiSpeak is powered by a low-latency WebRTC mesh paired with a persistent WebSocket presence and state synchronization protocol.
                   </p>
                   <p>
-                    <strong>Controls:</strong> Use <kbd className="px-1.5 py-0.5 rounded bg-soft-card font-mono text-xs">W, A, S, D</kbd> or <kbd className="px-1.5 py-0.5 rounded bg-soft-card font-mono text-xs">Arrow Keys</kbd> to move your avatar. Press <kbd className="px-1.5 py-0.5 rounded bg-soft-card font-mono text-xs">M</kbd> to toggle mute, or <kbd className="px-1.5 py-0.5 rounded bg-soft-card font-mono text-xs">Spacebar</kbd> for push-to-talk.
+                    <strong>Controls:</strong> Use <kbd className="px-2 py-0.5 rounded-md bg-[#EFECE5] border border-[#DDD9D0] font-mono text-xs text-[#1E1B18]">W, A, S, D</kbd> or <kbd className="px-2 py-0.5 rounded-md bg-[#EFECE5] border border-[#DDD9D0] font-mono text-xs text-[#1E1B18]">Arrow Keys</kbd> to move your avatar. Press <kbd className="px-2 py-0.5 rounded-md bg-[#EFECE5] border border-[#DDD9D0] font-mono text-xs text-[#1E1B18]">M</kbd> to toggle mute, or <kbd className="px-2 py-0.5 rounded-md bg-[#EFECE5] border border-[#DDD9D0] font-mono text-xs text-[#1E1B18]">Spacebar</kbd> for push-to-talk.
                   </p>
                   <p>
-                    <strong>Room Invites:</strong> Share meeting links with <code className="px-1.5 py-0.5 rounded bg-soft-card text-xs">?room=your-room-id</code> for instant access.
+                    <strong>Room Invites:</strong> Share meeting links with <code className="px-2 py-0.5 rounded-md bg-[#EFECE5] border border-[#DDD9D0] text-xs font-mono text-accent-orange">?room=your-room-id</code> for instant access.
                   </p>
                 </div>
               </div>
             )}
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 pt-4 border-t border-[#EAE7E0] flex justify-end">
               <button
+                type="button"
                 onClick={() => setActiveModal(null)}
-                className="px-6 py-2 rounded-full bg-primary text-on-primary text-xs font-bold tracking-wider uppercase cursor-pointer"
+                className="px-6 py-2.5 rounded-xl bg-[#1E1B18] hover:bg-[#332E27] text-white text-xs font-bold tracking-wider uppercase cursor-pointer transition-all shadow-sm"
               >
                 Close
               </button>
