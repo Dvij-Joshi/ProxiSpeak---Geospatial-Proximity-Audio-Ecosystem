@@ -141,14 +141,14 @@ export default function App() {
           alignItems: 'center',
           justifyContent: 'center',
           height: '100vh',
-          background: '#090d16',
-          color: '#94a3b8',
+          background: '#FAF9F5',
+          color: '#8C8880',
           fontFamily: 'Inter, system-ui, sans-serif',
           gap: '16px',
         }}
       >
         <div style={{ fontSize: '42px', animation: 'spin 1.5s infinite linear' }}>🎙️</div>
-        <div style={{ fontSize: '15px', color: '#cbd5e1', fontWeight: 500 }}>
+        <div style={{ fontSize: '15px', color: '#1c1b1b', fontWeight: 600 }}>
           Connecting to ProxiSpeak Network...
         </div>
       </div>
@@ -165,7 +165,7 @@ export default function App() {
     };
 
     return (
-      <div style={{ background: '#090d16', minHeight: '100vh', width: '100%' }}>
+      <div style={{ background: '#FAF9F5', minHeight: '100vh', width: '100%' }}>
         <WorldCanvas
           user={activeUser}
           room={currentRoom}
