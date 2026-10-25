@@ -21,13 +21,23 @@ export default function App() {
     } catch (_e) {}
   }, []);
 
-  // Validate existing JWT session on boot
+  // Validate existing JWT session on boot with smooth boot sequence
   useEffect(() => {
     const token = localStorage.getItem('proxispeak_token');
     const cachedUser = localStorage.getItem('proxispeak_user');
+    const bootStartTime = Date.now();
+    const minBootTimeMs = 800; // Guarantees a smooth, visible luxury boot sequence
+
+    const finishBoot = () => {
+      const elapsed = Date.now() - bootStartTime;
+      const remaining = Math.max(0, minBootTimeMs - elapsed);
+      setTimeout(() => {
+        setAuthChecking(false);
+      }, remaining);
+    };
 
     if (!token) {
-      setAuthChecking(false);
+      finishBoot();
       return;
     }
 
@@ -61,7 +71,7 @@ export default function App() {
         console.warn('[Auth] Token check network error, retaining cached session:', err.message);
       })
       .finally(() => {
-        setAuthChecking(false);
+        finishBoot();
       });
   }, []);
 
@@ -135,6 +145,40 @@ export default function App() {
   if (authChecking) {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#FAF9F5] select-none z-50">
+        <style>{`
+          @keyframes soundwave {
+            0%, 100% {
+              transform: scaleY(0.22);
+              opacity: 0.35;
+            }
+            50% {
+              transform: scaleY(1);
+              opacity: 1;
+            }
+          }
+          @keyframes shimmerProgress {
+            0% { transform: translateX(-150%); }
+            100% { transform: translateX(250%); }
+          }
+          @keyframes pulseRing {
+            0% { transform: scale(0.88); opacity: 0.3; }
+            50% { transform: scale(1.18); opacity: 0.85; }
+            100% { transform: scale(0.88); opacity: 0.3; }
+          }
+          .sound-bar {
+            display: inline-block !important;
+            width: 3.5px !important;
+            height: 24px !important;
+            background-color: #1c1b1b !important;
+            border-radius: 9999px !important;
+            transform-origin: center !important;
+            animation: soundwave 1.1s ease-in-out infinite !important;
+          }
+          .sound-bar-accent {
+            background-color: #FF4B2B !important;
+          }
+        `}</style>
+
         {/* Spatial Acoustic Node */}
         <div className="relative flex items-center justify-center">
           {/* Subtle Concentric Pulse Ring */}
@@ -144,10 +188,10 @@ export default function App() {
           />
 
           {/* Central Acoustic Core */}
-          <div className="w-14 h-14 rounded-2xl bg-white border border-[#D9D7D0] shadow-[0_8px_30px_rgba(0,0,0,0.04)] flex items-center justify-center gap-[3.5px] z-10">
+          <div className="w-16 h-16 rounded-2xl bg-white border border-[#D9D7D0] shadow-[0_8px_30px_rgba(0,0,0,0.05)] flex items-center justify-center gap-[4px] z-10">
             <span className="sound-bar" style={{ animationDelay: '0s' }} />
-            <span className="sound-bar" style={{ animationDelay: '0.22s' }} />
-            <span className="sound-bar sound-bar-accent" style={{ animationDelay: '0.45s' }} />
+            <span className="sound-bar" style={{ animationDelay: '0.2s' }} />
+            <span className="sound-bar sound-bar-accent" style={{ animationDelay: '0.4s' }} />
             <span className="sound-bar" style={{ animationDelay: '0.15s' }} />
             <span className="sound-bar" style={{ animationDelay: '0.35s' }} />
           </div>
@@ -163,10 +207,10 @@ export default function App() {
           </div>
 
           {/* Hairline Precision Progress Meter */}
-          <div className="w-32 h-[2px] bg-[#E9E8E4] rounded-full overflow-hidden relative mt-4">
+          <div className="w-36 h-[2px] bg-[#E9E8E4] rounded-full overflow-hidden relative mt-4">
             <div
               className="absolute top-0 bottom-0 w-16 bg-gradient-to-r from-transparent via-[#FF4B2B] to-transparent"
-              style={{ animation: 'shimmerProgress 1.8s infinite ease-in-out' }}
+              style={{ animation: 'shimmerProgress 1.6s infinite ease-in-out' }}
             />
           </div>
         </div>
