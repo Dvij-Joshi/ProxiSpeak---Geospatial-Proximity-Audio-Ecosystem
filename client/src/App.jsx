@@ -131,25 +131,49 @@ export default function App() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  // Loading spinner during initial auth check
+  // High-End Architectural Audio Loading Screen
   if (authChecking) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          background: '#FAF9F5',
-          color: '#8C8880',
-          fontFamily: 'Inter, system-ui, sans-serif',
-          gap: '16px',
-        }}
-      >
-        <div style={{ fontSize: '42px', animation: 'spin 1.5s infinite linear' }}>🎙️</div>
-        <div style={{ fontSize: '15px', color: '#1c1b1b', fontWeight: 600 }}>
-          Connecting to ProxiSpeak Network...
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#FAF9F5] select-none z-50">
+        {/* Spatial Acoustic Node */}
+        <div className="relative flex items-center justify-center">
+          {/* Subtle Concentric Pulse Ring */}
+          <div
+            className="absolute w-24 h-24 rounded-full border border-[#D9D7D0]/70 pointer-events-none"
+            style={{ animation: 'pulseRing 2.8s ease-in-out infinite' }}
+          />
+
+          {/* Central Acoustic Core */}
+          <div className="w-14 h-14 rounded-2xl bg-white border border-[#D9D7D0] shadow-[0_8px_30px_rgba(0,0,0,0.04)] flex items-center justify-center gap-[3.5px] z-10">
+            <span className="sound-bar" style={{ animationDelay: '0s' }} />
+            <span className="sound-bar" style={{ animationDelay: '0.22s' }} />
+            <span className="sound-bar sound-bar-accent" style={{ animationDelay: '0.45s' }} />
+            <span className="sound-bar" style={{ animationDelay: '0.15s' }} />
+            <span className="sound-bar" style={{ animationDelay: '0.35s' }} />
+          </div>
+        </div>
+
+        {/* Brand & Status */}
+        <div className="mt-7 flex flex-col items-center text-center">
+          <div className="font-mono text-[11px] font-semibold tracking-[0.28em] uppercase text-[#1c1b1b]">
+            ProxiSpeak
+          </div>
+          <div className="text-[12px] text-[#8C8880] mt-1.5 font-normal tracking-wide">
+            Connecting to spatial audio network...
+          </div>
+
+          {/* Hairline Precision Progress Meter */}
+          <div className="w-32 h-[2px] bg-[#E9E8E4] rounded-full overflow-hidden relative mt-4">
+            <div
+              className="absolute top-0 bottom-0 w-16 bg-gradient-to-r from-transparent via-[#FF4B2B] to-transparent"
+              style={{ animation: 'shimmerProgress 1.8s infinite ease-in-out' }}
+            />
+          </div>
+        </div>
+
+        {/* Architectural Footer Specification */}
+        <div className="absolute bottom-8 font-mono text-[9px] tracking-[0.25em] text-[#BDBAB2] uppercase">
+          3D HRTF Spatial Engine · WebRTC Mesh
         </div>
       </div>
     );
