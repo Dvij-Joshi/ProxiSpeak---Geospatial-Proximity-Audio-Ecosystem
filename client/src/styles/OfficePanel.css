@@ -166,7 +166,9 @@
 .office-header-user {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .office-bell-btn {
@@ -174,6 +176,10 @@
   color: #4b5563;
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
   cursor: pointer;
 }
 
@@ -191,13 +197,16 @@
 .office-user-profile {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px;
   cursor: pointer;
 }
 
 .office-avatar-circle {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   border-radius: 50%;
   object-fit: cover;
 }
@@ -205,23 +214,31 @@
 .office-user-info {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .office-user-name-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 5px;
   font-size: 9.5px;
   font-weight: 600;
   color: #111827;
   line-height: 1.1;
+  white-space: nowrap;
+}
+
+.office-user-name-row span {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .office-status-pill {
   display: flex;
   align-items: center;
   gap: 3px;
-  font-size: 8px;
+  font-size: 9px;
   color: var(--status-online);
   font-weight: 500;
 }

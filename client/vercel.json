@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://proxispeak-server.onrender.com/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://proxispeak-server.onrender.com/health"
+    }
+  ]
+}
