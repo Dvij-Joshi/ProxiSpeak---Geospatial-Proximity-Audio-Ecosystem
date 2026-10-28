@@ -106,7 +106,7 @@ const THEME_OPTIONS = [
   },
 ];
 
-export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth }) {
+export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth, onOpenVoiceTest }) {
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [joinCode, setJoinCode] = useState('');
@@ -339,6 +339,14 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
               className="font-label text-label text-muted-light hover:text-on-primary px-3.5 py-1.5 transition-colors cursor-pointer"
             >
               Docs
+            </button>
+            <button
+              onClick={onOpenVoiceTest || (() => { window.location.search = '?voiceTest=true'; })}
+              className="font-label text-[11px] font-semibold text-[#FF4B2B] hover:text-white px-3 py-1 bg-[#FF4B2B]/10 hover:bg-[#FF4B2B] rounded-full transition-all cursor-pointer flex items-center gap-1.5 border border-[#FF4B2B]/20"
+              title="Test Dedicated Voice Transfer Server"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FF4B2B] animate-pulse" />
+              Voice Test
             </button>
           </nav>
 
