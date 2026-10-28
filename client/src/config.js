@@ -1,5 +1,6 @@
 // ─── Client Configuration ──────────────────────────────────────────────────
 export const PRODUCTION_SERVER_URL = 'https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com';
+export const PRODUCTION_VOICE_SERVER_URL = 'https://proxispeak-geospatial-proximity-audio-wb2s.onrender.com';
 
 function resolveServerUrl() {
   if (import.meta.env.VITE_SERVER_URL) {
@@ -39,6 +40,22 @@ function resolveServerUrl() {
 
 export const SERVER_URL = resolveServerUrl();
 
+export function resolveVoiceServerUrl() {
+  if (import.meta.env.VITE_VOICE_SERVER_URL) {
+    return import.meta.env.VITE_VOICE_SERVER_URL;
+  }
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isLoopback = hostname === 'localhost' || hostname === '127.0.0.1';
+    if (isLoopback) {
+      return 'http://localhost:10000';
+    }
+  }
+  return PRODUCTION_VOICE_SERVER_URL;
+}
+
+export const VOICE_SERVER_URL = resolveVoiceServerUrl();
+
 export const AVATAR_COLORS = [
   '#3b82f6', // Electric Blue
   '#10b981', // Emerald Green
@@ -49,4 +66,3 @@ export const AVATAR_COLORS = [
   '#06b6d4', // Cyan
   '#84cc16', // Lime
 ];
-

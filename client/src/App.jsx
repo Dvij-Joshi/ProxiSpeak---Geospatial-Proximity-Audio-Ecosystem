@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AuthModal from './components/AuthModal';
 import MeetingLobby from './components/MeetingLobby';
 import WorldCanvas from './WorldCanvas';
+import VoiceTest from './components/VoiceTest';
 import { SERVER_URL } from './config';
 
 export default function App() {
@@ -9,6 +10,7 @@ export default function App() {
   const [authChecking, setAuthChecking] = useState(true);
   const [currentRoom, setCurrentRoom] = useState(null);
   const [inviteRoomId, setInviteRoomId] = useState(null);
+  const [isVoiceTesting, setIsVoiceTesting] = useState(false);
 
   // Check URL query parameters (?room=roomId)
   useEffect(() => {
@@ -18,16 +20,29 @@ export default function App() {
       if (roomParam && roomParam.trim()) {
         setInviteRoomId(roomParam.trim());
       }
+      if (params.get('voiceTest') === 'true' || params.has('voiceRoom') || window.location.pathname === '/voice-test') {
+        setIsVoiceTesting(true);
+      }
     } catch (_e) {}
   }, []);
 
-  // Validate existing JWT session on boot
+  // Validate existing JWT session on boot with smooth boot sequence
   useEffect(() => {
     const token = localStorage.getItem('proxispeak_token');
     const cachedUser = localStorage.getItem('proxispeak_user');
+    const bootStartTime = Date.now();
+    const minBootTimeMs = 800; // Guarantees a smooth, visible luxury boot sequence
+
+    const finishBoot = () => {
+      const elapsed = Date.now() - bootStartTime;
+      const remaining = Math.max(0, minBootTimeMs - elapsed);
+      setTimeout(() => {
+        setAuthChecking(false);
+      }, remaining);
+    };
 
     if (!token) {
-      setAuthChecking(false);
+      finishBoot();
       return;
     }
 
@@ -61,7 +76,7 @@ export default function App() {
         console.warn('[Auth] Token check network error, retaining cached session:', err.message);
       })
       .finally(() => {
-        setAuthChecking(false);
+        finishBoot();
       });
   }, []);
 
@@ -93,8 +108,16 @@ export default function App() {
     }
   }, [user, inviteRoomId, currentRoom]);
 
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   // Sync current room with browser URL history
   const handleJoinRoom = (room) => {
+    // If not authenticated, require registration or sign in
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
     setCurrentRoom(room);
     const newUrl = `${window.location.pathname}?room=${encodeURIComponent(room.roomId)}`;
     window.history.pushState({ roomId: room.roomId }, '', newUrl);
@@ -114,59 +137,153 @@ export default function App() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  // Loading spinner during initial auth check
+  // High-End Architectural Audio Loading Screen
   if (authChecking) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          background: '#090d16',
-          color: '#94a3b8',
-          fontFamily: 'Inter, system-ui, sans-serif',
-          gap: '16px',
-        }}
-      >
-        <div style={{ fontSize: '42px', animation: 'spin 1.5s infinite linear' }}>🎙️</div>
-        <div style={{ fontSize: '15px', color: '#cbd5e1', fontWeight: 500 }}>
-          Connecting to ProxiSpeak Network...
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#FAF9F5] select-none z-50">
+        <style>{`
+          @keyframes soundwave {
+            0%, 100% {
+              transform: scaleY(0.22);
+              opacity: 0.35;
+            }
+            50% {
+              transform: scaleY(1);
+              opacity: 1;
+            }
+          }
+          @keyframes shimmerProgress {
+            0% { transform: translateX(-150%); }
+            100% { transform: translateX(250%); }
+          }
+          @keyframes pulseRing {
+            0% { transform: scale(0.88); opacity: 0.3; }
+            50% { transform: scale(1.18); opacity: 0.85; }
+            100% { transform: scale(0.88); opacity: 0.3; }
+          }
+          .sound-bar {
+            display: inline-block !important;
+            width: 3.5px !important;
+            height: 24px !important;
+            background-color: #1c1b1b !important;
+            border-radius: 9999px !important;
+            transform-origin: center !important;
+            animation: soundwave 1.1s ease-in-out infinite !important;
+          }
+          .sound-bar-accent {
+            background-color: #FF4B2B !important;
+          }
+        `}</style>
+
+        {/* Spatial Acoustic Node */}
+        <div className="relative flex items-center justify-center">
+          {/* Subtle Concentric Pulse Ring */}
+          <div
+            className="absolute w-24 h-24 rounded-full border border-[#D9D7D0]/70 pointer-events-none"
+            style={{ animation: 'pulseRing 2.8s ease-in-out infinite' }}
+          />
+
+          {/* Central Acoustic Core */}
+          <div className="w-16 h-16 rounded-2xl bg-white border border-[#D9D7D0] shadow-[0_8px_30px_rgba(0,0,0,0.05)] flex items-center justify-center gap-[4px] z-10">
+            <span className="sound-bar" style={{ animationDelay: '0s' }} />
+            <span className="sound-bar" style={{ animationDelay: '0.2s' }} />
+            <span className="sound-bar sound-bar-accent" style={{ animationDelay: '0.4s' }} />
+            <span className="sound-bar" style={{ animationDelay: '0.15s' }} />
+            <span className="sound-bar" style={{ animationDelay: '0.35s' }} />
+          </div>
+        </div>
+
+        {/* Brand & Status */}
+        <div className="mt-7 flex flex-col items-center text-center">
+          <div className="font-mono text-[11px] font-semibold tracking-[0.28em] uppercase text-[#1c1b1b]">
+            ProxiSpeak
+          </div>
+          <div className="text-[12px] text-[#8C8880] mt-1.5 font-normal tracking-wide">
+            Connecting to spatial audio network...
+          </div>
+
+          {/* Hairline Precision Progress Meter */}
+          <div className="w-36 h-[2px] bg-[#E9E8E4] rounded-full overflow-hidden relative mt-4">
+            <div
+              className="absolute top-0 bottom-0 w-16 bg-gradient-to-r from-transparent via-[#FF4B2B] to-transparent"
+              style={{ animation: 'shimmerProgress 1.6s infinite ease-in-out' }}
+            />
+          </div>
+        </div>
+
+        {/* Architectural Footer Specification */}
+        <div className="absolute bottom-8 font-mono text-[9px] tracking-[0.25em] text-[#BDBAB2] uppercase">
+          3D HRTF Spatial Engine · WebRTC Mesh
         </div>
       </div>
     );
   }
 
-  // Step 1: User Login / Registration Modal
-  if (!user) {
+  // Dedicated Voice Transfer Server Test Bench
+  if (isVoiceTesting) {
     return (
-      <AuthModal
-        defaultRoomName={inviteRoomId}
-        onAuthSuccess={(authenticatedUser) => {
-          setUser(authenticatedUser);
+      <VoiceTest
+        user={user}
+        onBackToLobby={() => {
+          setIsVoiceTesting(false);
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('voiceTest');
+            url.searchParams.delete('voiceRoom');
+            window.history.pushState({}, '', url.pathname + (url.search ? url.search : ''));
+          } catch (_e) {}
         }}
       />
     );
   }
 
-  // Step 3: Active Workspace & Call Canvas
+  // Active Workspace & Call Canvas
   if (currentRoom) {
+    if (!user) {
+      return (
+        <AuthModal
+          defaultRoomName={currentRoom.roomId}
+          onClose={() => setCurrentRoom(null)}
+          onAuthSuccess={(authenticatedUser) => {
+            setUser(authenticatedUser);
+          }}
+        />
+      );
+    }
+
     return (
-      <WorldCanvas
-        user={user}
-        room={currentRoom}
-        onLeaveRoom={handleLeaveRoom}
-      />
+      <div style={{ background: '#FAF9F5', minHeight: '100vh', width: '100%' }}>
+        <WorldCanvas
+          user={user}
+          room={currentRoom}
+          onLeaveRoom={handleLeaveRoom}
+        />
+      </div>
     );
   }
 
-  // Step 2: Meeting Lobby (Browse rooms, Host meeting, Join by Code/URL)
+  // Main Home Page '/' - Stitch Lumio SaaS Landing Page & Spatial Workspaces Hub
   return (
-    <MeetingLobby
-      user={user}
-      onJoinRoom={handleJoinRoom}
-      onLogout={handleLogout}
-    />
+    <>
+      <MeetingLobby
+        user={user}
+        onJoinRoom={handleJoinRoom}
+        onLogout={handleLogout}
+        onRequestAuth={() => setShowAuthModal(true)}
+        onOpenVoiceTest={() => setIsVoiceTesting(true)}
+      />
+
+      {/* Auth Modal Dialog */}
+      {showAuthModal && (
+        <AuthModal
+          defaultRoomName={inviteRoomId}
+          onClose={() => setShowAuthModal(false)}
+          onAuthSuccess={(authenticatedUser) => {
+            setUser(authenticatedUser);
+            setShowAuthModal(false);
+          }}
+        />
+      )}
+    </>
   );
 }

@@ -1,18 +1,58 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body {
+  min-height: 100%;
+  width: 100%;
+}
+
 body {
-  background: #0f1117;
-  font-family: 'Inter', -apple-system, sans-serif;
-  color: #f1f5f9;
-  overflow: hidden;
-  user-select: none;
+  background: #FAF9F5;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #1c1b1b;
+  overflow-x: hidden;
 }
 
 #root {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+}
+
+
+/* Luxury Audio Wave & Shimmer Loading Animations */
+@keyframes soundwave {
+  0%, 100% {
+    transform: scaleY(0.22);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmerProgress {
+  0% { transform: translateX(-150%); }
+  100% { transform: translateX(250%); }
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(0.88); opacity: 0.3; }
+  50% { transform: scale(1.18); opacity: 0.85; }
+  100% { transform: scale(0.88); opacity: 0.3; }
+}
+
+.sound-bar {
+  display: inline-block;
+  width: 3px;
+  height: 24px;
+  background-color: #1c1b1b;
+  border-radius: 9999px;
+  transform-origin: center;
+  animation: soundwave 1.2s ease-in-out infinite;
+}
+
+.sound-bar-accent {
+  background-color: #FF4B2B;
 }

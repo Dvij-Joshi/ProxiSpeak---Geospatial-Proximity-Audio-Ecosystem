@@ -3,16 +3,27 @@ services:
     name: proxispeak-server
     runtime: node
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: CLIENT_URL
+        value: https://proxi-speak-geospatial-proximity-au-kappa.vercel.app
+      - key: SERVER_URL
+        value: https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com
+
+  - type: web
+    name: proxispeak-voice-server
+    rootDir: voice-server
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
-      - key: MONGODB_URI
-        sync: false          # set manually in Render dashboard
-      - key: CLIENT_URL
-        value: https://proxi-speak-geospatial-proximity-au-kappa.vercel.app
-      - key: SERVER_URL
-        value: https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com

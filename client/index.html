@@ -3,12 +3,129 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ProxiSpeak</title>
+    <title>ProxiSpeak - Architectural Spatial Workspaces</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..900;1,300..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+              "soft-card": "#E9E8E4",
+              "surface-container-highest": "#e5e2e1",
+              "secondary-fixed-dim": "#c7c7c3",
+              "on-tertiary-fixed": "#3e0400",
+              "tertiary": "#000000",
+              "surface-variant": "#e5e2e1",
+              "on-error-container": "#93000a",
+              "on-primary": "#ffffff",
+              "line": "#D9D7D0",
+              "surface": "#fdf8f8",
+              "accent-purple": "#8A2387",
+              "tertiary-container": "#3e0400",
+              "surface-container-high": "#ebe7e6",
+              "surface-container-lowest": "#ffffff",
+              "on-surface": "#1c1b1b",
+              "accent-orange": "#FF4B2B",
+              "secondary-container": "#e0e0dc",
+              "on-surface-variant": "#444748",
+              "on-primary-fixed": "#1c1b1b",
+              "surface-container": "#f1edec",
+              "tertiary-fixed": "#ffdad3",
+              "page-bg": "#FAF9F5",
+              "inverse-surface": "#313030",
+              "surface-dim": "#ddd9d8",
+              "surface-tint": "#5f5e5e",
+              "secondary": "#5e5f5c",
+              "soft-card-2": "#F4F3EF",
+              "outline": "#747878",
+              "accent-rose": "#E94057",
+              "tertiary-fixed-dim": "#ffb4a5",
+              "muted-light": "#BDBAB2",
+              "error-container": "#ffdad6",
+              "muted": "#8C8880",
+              "error": "#ba1a1a",
+              "inverse-on-surface": "#f4f0ef",
+              "white-card": "#FFFDF8",
+              "on-primary-container": "#858383",
+              "on-primary-fixed-variant": "#474746",
+              "surface-container-low": "#f7f3f2",
+              "primary-fixed": "#e5e2e1",
+              "on-tertiary-fixed-variant": "#8e1300",
+              "on-secondary-fixed-variant": "#464744",
+              "primary-container": "#1c1b1b",
+              "primary": "#000000",
+              "outline-variant": "#c4c7c7",
+              "on-error": "#ffffff",
+              "accent-crimson": "#FF416C",
+              "on-background": "#1c1b1b",
+              "panel-bg": "#F0EFEB",
+              "surface-bright": "#fdf8f8",
+              "inverse-primary": "#c8c6c5",
+              "on-tertiary": "#ffffff",
+              "on-secondary": "#ffffff",
+              "on-secondary-fixed": "#1b1c1a",
+              "secondary-fixed": "#e3e2df",
+              "primary-fixed-dim": "#c8c6c5",
+              "on-tertiary-container": "#f24223",
+              "accent-amber": "#F27121",
+              "on-secondary-container": "#626360",
+              "background": "#fdf8f8"
+            },
+            "borderRadius": {
+              "DEFAULT": "1rem",
+              "lg": "2rem",
+              "xl": "3rem",
+              "full": "9999px"
+            },
+            "spacing": {
+              "space-xs": "0.5rem",
+              "space-xl": "8rem",
+              "margin": "2.5rem",
+              "space-md": "2rem",
+              "gutter": "1.5rem",
+              "margin-mobile": "1.25rem",
+              "space-section": "10rem",
+              "space-sm": "1rem",
+              "gutter-lg": "3rem",
+              "space-lg": "4rem"
+            },
+            "fontFamily": {
+              "h1-mobile": ["Hanken Grotesk", "sans-serif"],
+              "display-hero": ["Hanken Grotesk", "sans-serif"],
+              "h2": ["Hanken Grotesk", "sans-serif"],
+              "body-md": ["Inter", "sans-serif"],
+              "label-caps": ["Inter", "sans-serif"],
+              "display-mobile": ["Hanken Grotesk", "sans-serif"],
+              "body-lg": ["Inter", "sans-serif"],
+              "display": ["Hanken Grotesk", "sans-serif"],
+              "label": ["Inter", "sans-serif"],
+              "h3": ["Hanken Grotesk", "sans-serif"],
+              "h1": ["Hanken Grotesk", "sans-serif"]
+            },
+            "fontSize": {
+              "h1-mobile": ["32px", { "lineHeight": "1.15", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+              "display-hero": ["120px", { "lineHeight": "0.9", "letterSpacing": "-0.05em", "fontWeight": "700" }],
+              "h2": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+              "body-md": ["15px", { "lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400" }],
+              "label-caps": ["10px", { "lineHeight": "1.0", "letterSpacing": "0.1em", "fontWeight": "700" }],
+              "display-mobile": ["44px", { "lineHeight": "1.1", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+              "body-lg": ["18px", { "lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400" }],
+              "display": ["82px", { "lineHeight": "1.05", "letterSpacing": "-0.04em", "fontWeight": "700" }],
+              "label": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600" }],
+              "h3": ["24px", { "lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+              "h1": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.03em", "fontWeight": "700" }]
+            }
+          }
+        }
+      };
+    </script>
   </head>
-  <body>
+  <body class="bg-page-bg font-body-md text-on-surface antialiased selection:bg-accent-orange selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/index.jsx"></script>
   </body>
