@@ -14,6 +14,8 @@ services:
         value: https://proxi-speak-geospatial-proximity-au-kappa.vercel.app
       - key: SERVER_URL
         value: https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com
+      - key: MONGODB_URI
+        value: mongodb+srv://dvij0905_db_user:1hruDoW2pDCbo68p@proxispeakcluster.0fl72gc.mongodb.net/proxispeak?retryWrites=true&w=majority
 
   - type: web
     name: proxispeak-voice-server

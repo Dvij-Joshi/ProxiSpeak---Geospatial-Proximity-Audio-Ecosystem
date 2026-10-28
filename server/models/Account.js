@@ -68,6 +68,7 @@ AccountSchema.statics.findByCredentials = async function (identifier) {
       { usernameLower: clean },
       { email: clean },
       { username: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+      { email: { $regex: new RegExp(`^${escaped}$`, 'i') } },
     ],
   });
 };

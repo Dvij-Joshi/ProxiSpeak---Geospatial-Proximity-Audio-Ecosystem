@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 
 export async function connectDB() {
-  const primaryUri = process.env.MONGODB_URI;
+  const primaryUri =
+    process.env.MONGODB_URI ||
+    'mongodb+srv://dvij0905_db_user:1hruDoW2pDCbo68p@proxispeakcluster.0fl72gc.mongodb.net/proxispeak?retryWrites=true&w=majority';
   const localUri = process.env.LOCAL_MONGODB_URI || 'mongodb://127.0.0.1:27017/proxispeak';
 
   // Monitor connection lifecycle

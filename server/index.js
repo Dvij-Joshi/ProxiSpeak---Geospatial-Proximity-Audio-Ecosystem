@@ -154,27 +154,44 @@ function saveAccountToCache(account) {
 
 async function syncCachedAccountsToDb() {
   if (!isDbConnected() || memoryAccounts.size === 0) return;
-  try {
-    for (const acc of memoryAccounts.values()) {
-      try {
-        const existing = await Account.findByCredentials(acc.username);
-        if (!existing) {
-          const created = await Account.create({
-            username: acc.username,
-            usernameLower: acc.username.toLowerCase(),
-            email: acc.email,
-            passwordHash: acc.passwordHash,
-            avatarColor: acc.avatarColor,
-          });
-          acc._id = created._id;
-          acc.id = created._id.toString();
-          acc.savedInDb = true;
-          console.log(`[Sync] Backfilled cached user "${acc.username}" into MongoDB.`);
-        }
-      } catch (_e) {}
+  let synced = 0;
+  let failed = 0;
+  for (const acc of memoryAccounts.values()) {
+    try {
+      // Skip accounts already confirmed in MongoDB with a real ObjectId
+      if (acc.savedInDb && acc._id && !String(acc._id).startsWith('acc_')) continue;
+      const existing = await Account.findByCredentials(acc.username);
+      if (!existing) {
+        const created = await Account.create({
+          username: acc.username,
+          usernameLower: acc.username.toLowerCase(),
+          email: acc.email,
+          passwordHash: acc.passwordHash,
+          avatarColor: acc.avatarColor,
+        });
+        acc._id = created._id;
+        acc.id = created._id.toString();
+        acc.savedInDb = true;
+        synced++;
+        console.log(`[Sync] Backfilled cached user "${acc.username}" into MongoDB [ID: ${acc.id}]`);
+      } else {
+        // Update cache entry with the real MongoDB ID
+        acc._id = existing._id;
+        acc.id = existing._id.toString();
+        acc.savedInDb = true;
+      }
+    } catch (syncErr) {
+      failed++;
+      console.warn(`[Sync] Failed to backfill "${acc.username}": ${syncErr.message}`);
     }
-  } catch (err) {
-    console.warn('[Sync] Syncing cached accounts error:', err.message);
+  }
+  // Persist updated IDs back to disk cache
+  if (synced > 0) {
+    try {
+      const all = Array.from(memoryAccounts.values());
+      fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(all, null, 2), 'utf8');
+    } catch (_e) {}
+    console.log(`[Sync] Complete: ${synced} backfilled, ${failed} failed out of ${memoryAccounts.size} cached accounts.`);
   }
 }
 
@@ -402,6 +419,9 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const cleanUsernameLower = cleanUsername.toLowerCase();
 
     // 1. Check existing in MongoDB if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         const existingUser = await Account.findByCredentials(cleanUsernameLower);
@@ -436,6 +456,9 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     let savedInDb = false;
 
     // 4. Save to MongoDB if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         const account = await Account.create({
@@ -517,9 +540,15 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     let account = null;
 
     // 1. Lookup in MongoDB first if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         account = await Account.findByCredentials(clean);
+        if (!account) {
+          account = await Account.findOne({ $or: [{ email: cleanLower }, { usernameLower: cleanLower }] });
+        }
         if (account) {
           console.log(`[Login] Found account in MongoDB for "${clean}" -> ${account.username} (${account.email})`);
         }
@@ -615,6 +644,9 @@ app.get('/api/auth/me', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     let account = null;
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         if (mongoose.Types.ObjectId.isValid(decoded.id)) {
@@ -662,6 +694,9 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/rooms', async (_req, res) => {
   try {
     let dbRooms = [];
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         dbRooms = await Room.find({ isPublic: true }).sort({ createdAt: -1 }).lean();
@@ -731,6 +766,9 @@ app.post('/api/rooms', roomCreationLimiter, async (req, res) => {
     memoryRooms.set(code, roomData);
 
     // Save in DB if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         await Room.create(roomData);
@@ -761,6 +799,9 @@ app.get('/api/rooms/:roomId', async (req, res) => {
     }
 
     // Check DB if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         const dbRoom = await Room.findOne({ roomId }).lean();
@@ -809,6 +850,9 @@ app.get('/api/proximity/:userId', async (req, res) => {
     let targetUser = null;
 
     // 1. Resolve user by MongoDB ObjectId, socketId, or username
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       if (mongoose.Types.ObjectId.isValid(userId)) {
         targetUser = await User.findById(userId);
@@ -856,6 +900,9 @@ app.get('/api/proximity/:userId', async (req, res) => {
     let nearbyUsers = [];
 
     // 2. Perform MongoDB $near geospatial query if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         const mongoResults = await User.find({
@@ -1310,6 +1357,31 @@ io.on('connection', (socket) => {
     }
   });
 
+
+  // ── Room Chat (Anti-Spam Throttled) ─────────────────────────────────────────
+  socket.on('room:chat:send', ({ roomId: chatRoomId, message }) => {
+    if (!checkThrottle('room:chat:send', 10, 5000)) {
+      console.warn(`[Anti-Spam] Throttled chat from socket ${socket.id}`);
+      return;
+    }
+    const rId = chatRoomId || socket.data.roomId;
+    if (!rId || !message || typeof message !== 'string') return;
+    const trimmed = message.trim().slice(0, 500); // cap at 500 chars
+    if (!trimmed) return;
+    const sender = socket.data.username || 'Anonymous';
+    const senderColor = (getRoomUsers(rId).get(socket.id) || {}).avatarColor || '#3b82f6';
+    const payload = {
+      from: socket.id,
+      username: sender,
+      avatarColor: senderColor,
+      message: trimmed,
+      timestamp: Date.now(),
+    };
+    // Echo back to sender + broadcast to room
+    io.to(rId).emit('room:chat:message', payload);
+    console.log(`[Chat] "${sender}" in "${rId}": ${trimmed.slice(0, 60)}`);
+  });
+
   // ── leave-room (End Call) ───────────────────────────────────────────────────
   socket.on('leave-room', async ({ roomId } = {}) => {
     try {
@@ -1393,6 +1465,12 @@ function startKeepAlive() {
 // ── Boot ───────────────────────────────────────────────────────────────────────
 connectDB()
   .then(async () => {
+    try {
+      const cleared = await User.deleteMany({});
+      if (cleared.deletedCount > 0) {
+        console.log(`[DB] Cleaned up ${cleared.deletedCount} stale socket presence record(s).`);
+      }
+    } catch (_e) {}
     await syncCachedAccountsToDb();
     await initRedisAdapter();
     httpServer.listen(PORT, '0.0.0.0', () => {
