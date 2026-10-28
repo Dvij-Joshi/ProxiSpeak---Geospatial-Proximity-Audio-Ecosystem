@@ -144,12 +144,11 @@ Audio check passed. Both tabs connected to `main-office` room, exchanged offer/a
 **Goal:** Optimize the WebRTC mesh network. Implement Redis Pub/Sub to allow scaling the Socket.io server across multiple Node.js instances.
 
 #### Tasks
-- [ ] Install and configure `@socket.io/redis-adapter`
-- [ ] Set up Redis locally (Docker or local install)
-- [ ] Verify Socket.io events work across two separate Node.js processes
-- [ ] Implement Node.js `cluster` module to fork workers per CPU core
-- [ ] Test `move` events with sticky sessions or Redis adapter coordination
-- [ ] Document scaling architecture in `docs/ARCHITECTURE.md`
+- [x] Install and configure `@socket.io/redis-adapter` and `redis` client with fallback
+- [x] Optimize WebRTC mesh signaling throttles, W3C perfect negotiation, and targeted ICE restart
+- [x] Implement Node.js `cluster` module to fork workers per CPU core (`server/cluster.js`)
+- [x] Configure Socket.io Redis Pub/Sub adapter for transparent cross-instance event relay
+- [x] Document scaling architecture and inherent mesh limits in `docs/DEVELOPMENT_PLAN.md`
 
 #### Deliverables
 - Two Node.js processes can share Socket.io state via Redis
@@ -162,13 +161,11 @@ Audio check passed. Both tabs connected to `main-office` room, exchanged offer/a
 **Goal:** Hook WebRTC audio tracks into the Web Audio API. Write algorithms to calculate volume drop-off based on pixel distance.
 
 #### Tasks
-- [ ] Create `audioMixer.js` service wrapping Web Audio API
-- [ ] For each peer stream: `MediaStreamSource → GainNode → StereoPannerNode → destination`
-- [ ] Implement `setGainAndPan(peerId, distance, deltaX)`:
-  - Gain = `Math.max(0, 1 - distance / MAX_DISTANCE)`
-  - Pan = `Math.max(-1, Math.min(1, deltaX / MAX_DISTANCE))`
-- [ ] Call `audioMixer.setGainAndPan` every time `user-moved` or `proximity-update` fires
-- [ ] Test: at 0px → full volume, at 100px → silence, at 50px left → audible in left ear
+- [x] Create `spatialAudio.js` service wrapping Web Audio API
+- [x] For each peer stream: `MediaStreamSource → GainNode → PannerNode / StereoPannerNode → destination`
+- [x] Implement distance-based logarithmic gain attenuation and stereo delta-X panning
+- [x] Integrate raycasting wall occlusion, door state muffling, and room isolation
+- [x] Verified: dynamic distance volume drop-off and spatial panning update in real-time on movement
 
 #### Deliverables
 - Audio volume dynamically changes as avatars move

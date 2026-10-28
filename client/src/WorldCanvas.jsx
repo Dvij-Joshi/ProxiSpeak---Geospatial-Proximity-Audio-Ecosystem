@@ -1142,7 +1142,9 @@ export default function WorldCanvas({
             avatarColor: u.avatarColor,
             isMuted: u.isMuted ?? false,
           };
-          webrtc.connectToPeer(u.id);
+          if (!webrtc.peers.has(u.id)) {
+            webrtc.connectToPeer(u.id);
+          }
         }
       }
     });
@@ -1235,7 +1237,9 @@ export default function WorldCanvas({
         avatarColor: ucolor,
         isMuted: peerMuted ?? false,
       };
-      webrtc.connectToPeer(id);
+      if (!webrtc.peers.has(id)) {
+        webrtc.connectToPeer(id);
+      }
     });
 
     // Peer moves

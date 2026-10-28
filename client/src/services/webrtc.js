@@ -78,6 +78,23 @@ class WebRTCManager {
     }
   }
 
+  _optimizeAudioSender(sender) {
+    if (!sender || typeof sender.getParameters !== 'function' || typeof sender.setParameters !== 'function') {
+      return;
+    }
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}];
+      }
+      // Target 48 kbps for high-fidelity speech while conserving mesh upstream bandwidth
+      if (!params.encodings[0].maxBitrate || params.encodings[0].maxBitrate > 48000) {
+        params.encodings[0].maxBitrate = 48000;
+        sender.setParameters(params).catch(() => {});
+      }
+    } catch (_e) {}
+  }
+
   getIceConfig() {
     return {
       iceServers: this.iceServers || DEFAULT_ICE_SERVERS,
@@ -138,7 +155,7 @@ class WebRTCManager {
         let pc = this.getOrCreatePeer(from, false);
         const meta = this.getPeerMeta(from);
 
-        const isPolite = Boolean(this.socket && this.socket.id > from);
+        const isPolite = Boolean(this.socket && this.socket.id < from);
         const offerCollision = meta.isMakingOffer || pc.signalingState !== 'stable';
 
         // Glare handling
@@ -484,40 +501,47 @@ class WebRTCManager {
         }
       }
 
-      // Hot-swap audio track to all active peer connections & trigger renegotiation
+      // Hot-swap audio track to all active peer connections without unnecessary renegotiation
       this.peers.forEach((pc, peerId) => {
         const senders = pc.getSenders();
         let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
+        let needsRenegotiation = false;
 
         if (audioSender && audioTrack) {
           audioSender.replaceTrack(audioTrack).then(() => {
-            console.log(`[WebRTC] Replaced track with live mic for ${peerId}`);
+            console.log(`[WebRTC] Hot-swapped live mic track for ${peerId} (0ms renegotiation)`);
           }).catch((e) => {
             console.warn('[WebRTC] replaceTrack error:', e);
           });
+          this._optimizeAudioSender(audioSender);
         } else if (audioTrack) {
           try {
-            pc.addTrack(audioTrack, this.localStream);
+            const addedSender = pc.addTrack(audioTrack, this.localStream);
+            this._optimizeAudioSender(addedSender);
+            needsRenegotiation = true;
           } catch (_e) {}
         }
 
-        // CRITICAL: Ensure transceiver direction is sendrecv
+        // Ensure transceiver direction is sendrecv
         const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
         const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
         if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
           console.log(`[WebRTC] Upgrading transceiver direction to sendrecv for ${peerId}`);
           audioTransceiver.direction = 'sendrecv';
+          needsRenegotiation = true;
         }
 
-        // CRITICAL: Initiate renegotiation so the remote peer updates its SDP from recvonly to sendrecv
-        if (pc.signalingState === 'stable') {
-          this.initiateOffer(peerId, pc);
-        } else {
-          setTimeout(() => {
-            if (this.peers.has(peerId) && pc.signalingState === 'stable') {
-              this.initiateOffer(peerId, pc);
-            }
-          }, 400);
+        // Only renegotiate if transceiver direction actually changed or new track added
+        if (needsRenegotiation) {
+          if (pc.signalingState === 'stable') {
+            this.initiateOffer(peerId, pc);
+          } else {
+            setTimeout(() => {
+              if (this.peers.has(peerId) && pc.signalingState === 'stable') {
+                this.initiateOffer(peerId, pc);
+              }
+            }, 300);
+          }
         }
       });
 
@@ -566,7 +590,8 @@ class WebRTCManager {
     if (this.localStream) {
       const audioTrack = this.localStream.getAudioTracks()[0];
       if (audioTrack && audioTrack.readyState === 'live') {
-        pc.addTrack(audioTrack, this.localStream);
+        const sender = pc.addTrack(audioTrack, this.localStream);
+        this._optimizeAudioSender(sender);
       } else {
         pc.addTransceiver('audio', { direction: 'sendrecv' });
       }
@@ -596,9 +621,6 @@ class WebRTCManager {
 
       event.track.onunmute = () => {
         console.log(`[WebRTC] Remote track unmuted for ${peerId}`);
-        if (this.onRemoteTrackCallback) {
-          this.onRemoteTrackCallback(peerId, remoteStream);
-        }
       };
 
       event.track.onmute = () => {
@@ -610,22 +632,43 @@ class WebRTCManager {
       };
     };
 
+    pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] Connection state with ${peerId}: ${pc.connectionState}`);
+      if (pc.connectionState === 'failed') {
+        console.warn(`[WebRTC] Peer connection failed with ${peerId}, attempting targeted ICE restart...`);
+        try {
+          if (typeof pc.restartIce === 'function') pc.restartIce();
+          this.initiateOffer(peerId, pc, 0, true);
+        } catch (_e) {
+          this.resetPeer(peerId);
+        }
+      }
+    };
+
     pc.oniceconnectionstatechange = () => {
       console.log(`[WebRTC] ICE state with ${peerId}: ${pc.iceConnectionState}`);
       if (pc.iceConnectionState === 'failed') {
-        console.warn(`[WebRTC] ICE failed with ${peerId}, attempting ICE restart...`);
+        console.warn(`[WebRTC] ICE failed with ${peerId}, attempting targeted ICE restart...`);
         try {
-          pc.restartIce();
-          this.initiateOffer(peerId, pc);
-        } catch (_e) {}
+          if (typeof pc.restartIce === 'function') pc.restartIce();
+          this.initiateOffer(peerId, pc, 0, true);
+        } catch (_e) {
+          this.resetPeer(peerId);
+        }
       }
       if (pc.iceConnectionState === 'disconnected') {
+        // 6-second grace period for temporary network/Wi-Fi handover recovery before tearing down
         setTimeout(() => {
-          if (this.peers.has(peerId) && pc.iceConnectionState === 'disconnected') {
-            console.warn(`[WebRTC] ICE still disconnected with ${peerId}, resetting connection`);
-            this.resetPeer(peerId);
+          if (this.peers.has(peerId) && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) {
+            console.warn(`[WebRTC] ICE still disconnected with ${peerId} after 6s grace, attempting targeted ICE restart...`);
+            try {
+              if (typeof pc.restartIce === 'function') pc.restartIce();
+              this.initiateOffer(peerId, pc, 0, true);
+            } catch (_e) {
+              this.resetPeer(peerId);
+            }
           }
-        }, 3500);
+        }, 6000);
       }
     };
 
@@ -640,7 +683,7 @@ class WebRTCManager {
    * Initiates an SDP offer to connect with a peer.
    * Armed with retry timer and offer watchdog for auto-recovery.
    */
-  async initiateOffer(peerId, pc, _retryCount = 0) {
+  async initiateOffer(peerId, pc, _retryCount = 0, isIceRestart = false) {
     const meta = this.getPeerMeta(peerId);
 
     // Clear any existing retry timer for this peer
@@ -658,7 +701,7 @@ class WebRTCManager {
           const timer = setTimeout(() => {
             this._offerRetryTimers.delete(peerId);
             if (this.peers.has(peerId)) {
-              this.initiateOffer(peerId, pc, _retryCount + 1);
+              this.initiateOffer(peerId, pc, _retryCount + 1, isIceRestart);
             }
           }, 300);
           this._offerRetryTimers.set(peerId, timer);
@@ -669,17 +712,19 @@ class WebRTCManager {
         return;
       }
 
-      const offer = await pc.createOffer();
+      const offerOptions = isIceRestart ? { iceRestart: true } : undefined;
+      const offer = await pc.createOffer(offerOptions);
       if (pc.signalingState !== 'stable') return;
 
       await pc.setLocalDescription(offer);
       this.socket.emit('webrtc-offer', { to: peerId, offer });
-      console.log(`[WebRTC] Sent offer to ${peerId}`);
+      console.log(`[WebRTC] Sent offer to ${peerId}${isIceRestart ? ' (ICE Restart)' : ''}`);
 
       // Set 3.8s offer watchdog: If no answer received, auto-recover
       this._setOfferWatchdog(peerId, pc);
     } catch (err) {
       console.error(`[WebRTC] Failed to create offer to ${peerId}:`, err);
+      this._clearOfferWatchdog(peerId);
     } finally {
       meta.isMakingOffer = false;
     }
@@ -691,6 +736,9 @@ class WebRTCManager {
    * This guarantees ZERO simultaneous offer collisions (glare) between any two devices!
    */
   connectToPeer(peerId) {
+    if (this.peers.has(peerId)) {
+      return;
+    }
     const shouldInitiate = Boolean(this.socket && this.socket.id > peerId);
     this.getOrCreatePeer(peerId, shouldInitiate);
   }
@@ -722,7 +770,12 @@ class WebRTCManager {
   removePeer(peerId) {
     const pc = this.peers.get(peerId);
     if (pc) {
-      pc.close();
+      pc.onicecandidate = null;
+      pc.ontrack = null;
+      pc.oniceconnectionstatechange = null;
+      pc.onconnectionstatechange = null;
+      pc.onsignalingstatechange = null;
+      try { pc.close(); } catch (_e) {}
       this.peers.delete(peerId);
     }
     this.peerMeta.delete(peerId);
