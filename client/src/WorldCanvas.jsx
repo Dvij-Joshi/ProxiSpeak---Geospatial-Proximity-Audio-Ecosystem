@@ -301,7 +301,7 @@ function drawConference(ctx) {
   drawRoundRect(ctx, 350, 92, 54, 42, 4);
   ctx.fillStyle = '#4f46e5'; ctx.fill();
   ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '14px sans-serif'; ctx.fillText('🎙️', 377, 118);
+  ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('MIC', 377, 118);
 
   // Auditorium Seating rows (left and right banks, center aisle)
   const rows = 4, cols = 5;
@@ -341,7 +341,7 @@ function drawConference(ctx) {
   drawRoundRect(ctx, 90, 560, 180, 44, 6);
   ctx.fillStyle = '#475569'; ctx.fill();
   ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#f8fafc'; ctx.fillText('☕ Refreshments Bar', 180, 586);
+  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#f8fafc'; ctx.fillText('REFRESHMENTS', 180, 586);
 
   for (const hx of [420, 600, 780, 980]) {
     drawRoundTable(ctx, hx, 580, 20, 3, '#64748b');
@@ -410,7 +410,7 @@ function drawLounge(ctx) {
   drawRoundRect(ctx, 420, 32, 360, 24, 4);
   ctx.fillStyle = '#451a03'; ctx.fill();
   ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#fef3c7'; ctx.textAlign = 'center';
-  ctx.fillText('🍸 ROOFTOP ESPRESSO & COCKTAIL BAR 🍹', 600, 48);
+  ctx.fillText('ROOFTOP SOCIAL LOUNGE', 600, 48);
 
   // West VIP Booths
   drawRoundRect(ctx, 50, 90, 160, 45, 8);
@@ -505,7 +505,7 @@ function drawDoors(ctx, doors = {}) {
       const midX = wall.x + wall.w / 2;
       const midY = wall.y + wall.h / 2;
       ctx.fillStyle = '#16a34a';
-      ctx.fillText('🚪 OPEN', midX, midY + (wall.h > wall.w ? 0 : -8));
+      ctx.fillText('OPEN', midX, midY + (wall.h > wall.w ? 0 : -8));
       ctx.restore();
     } else {
       // Draw closed door: solid wooden panel barrier
@@ -538,7 +538,7 @@ function drawDoors(ctx, doors = {}) {
       const midX = wall.x + wall.w / 2;
       const midY = wall.y + wall.h / 2;
       ctx.fillStyle = '#ef4444';
-      ctx.fillText('🔒 CLOSED', midX, midY + (wall.h > wall.w ? 0 : -8));
+      ctx.fillText('CLOSED', midX, midY + (wall.h > wall.w ? 0 : -8));
       ctx.restore();
     }
   }
@@ -549,7 +549,6 @@ const THEMES = {
   office: {
     id: 'office',
     name: 'Corporate Office',
-    icon: '🏢',
     badgeColor: '#3b82f6',
     spawn: { x: 620, y: 390 },
     draw: drawOffice,
@@ -559,7 +558,6 @@ const THEMES = {
   conference: {
     id: 'conference',
     name: 'Conference & Auditorium',
-    icon: '🏛️',
     badgeColor: '#8b5cf6',
     spawn: { x: 600, y: 570 },
     draw: drawConference,
@@ -569,7 +567,6 @@ const THEMES = {
   lounge: {
     id: 'lounge',
     name: 'Rooftop Social Lounge',
-    icon: '☕',
     badgeColor: '#10b981',
     spawn: { x: 600, y: 360 },
     draw: drawLounge,
@@ -670,7 +667,7 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
   ctx.font = '600 12px Inter, sans-serif';
   ctx.textAlign = 'center';
   const isActuallySpeaking = !isMuted && (isSpeaking || voiceIntensity > 0.04);
-  const micIcon = isMuted ? '🔇' : (isActuallySpeaking ? '🗣️' : '🎙️');
+  const micIcon = isMuted ? 'MUTED' : (isActuallySpeaking ? 'LIVE' : 'MIC');
   const label = isMe ? `${username} (you)` : username;
   const fullTag = `${micIcon} ${label}`;
   const tw = ctx.measureText(fullTag).width;
@@ -711,34 +708,34 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
       if (acousticInfo.status === 'blocked-wall' || acousticInfo.status === 'door-closed') {
         ctx.fillStyle = '#ef4444';
         const stLabel = acousticInfo.status === 'door-closed' ? 'Closed Door' : 'Soundproof';
-        ctx.fillText(`🔒 ${acousticInfo.remoteRoom?.name || 'Room'} (${stLabel})`, x, y + R + 15);
+        ctx.fillText(`${acousticInfo.remoteRoom?.name || 'Room'} (${stLabel})`, x, y + R + 15);
       } else if (acousticInfo.status === 'in-room') {
         const volPct = Math.round(volumeGain * 100);
         ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
-        ctx.fillText(`🔊 ${volPct}% • ${acousticInfo.remoteRoom.name}`, x, y + R + 15);
+        ctx.fillText(`${volPct}% • ${acousticInfo.remoteRoom.name}`, x, y + R + 15);
       } else if (acousticInfo.status === 'doorway') {
         const volPct = Math.round(volumeGain * 100);
         ctx.fillStyle = '#38bdf8';
-        ctx.fillText(`🚪 Open Door 🔊 ${volPct}%`, x, y + R + 15);
+        ctx.fillText(`Open door ${volPct}%`, x, y + R + 15);
       } else if (acousticInfo.status === 'occluded') {
         const volPct = Math.round(volumeGain * 100);
         ctx.fillStyle = '#f59e0b';
-        ctx.fillText(`🧱 Muffled Wall 🔊 ${volPct}%`, x, y + R + 15);
+        ctx.fillText(`Muffled wall ${volPct}%`, x, y + R + 15);
       } else if (volumeGain > 0.04) {
         const volPct = Math.round(volumeGain * 100);
         ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
-        ctx.fillText(`🔊 ${volPct}%`, x, y + R + 15);
+        ctx.fillText(`${volPct}%`, x, y + R + 15);
       }
     } else if (volumeGain > 0.04) {
       const volPct = Math.round(volumeGain * 100);
       ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
-      ctx.fillText(`🔊 ${volPct}%`, x, y + R + 15);
+      ctx.fillText(`${volPct}%`, x, y + R + 15);
     }
   } else if (isMe && acousticInfo?.localRoom) {
     ctx.font = '500 10px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = acousticInfo.localRoom.isIsolated ? '#38bdf8' : '#94a3b8';
-    ctx.fillText(`📍 ${acousticInfo.localRoom.name}`, x, y + R + 15);
+    ctx.fillText(acousticInfo.localRoom.name, x, y + R + 15);
   }
 }
 
@@ -942,7 +939,7 @@ export default function WorldCanvas({
     ctx.fillText('W A S D to move · [M] Mute · [D] Deafen', 26, H - 36);
     ctx.fillStyle = '#5e5f5c';
     ctx.font = '11px Inter, sans-serif';
-    ctx.fillText(`👥 ${userCount} in room · Hold [Space] Push-to-Talk`, 26, H - 20);
+    ctx.fillText(`${userCount} people in room · Hold [Space] Push-to-Talk`, 26, H - 20);
 
     // 5. Connection indicator bottom-right
     const connected = socketRef.current?.connected;
@@ -974,9 +971,9 @@ export default function WorldCanvas({
         isMutedRef.current = false;
         setIsMuted(false);
         playUiChime('unmute');
-        showToast('🎙️ Microphone active! Connected to meeting voice.', 'success');
+        showToast('Microphone active. Connected to meeting voice.', 'success');
       } catch (err) {
-        showToast(`❌ ${err.message || 'Microphone access failed'}`, 'alert');
+        showToast(err.message || 'Microphone access failed', 'alert');
         alert(err.message || 'Microphone permission required for voice audio.');
       }
     } else {
@@ -984,7 +981,7 @@ export default function WorldCanvas({
       isMutedRef.current = newMuted;
       setIsMuted(newMuted);
       playUiChime(newMuted ? 'mute' : 'unmute');
-      showToast(newMuted ? '🔇 Microphone muted' : '🎙️ Microphone unmuted', newMuted ? 'info' : 'success');
+      showToast(newMuted ? 'Microphone muted' : 'Microphone unmuted', newMuted ? 'info' : 'success');
     }
   };
 
@@ -1060,7 +1057,7 @@ export default function WorldCanvas({
         setMicActive(false);
         isMutedRef.current = true;
         setIsMuted(true);
-        showToast(`⚠️ ${reason || 'Microphone disconnected.'} Click "Enable Mic" to reconnect.`, 'alert');
+        showToast(`${reason || 'Microphone disconnected.'} Click "Enable Mic" to reconnect.`, 'alert');
       },
     });
 
@@ -1155,7 +1152,7 @@ export default function WorldCanvas({
         return next;
       });
       const dName = DOORS[key]?.name || key;
-      showToast(`${isOpen ? '🚪' : '🔒'} ${changedBy || 'Member'} ${isOpen ? 'opened' : 'closed'} the ${dName} door!`, isOpen ? 'success' : 'warn');
+      showToast(`${changedBy || 'Member'} ${isOpen ? 'opened' : 'closed'} the ${dName} door.`, isOpen ? 'success' : 'warn');
     });
 
     // Audio chime broadcast when someone knocks on any door
@@ -1174,7 +1171,7 @@ export default function WorldCanvas({
       if (amIInside) {
         playKnockSound();
         setPendingKnockRequests(pendingKnocks || []);
-        showToast(`🔔 ${visitorName} is knocking at the ${targetRoomName} door!`, 'alert');
+        showToast(`${visitorName} is knocking at the ${targetRoomName} door.`, 'alert');
       }
     });
 
@@ -1191,10 +1188,10 @@ export default function WorldCanvas({
       const dName = DOORS[doorKey]?.name || doorKey;
       if (status === 'waiting') {
         setMyKnockStatus({ doorKey, status: 'waiting', message });
-        showToast(`🔔 Waiting for occupants of ${dName} to welcome you...`, 'info');
+        showToast(`Waiting for occupants of ${dName} to welcome you...`, 'info');
       } else if (status === 'room-empty') {
         setMyKnockStatus(null);
-        showToast(`ℹ️ ${message}`, 'info');
+        showToast(message, 'info');
       }
     });
 
@@ -1202,19 +1199,19 @@ export default function WorldCanvas({
     socket.on('visitor-welcomed', ({ doorKey, roomName: targetRoomName, welcomedBy }) => {
       setWelcomedDoors((prev) => ({ ...prev, [doorKey]: true }));
       setMyKnockStatus({ doorKey, status: 'welcomed' });
-      showToast(`🎉 ${welcomedBy} welcomed you into ${targetRoomName}! Step inside.`, 'success');
+      showToast(`${welcomedBy} welcomed you into ${targetRoomName}. Step inside.`, 'success');
     });
 
     // Received by visitor when an occupant declines entry
     socket.on('visitor-declined', ({ doorKey, roomName: targetRoomName, declinedBy, reason }) => {
       setMyKnockStatus({ doorKey, status: 'declined' });
-      showToast(`🔒 ${declinedBy} declined entry to ${targetRoomName}: ${reason}`, 'alert');
+      showToast(`${declinedBy} declined entry to ${targetRoomName}: ${reason}`, 'alert');
     });
 
     // Received if an unauthorized action is denied by the server
     socket.on('door-action-denied', ({ doorKey, reason }) => {
       const dName = DOORS[doorKey]?.name || doorKey;
-      showToast(`🔒 ${dName}: ${reason}`, 'alert');
+      showToast(`${dName}: ${reason}`, 'alert');
     });
 
     // Existing user gets notified of new peer
@@ -1365,7 +1362,7 @@ export default function WorldCanvas({
                 doorKey: enteredRoomKey,
                 isOpen: false,
               });
-              showToast(`🔒 Door closed for private meeting. Visitors must knock to enter.`, 'info');
+              showToast('Door closed for private meeting. Visitors must knock to enter.', 'info');
             }
           }, 3500);
         }
@@ -1487,7 +1484,7 @@ export default function WorldCanvas({
     });
     setMyKnockStatus({ doorKey, status: 'waiting' });
     const dName = DOORS[doorKey]?.name || doorKey;
-    showToast(`🔔 You knocked on the ${dName} door! Waiting for occupants...`, 'info');
+    showToast(`You knocked on the ${dName} door. Waiting for occupants...`, 'info');
   };
 
   const handleCancelKnock = (doorKey) => {
@@ -1508,7 +1505,7 @@ export default function WorldCanvas({
       visitorId,
     });
     setPendingKnockRequests((prev) => prev.filter((r) => r.visitorId !== visitorId));
-    showToast('🚪 Welcomed visitor in! Door opened.', 'success');
+    showToast('Welcomed visitor in. Door opened.', 'success');
   };
 
   const handleDeclineVisitor = (doorKey, visitorId) => {
@@ -1519,7 +1516,7 @@ export default function WorldCanvas({
       visitorId,
     });
     setPendingKnockRequests((prev) => prev.filter((r) => r.visitorId !== visitorId));
-    showToast('🔒 Visitor entry request declined.', 'info');
+    showToast('Visitor entry request declined.', 'info');
   };
 
   return (
@@ -1725,7 +1722,7 @@ export default function WorldCanvas({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #E9E8E4', paddingBottom: '6px' }}>
-              <span style={{ fontSize: '15px' }}>🔔</span>
+              <span className="material-symbols-outlined" aria-hidden="true">notifications</span>
               <span style={{ fontWeight: 700, fontSize: '13px', color: '#1c1b1b' }}>
                 Knock at the Door
               </span>
@@ -1747,7 +1744,7 @@ export default function WorldCanvas({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '15px' }}>👤</span>
+                    <span className="material-symbols-outlined" aria-hidden="true">person</span>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: '12px', color: '#1c1b1b' }}>
                         {k.visitorName}
@@ -1777,7 +1774,7 @@ export default function WorldCanvas({
                       }}
                       title="Welcome visitor into the room and open the door"
                     >
-                      <span>🚪</span>
+                      <span className="material-symbols-outlined" aria-hidden="true">door_open</span>
                       <span>Welcome</span>
                     </button>
 
@@ -1830,7 +1827,7 @@ export default function WorldCanvas({
               animation: 'pulse 2s infinite',
             }}
           >
-            <span style={{ fontSize: '16px' }}>🔊</span>
+            <span className="material-symbols-outlined" aria-hidden="true">volume_up</span>
             <span style={{ fontSize: '12px', fontWeight: 600 }}>Click anywhere to enable spatial audio</span>
           </div>
         )}
@@ -1892,7 +1889,7 @@ export default function WorldCanvas({
                   justifyContent: 'center',
                 }}
               >
-                ✕
+                <span className="material-symbols-outlined" aria-hidden="true">close</span>
               </button>
             </div>
 
@@ -1971,7 +1968,7 @@ export default function WorldCanvas({
                     spatialAudio.resumeAll();
                     setAudioUnlocked(true);
                     refreshDiagnostics();
-                    showToast('🔊 Audio playback resumed', 'success');
+                    showToast('Audio playback resumed.', 'success');
                   }}
                   style={{
                     padding: '7px 12px',
@@ -1984,7 +1981,8 @@ export default function WorldCanvas({
                     cursor: 'pointer',
                   }}
                 >
-                  🔊 Resume / Unlock Audio
+                  <span className="material-symbols-outlined" aria-hidden="true">volume_up</span>
+                  <span>Resume / Unlock Audio</span>
                 </button>
                 <button
                   onClick={async () => {
@@ -1995,9 +1993,9 @@ export default function WorldCanvas({
                       isMutedRef.current = false;
                       setIsMuted(false);
                       refreshDiagnostics();
-                      showToast('🎙️ Microphone re-acquired & unmuted', 'success');
+                      showToast('Microphone re-acquired and unmuted.', 'success');
                     } catch (e) {
-                      showToast(`❌ ${e.message}`, 'alert');
+                      showToast(e.message, 'alert');
                     }
                   }}
                   style={{
@@ -2011,14 +2009,15 @@ export default function WorldCanvas({
                     cursor: 'pointer',
                   }}
                 >
-                  🎙️ Re-acquire Microphone
+                  <span className="material-symbols-outlined" aria-hidden="true">mic</span>
+                  <span>Re-acquire Microphone</span>
                 </button>
                 <button
                   onClick={() => {
                     webrtc.reconnectAllPeers();
                     spatialAudio.resumeAll();
                     refreshDiagnostics();
-                    showToast('⚡ Reconnecting all peer connections cleanly...', 'info');
+                    showToast('Reconnecting all peer connections.', 'info');
                   }}
                   style={{
                     padding: '7px 12px',
@@ -2031,7 +2030,8 @@ export default function WorldCanvas({
                     cursor: 'pointer',
                   }}
                 >
-                  ⚡ Force Reconnect All Peers
+                  <span className="material-symbols-outlined" aria-hidden="true">sync</span>
+                  <span>Force Reconnect All Peers</span>
                 </button>
               </div>
             </div>
@@ -2191,7 +2191,7 @@ export default function WorldCanvas({
                   : 'Open the door to welcome other members in'
               }
             >
-              <span style={{ fontSize: '14px' }}>{isRoomDoorOpen ? '🔒' : '🚪'}</span>
+              <span className="material-symbols-outlined" aria-hidden="true">{isRoomDoorOpen ? 'lock' : 'door_open'}</span>
               <span>
                 {isRoomDoorOpen
                   ? `Close Door (${DOORS[roomDoorKey]?.name || 'Room'})`
@@ -2221,7 +2221,7 @@ export default function WorldCanvas({
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  <span style={{ fontSize: '14px' }}>{isNearbyDoorOpen ? '🔒' : '🚪'}</span>
+                  <span className="material-symbols-outlined" aria-hidden="true">{isNearbyDoorOpen ? 'lock' : 'door_open'}</span>
                   <span>
                     {isNearbyDoorOpen
                       ? `Close Door (${DOORS[nearbyDoor]?.name || 'Room'})`
@@ -2250,7 +2250,7 @@ export default function WorldCanvas({
                             cursor: 'pointer',
                           }}
                         >
-                          <span style={{ fontSize: '14px' }}>🚪</span>
+                          <span className="material-symbols-outlined" aria-hidden="true">door_open</span>
                           <span>Enter Room (Welcomed In!)</span>
                         </button>
                       ) : myKnockStatus?.doorKey === nearbyDoor && myKnockStatus?.status === 'waiting' ? (
@@ -2304,7 +2304,7 @@ export default function WorldCanvas({
                               fontWeight: 600,
                             }}
                           >
-                            <span>🔒</span>
+                            <span className="material-symbols-outlined" aria-hidden="true">lock</span>
                             <span>Private (Declined)</span>
                           </div>
                           <button
@@ -2341,7 +2341,7 @@ export default function WorldCanvas({
                             boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
                           }}
                         >
-                          <span style={{ fontSize: '14px' }}>🔔</span>
+                          <span className="material-symbols-outlined" aria-hidden="true">notifications</span>
                           <span>Knock to Enter (${DOORS[nearbyDoor]?.name || 'Room'})</span>
                         </button>
                       )}
@@ -2362,7 +2362,7 @@ export default function WorldCanvas({
                         fontWeight: 600,
                       }}
                     >
-                      <span>🚪</span>
+                      <span className="material-symbols-outlined" aria-hidden="true">door_open</span>
                       <span>Door Open — Step Inside</span>
                     </div>
                   )}

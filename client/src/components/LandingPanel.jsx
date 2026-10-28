@@ -9,7 +9,7 @@ import social3 from '../assets/social_3.png';
 import social4 from '../assets/social_4.png';
 import landingOfficeExact from '../assets/landing_office_exact.png';
 
-export default function LandingPanel({ onGetStarted, onOpenMeeting }) {
+export default function LandingPanel({ onGetStarted, onOpenMeeting, onSignIn }) {
   return (
     <div className="landing-card">
       {/* Header */}
@@ -24,7 +24,7 @@ export default function LandingPanel({ onGetStarted, onOpenMeeting }) {
         </nav>
 
         <div className="landing-auth">
-          <span className="landing-signin" onClick={onGetStarted}>Sign in</span>
+          <button type="button" className="landing-signin" onClick={onSignIn || onGetStarted}>Sign in</button>
           <button className="landing-btn-dark" onClick={onGetStarted}>
             Get started
           </button>
@@ -48,7 +48,7 @@ export default function LandingPanel({ onGetStarted, onOpenMeeting }) {
             </button>
             <button className="landing-cta-secondary" onClick={onOpenMeeting || onGetStarted}>
               <Play size={10} fill="#111827" strokeWidth={0} />
-              <span>Preview a call</span>
+              <span>Preview the workspace</span>
             </button>
           </div>
 
