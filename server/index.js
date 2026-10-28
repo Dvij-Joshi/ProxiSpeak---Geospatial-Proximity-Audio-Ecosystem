@@ -395,6 +395,9 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const cleanUsernameLower = cleanUsername.toLowerCase();
 
     // 1. Check existing in MongoDB if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         const existingUser = await Account.findByCredentials(cleanUsernameLower);
@@ -429,6 +432,9 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     let savedInDb = false;
 
     // 4. Save to MongoDB if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         const account = await Account.create({
@@ -510,9 +516,15 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     let account = null;
 
     // 1. Lookup in MongoDB first if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         account = await Account.findByCredentials(clean);
+        if (!account) {
+          account = await Account.findOne({ $or: [{ email: cleanLower }, { usernameLower: cleanLower }] });
+        }
         if (account) {
           console.log(`[Login] Found account in MongoDB for "${clean}" -> ${account.username} (${account.email})`);
         }
@@ -608,6 +620,9 @@ app.get('/api/auth/me', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     let account = null;
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         if (mongoose.Types.ObjectId.isValid(decoded.id)) {
@@ -655,6 +670,9 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/rooms', async (_req, res) => {
   try {
     let dbRooms = [];
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         dbRooms = await Room.find({ isPublic: true }).sort({ createdAt: -1 }).lean();
@@ -724,6 +742,9 @@ app.post('/api/rooms', roomCreationLimiter, async (req, res) => {
     memoryRooms.set(code, roomData);
 
     // Save in DB if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         await Room.create(roomData);
@@ -754,6 +775,9 @@ app.get('/api/rooms/:roomId', async (req, res) => {
     }
 
     // Check DB if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         const dbRoom = await Room.findOne({ roomId }).lean();
@@ -802,6 +826,9 @@ app.get('/api/proximity/:userId', async (req, res) => {
     let targetUser = null;
 
     // 1. Resolve user by MongoDB ObjectId, socketId, or username
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       if (mongoose.Types.ObjectId.isValid(userId)) {
         targetUser = await User.findById(userId);
@@ -849,6 +876,9 @@ app.get('/api/proximity/:userId', async (req, res) => {
     let nearbyUsers = [];
 
     // 2. Perform MongoDB $near geospatial query if connected
+    if (!isDbConnected()) {
+      try { await connectDB(); } catch (_e) {}
+    }
     if (isDbConnected()) {
       try {
         const mongoResults = await User.find({
@@ -1395,6 +1425,12 @@ function startKeepAlive() {
 // ── Boot ───────────────────────────────────────────────────────────────────────
 connectDB()
   .then(async () => {
+    try {
+      const cleared = await User.deleteMany({});
+      if (cleared.deletedCount > 0) {
+        console.log(`[DB] Cleaned up ${cleared.deletedCount} stale socket presence record(s).`);
+      }
+    } catch (_e) {}
     await syncCachedAccountsToDb();
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`\n✅ ProxiSpeak server running (Anti-DDoS & Rate Limiting Active):`);
