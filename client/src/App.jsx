@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import AuthModal from './components/AuthModal';
 import MeetingLobby from './components/MeetingLobby';
 import WorldCanvas from './WorldCanvas';
+import LandingPanel from './components/LandingPanel';
 import VoiceTest from './components/VoiceTest';
 import { SERVER_URL } from './config';
+import { X } from 'lucide-react';
+import './styles/variables.css';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -11,6 +14,10 @@ export default function App() {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [inviteRoomId, setInviteRoomId] = useState(null);
   const [isVoiceTesting, setIsVoiceTesting] = useState(false);
+  const [hasEnteredLobby, setHasEnteredLobby] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('room') || params.has('voiceTest') || params.has('voiceRoom') || window.location.pathname === '/voice-test';
+  });
 
   // Check URL query parameters (?room=roomId)
   useEffect(() => {
@@ -112,6 +119,7 @@ export default function App() {
 
   // Sync current room with browser URL history
   const handleJoinRoom = (room) => {
+    setHasEnteredLobby(true);
     // If not authenticated, create guest user credentials so canvas works seamlessly
     if (!user) {
       const guestName = 'Guest-' + Math.floor(1000 + Math.random() * 9000);
@@ -135,6 +143,7 @@ export default function App() {
   const handleLeaveRoom = () => {
     setCurrentRoom(null);
     setInviteRoomId(null);
+    setHasEnteredLobby(true);
     window.history.pushState({}, '', window.location.pathname);
   };
 
@@ -143,6 +152,7 @@ export default function App() {
     localStorage.removeItem('proxispeak_user');
     setUser(null);
     setCurrentRoom(null);
+    setHasEnteredLobby(true);
     window.history.pushState({}, '', window.location.pathname);
   };
 
@@ -266,6 +276,21 @@ export default function App() {
     );
   }
 
+  if (!user && !inviteRoomId && !hasEnteredLobby) {
+    return (
+      <div style={{ width: '100%', height: '100vh', minHeight: '560px' }}>
+        <LandingPanel
+          onGetStarted={() => setHasEnteredLobby(true)}
+          onOpenMeeting={() => setHasEnteredLobby(true)}
+          onSignIn={() => {
+            setHasEnteredLobby(true);
+            setShowAuthModal(true);
+          }}
+        />
+      </div>
+    );
+  }
+
   // Main Home Page '/' - Stitch Lumio SaaS Landing Page & Spatial Workspaces Hub
   return (
     <>
@@ -312,7 +337,7 @@ export default function App() {
                 justifyContent: 'center',
               }}
             >
-              ✕
+              <X size={15} aria-hidden="true" />
             </button>
             <AuthModal
               defaultRoomName={inviteRoomId}
@@ -327,4 +352,3 @@ export default function App() {
     </>
   );
 }
-

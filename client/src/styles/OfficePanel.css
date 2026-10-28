@@ -1,0 +1,333 @@
+.office-card {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  font-family: var(--font-family);
+}
+
+/* Sidebar */
+.office-sidebar {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  background: #ffffff;
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 5px;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.office-sidebar-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.office-brand {
+  padding: 2px 2px;
+  overflow: hidden;
+}
+
+.office-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.office-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.office-nav-item:hover {
+  background: var(--bg-panel-secondary);
+  color: var(--text-main);
+}
+
+.office-nav-item:disabled {
+  color: #a2a69f;
+  cursor: not-allowed;
+}
+
+.office-nav-item.active {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.office-sidebar-bottom {
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Main Area */
+.office-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+/* Header */
+.office-header {
+  height: 35px;
+  min-height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-light);
+  z-index: 4;
+}
+
+.office-workspace-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.office-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-panel-secondary);
+  padding: 4px 9px;
+  border-radius: 6px;
+  width: 170px;
+}
+
+.office-search-box input {
+  background: transparent;
+  border: none;
+  font-size: 9px;
+  color: #111827;
+  width: 100%;
+}
+
+.office-search-clear {
+  color: var(--text-subtle);
+  font-size: 14px;
+  line-height: 1;
+}
+.office-search-results {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  width: 100%;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  box-shadow: 0 6px 16px rgba(38, 42, 38, .12);
+  z-index: 20;
+}
+.office-search-results button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  padding: 6px 7px;
+  border-radius: 4px;
+  font-size: 9px;
+  text-align: left;
+  color: var(--text-main);
+}
+.office-search-results button:hover { background: var(--bg-panel-secondary); }
+.office-search-results button span { color: var(--text-subtle); font-size: 8px; }
+.office-search-empty { padding: 7px; color: var(--text-muted); font-size: 9px; }
+
+.office-search-box input::placeholder {
+  color: #9ca3af;
+}
+
+.office-header-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.office-bell-btn {
+  position: relative;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  cursor: pointer;
+}
+
+.office-bell-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 5px;
+  height: 5px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 1px solid #ffffff;
+}
+
+.office-user-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.office-avatar-circle {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.office-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.office-user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.office-user-name-row span {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.office-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  color: var(--status-online);
+  font-weight: 500;
+}
+
+.office-status-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--status-online);
+}
+
+/* Map Canvas Container */
+.office-map-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.office-move-hint {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  color: #4f5b52;
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid rgba(101, 117, 103, .2);
+  border-radius: 999px;
+  font-size: 8px;
+  opacity: 0;
+  transition: opacity .15s;
+  pointer-events: none;
+}
+.office-map-container:hover .office-move-hint { opacity: 1; }
+.office-movable-avatar {
+  position: absolute;
+  z-index: 7;
+  width: 25px;
+  height: 25px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 5px rgba(93, 118, 104, .2), 0 0 0 10px rgba(93, 118, 104, .1);
+  cursor: grab;
+  touch-action: none;
+  overflow: hidden;
+  padding: 0;
+}
+.office-movable-avatar:active { cursor: grabbing; }
+.office-movable-avatar:not(.moved) { border: 0; box-shadow: none; opacity: 0; }
+.office-movable-avatar img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+.office-canvas-bg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Interactive click targets overlaid on canvas */
+.office-interactive-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.office-call-hit-bar {
+  position: absolute;
+  bottom: 8px;
+  left: 28%;
+  width: 44%;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  cursor: pointer;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.office-call-hit-target {
+  width: 25%;
+  height: 100%;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.office-call-hit-target:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.office-call-hit-target.active { background: rgba(239,68,68,.22); }
