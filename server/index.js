@@ -9,6 +9,8 @@ import path from 'path';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
@@ -82,6 +84,28 @@ const io = new Server(httpServer, {
 
 // Socket connection concurrency limiter (prevents connection exhaustion)
 io.use(socketConnectionLimiter);
+
+// ── Redis Pub/Sub Adapter (Week 3 Mesh Scaling: Multi-Node Scaling) ───────────
+async function initRedisAdapter() {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.log('[Redis] REDIS_URL not configured. Running with standard in-memory adapter.');
+    return;
+  }
+  try {
+    const pubClient = createClient({ url: redisUrl });
+    const subClient = pubClient.duplicate();
+
+    pubClient.on('error', (err) => console.warn('[Redis pubClient]', err.message));
+    subClient.on('error', (err) => console.warn('[Redis subClient]', err.message));
+
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('[Redis] Socket.io Redis Pub/Sub adapter active for multi-instance scaling.');
+  } catch (err) {
+    console.warn('[Redis] Failed to connect to Redis. Falling back to in-memory adapter:', err.message);
+  }
+}
 
 // ── Dual Layer Storage (MongoDB + Persistent Disk Cache + In-Memory Fallback) ─
 const rooms = new Map();
@@ -1044,19 +1068,35 @@ io.on('connection', (socket) => {
     ).catch(err => console.error('[DB move]', err.message));
   });
 
-  // ── WebRTC Signaling Relay (Anti-Spam Throttled) ─────────────────────────────
+  // ── WebRTC Signaling Relay (Anti-Spam Throttled & Room-Scoped) ───────────────
   socket.on('webrtc-offer', ({ to, offer }) => {
-    if (!checkThrottle('webrtc', 40, 5000)) return;
+    if (!to || !offer) return;
+    if (!checkThrottle('webrtc-offer', 30, 5000)) return;
+    const senderRoom = socket.data.roomId;
+    if (senderRoom && rooms.has(senderRoom) && !rooms.get(senderRoom).has(to)) {
+      return; // Suppress cross-room signaling leaks
+    }
     io.to(to).emit('webrtc-offer', { from: socket.id, offer });
   });
 
   socket.on('webrtc-answer', ({ to, answer }) => {
-    if (!checkThrottle('webrtc', 40, 5000)) return;
+    if (!to || !answer) return;
+    if (!checkThrottle('webrtc-answer', 30, 5000)) return;
+    const senderRoom = socket.data.roomId;
+    if (senderRoom && rooms.has(senderRoom) && !rooms.get(senderRoom).has(to)) {
+      return;
+    }
     io.to(to).emit('webrtc-answer', { from: socket.id, answer });
   });
 
   socket.on('webrtc-ice-candidate', ({ to, candidate }) => {
-    if (!checkThrottle('webrtc', 40, 5000)) return;
+    if (!to || !candidate) return;
+    // Multi-peer mesh gathering requires high candidate throughput (burst up to 200 per 5s)
+    if (!checkThrottle('webrtc-candidate', 200, 5000)) return;
+    const senderRoom = socket.data.roomId;
+    if (senderRoom && rooms.has(senderRoom) && !rooms.get(senderRoom).has(to)) {
+      return;
+    }
     io.to(to).emit('webrtc-ice-candidate', { from: socket.id, candidate });
   });
 
@@ -1432,6 +1472,7 @@ connectDB()
       }
     } catch (_e) {}
     await syncCachedAccountsToDb();
+    await initRedisAdapter();
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`\n✅ ProxiSpeak server running (Anti-DDoS & Rate Limiting Active):`);
       console.log(`   Local  : http://localhost:${PORT}`);
@@ -1440,8 +1481,9 @@ connectDB()
       startKeepAlive();
     });
   })
-  .catch(err => {
+  .catch(async err => {
     console.error('[DB] Database connection error:', err.message);
+    await initRedisAdapter();
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`\n⚠️  ProxiSpeak server running (PERSISTENT DISK CACHE MODE) on http://localhost:${PORT}\n`);
       startKeepAlive();
