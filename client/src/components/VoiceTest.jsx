@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
+import { VOICE_SERVER_URL } from '../config';
 
 export default function VoiceTest({ user, onBackToLobby }) {
   // Voice server URL: defaults to localhost in dev, or custom URL
-  const defaultServerUrl = import.meta.env.VITE_VOICE_SERVER_URL || 'http://localhost:5001';
+  const defaultServerUrl = VOICE_SERVER_URL;
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const [showConfig, setShowConfig] = useState(false);
 
