@@ -247,6 +247,10 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
 
   const handleCreateRoom = async (e) => {
     e.preventDefault();
+    if (!user) {
+      onRequestAuth?.();
+      return;
+    }
     if (!newRoomName.trim()) return;
 
     spatialAudio.resumeAll();
@@ -258,7 +262,7 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
         body: JSON.stringify({
           name: newRoomName.trim(),
           theme: newRoomTheme,
-          createdBy: user?.username || 'Guest Host',
+          createdBy: user.username,
         }),
       });
 
@@ -377,19 +381,10 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
               <div className="flex items-center gap-2">
                 <button
                   onClick={onRequestAuth}
-                  className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-surface-container-highest/20 text-on-primary text-xs font-semibold hover:bg-surface-container-highest/30 transition-all cursor-pointer"
-                >
-                  <span>Sign In</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const guestName = 'Guest-' + Math.floor(1000 + Math.random() * 9000);
-                    onJoinRoom({ roomId: 'main-office', name: 'Corporate Office', theme: 'office' });
-                  }}
                   className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-accent-orange text-white text-xs font-semibold hover:bg-accent-orange/90 transition-all shadow-sm cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-[14px]">login</span>
-                  <span>Quick Join</span>
+                  <span className="material-symbols-outlined text-[14px]">lock</span>
+                  <span>Sign In / Register</span>
                 </button>
               </div>
             )}

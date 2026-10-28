@@ -112,19 +112,10 @@ export default function App() {
 
   // Sync current room with browser URL history
   const handleJoinRoom = (room) => {
-    // If not authenticated, create guest user credentials so canvas works seamlessly
+    // If not authenticated, require registration or sign in
     if (!user) {
-      const guestName = 'Guest-' + Math.floor(1000 + Math.random() * 9000);
-      const guestUser = {
-        userId: 'guest-' + Math.random().toString(36).substring(2, 9),
-        username: guestName,
-        email: `${guestName.toLowerCase()}@guest.local`,
-        avatarColor: '#FF4B2B',
-        isGuest: true,
-      };
-      localStorage.setItem('proxispeak_token', 'guest-token-' + Date.now());
-      localStorage.setItem('proxispeak_user', JSON.stringify(guestUser));
-      setUser(guestUser);
+      setShowAuthModal(true);
+      return;
     }
 
     setCurrentRoom(room);
@@ -248,17 +239,22 @@ export default function App() {
 
   // Active Workspace & Call Canvas
   if (currentRoom) {
-    const activeUser = user || {
-      userId: 'guest-' + Math.random().toString(36).substring(2, 9),
-      username: 'Guest-' + Math.floor(1000 + Math.random() * 9000),
-      avatarColor: '#FF4B2B',
-      isGuest: true,
-    };
+    if (!user) {
+      return (
+        <AuthModal
+          defaultRoomName={currentRoom.roomId}
+          onClose={() => setCurrentRoom(null)}
+          onAuthSuccess={(authenticatedUser) => {
+            setUser(authenticatedUser);
+          }}
+        />
+      );
+    }
 
     return (
       <div style={{ background: '#FAF9F5', minHeight: '100vh', width: '100%' }}>
         <WorldCanvas
-          user={activeUser}
+          user={user}
           room={currentRoom}
           onLeaveRoom={handleLeaveRoom}
         />
@@ -291,4 +287,3 @@ export default function App() {
     </>
   );
 }
-

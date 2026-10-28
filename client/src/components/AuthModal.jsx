@@ -24,23 +24,6 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Quick Guest Join
-  const handleGuestJoin = (e) => {
-    if (e) e.preventDefault();
-    const fallbackName = identifier.trim() || username.trim() || 'Guest-' + Math.floor(1000 + Math.random() * 9000);
-    const guestUser = {
-      userId: 'guest-' + Math.random().toString(36).substring(2, 9),
-      username: fallbackName,
-      email: `${fallbackName.toLowerCase().replace(/[^a-z0-9]/g, '')}@guest.local`,
-      avatarColor: selectedColor || '#FF4B2B',
-      isGuest: true,
-    };
-    const guestToken = 'guest-token-' + Date.now();
-    localStorage.setItem('proxispeak_token', guestToken);
-    localStorage.setItem('proxispeak_user', JSON.stringify(guestUser));
-    onAuthSuccess(guestUser);
-  };
-
   const handleSwitchToRegister = () => {
     setIsLogin(false);
     setError('');
@@ -114,7 +97,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
       } catch (networkErr) {
         console.warn('[AuthModal] Network error reaching', SERVER_URL, networkErr);
         throw new Error(
-          'Unable to reach the ProxiSpeak authentication gateway. Please check your network or enter via Guest Session.'
+          'Unable to reach the ProxiSpeak authentication gateway. Please check your network connection and retry.'
         );
       }
 
@@ -124,7 +107,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
         data = JSON.parse(responseText);
       } catch (_jsonErr) {
         if (!res.ok) {
-          throw new Error(`Authentication server returned status ${res.status}. Please retry or continue as Guest.`);
+          throw new Error(`Authentication server returned status ${res.status}. Please verify your credentials and retry.`);
         }
         throw new Error('Unexpected authentication response format.');
       }
@@ -534,22 +517,15 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
             </form>
           </div>
 
-          {/* Bottom Secondary Actions */}
-          <div className="mt-6 pt-4 border-t border-[#D9D7D0]">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={handleGuestJoin}
-                className="w-full sm:w-auto px-4 py-2 rounded-lg border border-[#D9D7D0] hover:bg-[#F4F3EF] hover:border-[#1c1b1b] text-[#1c1b1b] text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[16px] text-[#FF4B2B]">bolt</span>
-                <span>Instant Guest Pass</span>
-              </button>
-
-              <span className="font-mono text-[9px] text-[#8C8880] uppercase tracking-wider text-center sm:text-right">
-                HRTF Engine · 0% TURN API
-              </span>
-            </div>
+          {/* Bottom Security Assurance */}
+          <div className="mt-6 pt-4 border-t border-[#D9D7D0] flex items-center justify-between text-[#8C8880] font-mono text-[10px]">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              AES-256 Encrypted Session
+            </span>
+            <span className="uppercase tracking-wider">
+              HRTF Engine · 0% TURN API
+            </span>
           </div>
         </div>
       </div>
