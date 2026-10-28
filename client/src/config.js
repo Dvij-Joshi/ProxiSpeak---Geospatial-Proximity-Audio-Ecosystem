@@ -1,5 +1,5 @@
 // ─── Client Configuration ──────────────────────────────────────────────────
-export const PRODUCTION_SERVER_URL = 'https://proxispeak-server.onrender.com';
+export const PRODUCTION_SERVER_URL = 'https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com';
 export const PRODUCTION_VOICE_SERVER_URL = 'https://proxispeak-geospatial-proximity-audio-wb2s.onrender.com';
 
 function resolveServerUrl() {
@@ -66,4 +66,3 @@ export const AVATAR_COLORS = [
   '#06b6d4', // Cyan
   '#84cc16', // Lime
 ];
-

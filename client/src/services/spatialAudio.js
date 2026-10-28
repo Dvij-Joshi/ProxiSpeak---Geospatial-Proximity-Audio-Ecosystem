@@ -490,8 +490,9 @@ class SpatialAudioManager {
     }
     this.peers.forEach((peer) => {
       if (peer.audioEl) {
-        if (peer.audioEl.paused) {
-          peer.audioEl.play().catch(() => {});
+        if (peer.audioEl.paused && !peer._playPending) {
+          peer._playPending = true;
+          peer.audioEl.play().catch(() => {}).finally(() => { peer._playPending = false; });
         }
         // On iOS, ensure audio element is not stuck muted
         if (this._isIOS && !peer.usingWebAudio) {
@@ -686,8 +687,9 @@ class SpatialAudioManager {
               peer.audioEl.muted = false;
               peer.audioEl.volume = targetGain > 0.04 ? 0.0001 : 0;
             }
-            if (peer.audioEl.paused && targetGain > 0.04) {
-              peer.audioEl.play().catch(() => {});
+            if (peer.audioEl.paused && targetGain > 0.04 && !peer._playPending) {
+              peer._playPending = true;
+              peer.audioEl.play().catch(() => {}).finally(() => { peer._playPending = false; });
             }
           }
         } else if (peer.audioEl) {
@@ -700,8 +702,9 @@ class SpatialAudioManager {
           } else {
             peer.audioEl.volume = this.isDeafened ? 0 : Math.max(0, Math.min(1, targetGain));
           }
-          if (targetGain > 0.04 && peer.audioEl.paused) {
-            peer.audioEl.play().catch(() => {});
+          if (targetGain > 0.04 && peer.audioEl.paused && !peer._playPending) {
+            peer._playPending = true;
+            peer.audioEl.play().catch(() => {}).finally(() => { peer._playPending = false; });
           }
         }
 

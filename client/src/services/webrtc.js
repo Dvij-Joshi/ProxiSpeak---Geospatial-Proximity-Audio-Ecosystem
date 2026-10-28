@@ -52,10 +52,13 @@ class WebRTCManager {
     this.silenceGain = null;
     this.animFrame = null;
     this.isSpeaking = false;
+    this._speechHoldTimer = null;
 
     this._deviceChangeHandler = null;
     this._offerRetryTimers = new Map();
     this._offerWatchdogs = new Map();
+    this.peerStats = new Map();
+    this.selectedMicDeviceId = null;
 
     this.fetchIceServers();
   }
@@ -273,24 +276,98 @@ class WebRTCManager {
   /**
    * Progressive getUserMedia: tries ideal constraints first, falls back to basic.
    */
-  async _acquireMicStream() {
+  async _acquireMicStream(preferredDeviceId = null) {
+    const targetDevId = preferredDeviceId || this.selectedMicDeviceId;
+    const audioConstraints = {
+      echoCancellation: { ideal: true },
+      noiseSuppression: { ideal: true },
+      autoGainControl: { ideal: true },
+    };
+    if (targetDevId) {
+      audioConstraints.deviceId = { ideal: targetDevId };
+    }
+
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: { ideal: true },
-          noiseSuppression: { ideal: true },
-          autoGainControl: { ideal: true },
-        },
+        audio: audioConstraints,
         video: false,
       });
     } catch (err) {
       console.warn('[WebRTC] Ideal mic constraints failed:', err.name, '— retrying with basic constraints');
       if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError' ||
           err.name === 'NotSupportedError' || err.name === 'TypeError') {
-        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const fallbackAudio = targetDevId ? { deviceId: { ideal: targetDevId } } : true;
+        return await navigator.mediaDevices.getUserMedia({ audio: fallbackAudio, video: false });
       }
       throw err;
     }
+  }
+
+  /**
+   * Enumerates available microphone hardware devices.
+   */
+  async getAudioInputDevices() {
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.enumerateDevices !== 'function') {
+      return [];
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices
+        .filter((d) => d.kind === 'audioinput')
+        .map((d, index) => ({
+          deviceId: d.deviceId,
+          label: d.label || `Microphone ${index + 1}`,
+          groupId: d.groupId,
+        }));
+    } catch (err) {
+      console.warn('[WebRTC] Error enumerating audio devices:', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Seamlessly switches to a selected microphone device without dropping peer connections.
+   */
+  async switchAudioInputDevice(deviceId) {
+    console.log('[WebRTC] Switching microphone device to:', deviceId);
+    this.selectedMicDeviceId = deviceId;
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((t) => t.stop());
+      this.localStream = null;
+    }
+    const stream = await this._acquireMicStream(deviceId);
+    this.localStream = stream;
+    const newTrack = stream.getAudioTracks()[0];
+    if (newTrack) {
+      newTrack.enabled = !this.isMuted;
+      this._monitorTrack(newTrack);
+
+      this.peers.forEach((pc, peerId) => {
+        const senders = pc.getSenders();
+        let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
+        if (audioSender) {
+          audioSender.replaceTrack(newTrack).catch((e) => {
+            console.warn(`[WebRTC] replaceTrack error for ${peerId}:`, e);
+          });
+        } else {
+          try { pc.addTrack(newTrack, stream); } catch (_e) {}
+        }
+
+        const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
+        const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
+        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
+          audioTransceiver.direction = 'sendrecv';
+        }
+
+        if (pc.signalingState === 'stable') {
+          this.initiateOffer(peerId, pc);
+        }
+      });
+    }
+
+    this.setupVoiceActivityDetection(stream);
+    console.log('[WebRTC] Successfully switched microphone device');
+    return stream;
   }
 
   /**
@@ -650,6 +727,7 @@ class WebRTCManager {
     }
     this.peerMeta.delete(peerId);
     this.iceCandidateQueues.delete(peerId);
+    this.peerStats.delete(peerId);
 
     const timer = this._offerRetryTimers.get(peerId);
     if (timer) {
@@ -684,6 +762,75 @@ class WebRTCManager {
   /**
    * Returns diagnostic info about the current audio pipeline state.
    */
+  /**
+   * Fetches real-time WebRTC stats for a peer: candidate type (STUN/TURN/host), protocol, and RTT.
+   */
+  async updatePeerStats(peerId) {
+    const pc = this.peers.get(peerId);
+    if (!pc || pc.connectionState === 'closed') return null;
+
+    try {
+      const stats = await pc.getStats();
+      let activeCandidatePair = null;
+      let localCandidate = null;
+      let remoteCandidate = null;
+
+      stats.forEach((report) => {
+        if (report.type === 'transport' && report.selectedCandidatePairId) {
+          activeCandidatePair = stats.get(report.selectedCandidatePairId);
+        }
+      });
+
+      if (!activeCandidatePair) {
+        stats.forEach((report) => {
+          if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
+            activeCandidatePair = report;
+          }
+        });
+      }
+
+      if (activeCandidatePair) {
+        localCandidate = stats.get(activeCandidatePair.localCandidateId);
+        remoteCandidate = stats.get(activeCandidatePair.remoteCandidateId);
+      }
+
+      const rttMs = activeCandidatePair?.currentRoundTripTime != null
+        ? Math.round(activeCandidatePair.currentRoundTripTime * 1000)
+        : null;
+
+      const rawType = localCandidate?.candidateType || remoteCandidate?.candidateType || 'unknown';
+      let modeLabel = 'Direct P2P';
+      if (rawType === 'relay') modeLabel = 'TURN Relay';
+      else if (rawType === 'srflx' || rawType === 'prflx') modeLabel = 'STUN P2P';
+      else if (rawType === 'host') modeLabel = 'Local / LAN';
+
+      const info = {
+        candidateType: rawType,
+        modeLabel,
+        protocol: (localCandidate?.protocol || 'udp').toUpperCase(),
+        rtt: rttMs,
+        bytesReceived: activeCandidatePair?.bytesReceived || 0,
+        bytesSent: activeCandidatePair?.bytesSent || 0,
+      };
+
+      this.peerStats.set(peerId, info);
+      return info;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  /**
+   * Refreshes stats for all active WebRTC peers.
+   */
+  async updateAllPeerStats() {
+    const promises = Array.from(this.peers.keys()).map((id) => this.updatePeerStats(id));
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Returns diagnostic info about the current audio pipeline state.
+   */
   getConnectionDiagnostics() {
     const micTrack = this.localStream?.getAudioTracks()[0];
     const peerDiag = {};
@@ -695,6 +842,7 @@ class WebRTCManager {
         signalingState: pc.signalingState,
         hasSender: Boolean(audioSender),
         senderTrackState: audioSender?.track?.readyState || 'none',
+        stats: this.peerStats.get(id) || null,
       };
     });
     return {
@@ -762,13 +910,29 @@ class WebRTCManager {
           sum += Math.abs(dataArray[i] - 128);
         }
         const avg = sum / dataArray.length;
-        const speaking = !this.isMuted && avg > 1.5;
+        // Require true speech volume (avg > 4.5) to reject typing / mechanical keyboard clicks
+        const nowSpeaking = !this.isMuted && avg > 4.5;
 
-        if (speaking !== this.isSpeaking) {
-          this.isSpeaking = speaking;
-          if (this.onVoiceActivityCallback) {
-            this.onVoiceActivityCallback(speaking);
+        if (nowSpeaking) {
+          if (this._speechHoldTimer) {
+            clearTimeout(this._speechHoldTimer);
+            this._speechHoldTimer = null;
           }
+          if (!this.isSpeaking) {
+            this.isSpeaking = true;
+            if (this.onVoiceActivityCallback) {
+              this.onVoiceActivityCallback(true);
+            }
+          }
+        } else if (this.isSpeaking && !this._speechHoldTimer) {
+          // 250ms hold time prevents rapid flickering on speech pauses or key taps
+          this._speechHoldTimer = setTimeout(() => {
+            this.isSpeaking = false;
+            this._speechHoldTimer = null;
+            if (this.onVoiceActivityCallback) {
+              this.onVoiceActivityCallback(false);
+            }
+          }, 250);
         }
 
         this.animFrame = requestAnimationFrame(checkVolume);
@@ -817,6 +981,11 @@ class WebRTCManager {
       this._deviceChangeHandler = null;
     }
 
+    if (this._speechHoldTimer) {
+      clearTimeout(this._speechHoldTimer);
+      this._speechHoldTimer = null;
+    }
+
     if (this.animFrame) {
       cancelAnimationFrame(this.animFrame);
       this.animFrame = null;
@@ -843,6 +1012,7 @@ class WebRTCManager {
     this.peers.clear();
     this.peerMeta.clear();
     this.iceCandidateQueues.clear();
+    this.peerStats.clear();
   }
 }
 
