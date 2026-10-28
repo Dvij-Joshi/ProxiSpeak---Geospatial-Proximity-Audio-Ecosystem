@@ -16,3 +16,16 @@ services:
         value: https://proxi-speak-geospatial-proximity-au-kappa.vercel.app
       - key: SERVER_URL
         value: https://proxispeak-server.onrender.com
+
+  - type: web
+    name: proxispeak-voice-server
+    rootDir: voice-server
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
