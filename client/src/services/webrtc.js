@@ -52,6 +52,7 @@ class WebRTCManager {
     this.silenceGain = null;
     this.animFrame = null;
     this.isSpeaking = false;
+    this._speechHoldTimer = null;
 
     this._deviceChangeHandler = null;
     this._offerRetryTimers = new Map();
@@ -909,13 +910,29 @@ class WebRTCManager {
           sum += Math.abs(dataArray[i] - 128);
         }
         const avg = sum / dataArray.length;
-        const speaking = !this.isMuted && avg > 1.5;
+        // Require true speech volume (avg > 4.5) to reject typing / mechanical keyboard clicks
+        const nowSpeaking = !this.isMuted && avg > 4.5;
 
-        if (speaking !== this.isSpeaking) {
-          this.isSpeaking = speaking;
-          if (this.onVoiceActivityCallback) {
-            this.onVoiceActivityCallback(speaking);
+        if (nowSpeaking) {
+          if (this._speechHoldTimer) {
+            clearTimeout(this._speechHoldTimer);
+            this._speechHoldTimer = null;
           }
+          if (!this.isSpeaking) {
+            this.isSpeaking = true;
+            if (this.onVoiceActivityCallback) {
+              this.onVoiceActivityCallback(true);
+            }
+          }
+        } else if (this.isSpeaking && !this._speechHoldTimer) {
+          // 250ms hold time prevents rapid flickering on speech pauses or key taps
+          this._speechHoldTimer = setTimeout(() => {
+            this.isSpeaking = false;
+            this._speechHoldTimer = null;
+            if (this.onVoiceActivityCallback) {
+              this.onVoiceActivityCallback(false);
+            }
+          }, 250);
         }
 
         this.animFrame = requestAnimationFrame(checkVolume);
@@ -962,6 +979,11 @@ class WebRTCManager {
     if (this._deviceChangeHandler && navigator.mediaDevices && typeof navigator.mediaDevices.removeEventListener === 'function') {
       navigator.mediaDevices.removeEventListener('devicechange', this._deviceChangeHandler);
       this._deviceChangeHandler = null;
+    }
+
+    if (this._speechHoldTimer) {
+      clearTimeout(this._speechHoldTimer);
+      this._speechHoldTimer = null;
     }
 
     if (this.animFrame) {

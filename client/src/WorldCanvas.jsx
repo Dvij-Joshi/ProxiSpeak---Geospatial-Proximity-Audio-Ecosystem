@@ -807,8 +807,6 @@ export default function WorldCanvas({
   const [micActive, setMicActive] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [isDeafened, setIsDeafened] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [localIntensityState, setLocalIntensityState] = useState(0);
   const [inEarshotCount, setInEarshotCount] = useState(0);
   const [currentRoom, setCurrentRoom] = useState({ id: 'open-workspace', name: 'Open Workspace', isIsolated: false });
   const [copiedLink, setCopiedLink] = useState(false);
@@ -820,6 +818,7 @@ export default function WorldCanvas({
 
   const isMutedRef = useRef(true);
   const isSpeakingRef = useRef(false);
+  const voiceMeterBarRef = useRef(null);
   const renderRef = useRef(null);
   const offscreenRef = useRef(null);
 
@@ -987,21 +986,21 @@ export default function WorldCanvas({
     setIsDeafened(nextDeafened);
   };
 
-  // Voice intensity polling
+  // Voice intensity polling - updates ref & direct DOM bar without causing React re-renders
   useEffect(() => {
     let lastLog = 0;
-    let prevBucket = -1;
     const timer = setInterval(() => {
       const v = webrtc.getLocalVoiceIntensity();
       localIntensityRef.current = v;
-      const bucket = Math.round(v * 20);
-      if (bucket !== prevBucket) {
-        prevBucket = bucket;
-        setLocalIntensityState(v);
+      if (voiceMeterBarRef.current) {
+        const pct = Math.round(v * 100);
+        voiceMeterBarRef.current.style.width = `${pct}%`;
+        voiceMeterBarRef.current.style.minWidth = v > 0.02 ? '4px' : '0px';
+        voiceMeterBarRef.current.style.background = v > 0.6 ? '#f59e0b' : '#22c55e';
+        voiceMeterBarRef.current.style.boxShadow = v > 0.1 ? '0 0 8px rgba(34, 197, 94, 0.7)' : 'none';
       }
       const now = Date.now();
       if (v > 0.05 && now - lastLog > 1500) {
-        console.log(`[Voice] Live voice intensity: ${(v * 100).toFixed(0)}%`);
         lastLog = now;
       }
     }, 50);
@@ -1044,7 +1043,6 @@ export default function WorldCanvas({
       },
       onVoiceActivity: (speaking) => {
         isSpeakingRef.current = speaking;
-        setIsSpeaking(speaking);
       },
       onMicLost: (reason) => {
         console.warn('[WorldCanvas] Microphone lost:', reason);
@@ -1062,15 +1060,19 @@ export default function WorldCanvas({
       }
     }, 2 * 60 * 1000);
 
-    // Auto-resume AudioContext and audio elements on user interaction
+    // Auto-resume AudioContext and audio elements on initial user interaction (once only)
     const unlockAudio = () => {
       spatialAudio.resumeAll();
       setAudioUnlocked(true);
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('pointerdown', unlockAudio);
     };
-    window.addEventListener('click', unlockAudio);
-    window.addEventListener('keydown', unlockAudio);
-    window.addEventListener('touchstart', unlockAudio);
-    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+    window.addEventListener('touchstart', unlockAudio, { once: true });
+    window.addEventListener('pointerdown', unlockAudio, { once: true });
 
     // Auto-recover audio & mic when returning from background (screen lock / app switch on mobile)
     const handleVisibilityChange = () => {
@@ -1249,14 +1251,20 @@ export default function WorldCanvas({
       console.log('[Socket] disconnected');
     });
 
-    // Keyboard handlers
+    // Keyboard handlers (W, A, S, D and Arrow keys for movement)
     const onKeyDown = (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+        return;
+      }
       stateRef.current.keys[e.key] = true;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
     };
     const onKeyUp = (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+        return;
+      }
       stateRef.current.keys[e.key] = false;
     };
     window.addEventListener('keydown', onKeyDown);
@@ -2072,7 +2080,11 @@ export default function WorldCanvas({
         >
           {/* Microphone Toggle Button */}
           <button
-            onClick={handleToggleMic}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              canvasRef.current?.focus();
+              handleToggleMic();
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -2090,15 +2102,14 @@ export default function WorldCanvas({
               fontWeight: 600,
               cursor: 'pointer',
               transition: 'all 0.2s ease',
-              boxShadow: isSpeaking && !isMuted ? '0 0 15px rgba(34, 197, 94, 0.6)' : 'none',
             }}
             title={!micActive ? 'Click to grant microphone access' : isMuted ? 'Click to Unmute' : 'Click to Mute'}
           >
             <span style={{ fontSize: '15px' }}>
-              {!micActive ? '🎙️' : isMuted ? '🔇' : (isSpeaking ? '🗣️' : '🎙️')}
+              {!micActive ? '🎙️' : isMuted ? '🔇' : '🎙️'}
             </span>
             <span>
-              {!micActive ? 'Enable Mic' : isMuted ? 'Muted' : (isSpeaking ? 'Speaking...' : 'Mic On')}
+              {!micActive ? 'Enable Mic' : isMuted ? 'Muted' : 'Mic On'}
             </span>
           </button>
 
@@ -2119,14 +2130,13 @@ export default function WorldCanvas({
               <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 700, letterSpacing: '0.05em' }}>VOICE</span>
               <div style={{ width: '60px', height: '8px', background: '#0f172a', borderRadius: '4px', overflow: 'hidden', padding: '1px', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
                 <div
+                  ref={voiceMeterBarRef}
                   style={{
-                    width: `${Math.round(localIntensityState * 100)}%`,
-                    minWidth: localIntensityState > 0.02 ? '4px' : '0px',
+                    width: '0%',
                     height: '100%',
                     borderRadius: '3px',
-                    background: localIntensityState > 0.6 ? '#f59e0b' : '#22c55e',
-                    boxShadow: localIntensityState > 0.1 ? '0 0 8px rgba(34, 197, 94, 0.7)' : 'none',
-                    transition: 'width 0.04s ease-out',
+                    background: '#22c55e',
+                    transition: 'width 0.05s ease-out',
                   }}
                 />
               </div>
@@ -2135,7 +2145,11 @@ export default function WorldCanvas({
 
           {/* Deafen Toggle Button */}
           <button
-            onClick={handleToggleDeafen}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              canvasRef.current?.focus();
+              handleToggleDeafen();
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
