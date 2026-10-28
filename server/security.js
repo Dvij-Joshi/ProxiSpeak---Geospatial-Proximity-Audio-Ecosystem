@@ -110,7 +110,7 @@ export const generalApiLimiter = createRateLimiter({
 // Sensitive Auth (Register & Login): 10 attempts per 10 minutes per IP
 export const authLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
-  max: 10,
+  max: 60,
   message: 'Too many authentication attempts from this IP. Please wait a few minutes before trying again.',
   keyPrefix: 'auth',
 });

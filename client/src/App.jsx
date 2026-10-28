@@ -277,52 +277,16 @@ export default function App() {
         onOpenVoiceTest={() => setIsVoiceTesting(true)}
       />
 
-      {/* Auth Modal Overlay */}
+      {/* Auth Modal Dialog */}
       {showAuthModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100,
-            background: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
+        <AuthModal
+          defaultRoomName={inviteRoomId}
+          onClose={() => setShowAuthModal(false)}
+          onAuthSuccess={(authenticatedUser) => {
+            setUser(authenticatedUser);
+            setShowAuthModal(false);
           }}
-        >
-          <div style={{ position: 'relative', width: '100%', maxWidth: '440px' }}>
-            <button
-              onClick={() => setShowAuthModal(false)}
-              style={{
-                position: 'absolute',
-                top: '-40px',
-                right: '0',
-                color: '#ffffff',
-                background: 'rgba(255, 255, 255, 0.15)',
-                border: 'none',
-                borderRadius: '50%',
-                width: '32px',
-                height: '32px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              ✕
-            </button>
-            <AuthModal
-              defaultRoomName={inviteRoomId}
-              onAuthSuccess={(authenticatedUser) => {
-                setUser(authenticatedUser);
-                setShowAuthModal(false);
-              }}
-            />
-          </div>
-        </div>
+        />
       )}
     </>
   );

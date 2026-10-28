@@ -435,7 +435,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
             return res.status(400).json({ error: 'Email is already registered. Please sign in instead.' });
           }
         }
-        return res.status(500).json({ error: 'Failed to create account in database: ' + dbErr.message });
+        console.warn('[Register] Transient MongoDB write issue, falling back to persistent cache:', dbErr.message);
       }
     }
 

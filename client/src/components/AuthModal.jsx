@@ -1,23 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SERVER_URL, AVATAR_COLORS } from '../config';
 
-export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
+export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
   const [isLogin, setIsLogin] = useState(true);
+  const [identifier, setIdentifier] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [selectedColor, setSelectedColor] = useState(AVATAR_COLORS[0]);
   const [error, setError] = useState('');
+  const [suggestSwitch, setSuggestSwitch] = useState(null); // 'register' | 'login'
   const [loading, setLoading] = useState(false);
 
+  // Close on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Quick Guest Join fallback
   const handleGuestJoin = (e) => {
     if (e) e.preventDefault();
-    const cleanName = username.trim() || 'Guest-' + Math.floor(1000 + Math.random() * 9000);
+    const fallbackName = identifier.trim() || username.trim() || 'Guest-' + Math.floor(1000 + Math.random() * 9000);
     const guestUser = {
       userId: 'guest-' + Math.random().toString(36).substring(2, 9),
-      username: cleanName,
-      email: `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '')}@guest.local`,
-      avatarColor: selectedColor || AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+      username: fallbackName,
+      email: `${fallbackName.toLowerCase().replace(/[^a-z0-9]/g, '')}@guest.local`,
+      avatarColor: selectedColor || '#FF4B2B',
       isGuest: true,
     };
     const guestToken = 'guest-token-' + Date.now();
@@ -26,13 +41,39 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
     onAuthSuccess(guestUser);
   };
 
+  const handleSwitchToRegister = () => {
+    setIsLogin(false);
+    setError('');
+    setSuggestSwitch(null);
+    if (identifier.includes('@')) {
+      setEmail(identifier.trim());
+      if (!username) {
+        setUsername(identifier.split('@')[0]);
+      }
+    } else {
+      setUsername(identifier.trim());
+    }
+  };
+
+  const handleSwitchToLogin = () => {
+    setIsLogin(true);
+    setError('');
+    setSuggestSwitch(null);
+    if (email) {
+      setIdentifier(email.trim());
+    } else if (username) {
+      setIdentifier(username.trim());
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuggestSwitch(null);
 
     if (isLogin) {
-      if (!username.trim() || !password) {
-        setError('Please enter your username/email and password.');
+      if (!identifier.trim() || !password) {
+        setError('Please enter your username or email address and password.');
         return;
       }
     } else {
@@ -55,12 +96,12 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       const payload = isLogin
-        ? { identifier: username.trim(), password }
+        ? { identifier: identifier.trim(), password }
         : {
             username: username.trim(),
-            email: email.trim(),
+            email: email.trim().toLowerCase(),
             password,
-            avatarColor: selectedColor,
+            avatarColor: selectedColor || '#FF4B2B',
           };
 
       let res;
@@ -72,7 +113,9 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
         });
       } catch (networkErr) {
         console.warn('[AuthModal] Network error reaching', SERVER_URL, networkErr);
-        throw new Error(`Unable to reach server at ${SERVER_URL}. Check your network or click 'Quick Join as Guest' below.`);
+        throw new Error(
+          `Unable to reach authentication server. Please check your internet connection or join immediately as a Guest.`
+        );
       }
 
       let data = {};
@@ -82,22 +125,37 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
       } catch (_jsonErr) {
         console.warn('[AuthModal] Non-JSON server response:', responseText.slice(0, 120));
         if (!res.ok) {
-          throw new Error(`Server returned ${res.status} (${res.statusText || 'Service Temporarily Unavailable'}). Please try again or join as Guest.`);
+          throw new Error(`Server returned HTTP ${res.status}. Please try again or join as Guest.`);
         }
         throw new Error('Unexpected server response format.');
       }
 
       if (!res.ok) {
-        throw new Error(data.error || 'Authentication failed. Please check your credentials.');
+        const errorMsg = data.error || 'Authentication failed. Please verify your credentials.';
+
+        // Smart Suggestion: Account does not exist on login
+        if (isLogin && (res.status === 404 || errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('no account'))) {
+          setSuggestSwitch('register');
+        }
+
+        // Smart Suggestion: Email already registered on register
+        if (!isLogin && (errorMsg.toLowerCase().includes('already registered') || errorMsg.toLowerCase().includes('already taken'))) {
+          setSuggestSwitch('login');
+        }
+
+        throw new Error(errorMsg);
       }
 
       // Persist auth token and user profile
-      localStorage.setItem('proxispeak_token', data.token);
-      localStorage.setItem('proxispeak_user', JSON.stringify(data.user));
-
-      onAuthSuccess(data.user);
+      if (data.token && data.user) {
+        localStorage.setItem('proxispeak_token', data.token);
+        localStorage.setItem('proxispeak_user', JSON.stringify(data.user));
+        onAuthSuccess(data.user);
+      } else {
+        throw new Error('Invalid response structure received from authentication server.');
+      }
     } catch (err) {
-      setError(err.message || 'Connection error. Please try again.');
+      setError(err.message || 'Authentication error. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -105,365 +163,303 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
 
   return (
     <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        background: '#090d16',
-        padding: '20px',
-        color: '#f8fafc',
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#1c1b1b]/50 backdrop-blur-md transition-all select-none"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) onClose();
       }}
     >
-      {/* Brand Header */}
-      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <div style={{ fontSize: '42px', marginBottom: '6px' }}>🎙️</div>
-        <h1 style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: '#f8fafc' }}>
-          ProxiSpeak
-        </h1>
-        <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '4px' }}>
-          Geospatial Proximity Audio & Virtual Workspaces
-        </p>
-        {defaultRoomName && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              marginTop: '12px',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              background: 'rgba(59, 130, 246, 0.15)',
-              border: '1px solid rgba(59, 130, 246, 0.4)',
-              fontSize: '12px',
-              color: '#60a5fa',
-            }}
-          >
-            <span>🔗 Invited to join:</span>
-            <strong>{defaultRoomName}</strong>
-          </div>
-        )}
-      </div>
+      <style>{`
+        @keyframes soundwaveAuth {
+          0%, 100% { transform: scaleY(0.3); opacity: 0.4; }
+          50% { transform: scaleY(1); opacity: 1; }
+        }
+        .auth-bar {
+          display: inline-block;
+          width: 3px;
+          height: 18px;
+          background-color: #1c1b1b;
+          border-radius: 9999px;
+          animation: soundwaveAuth 1.1s ease-in-out infinite;
+        }
+      `}</style>
 
-      {/* Card */}
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '380px',
-          background: 'rgba(23, 31, 48, 0.85)',
-          backdropFilter: 'blur(16px)',
-          borderRadius: '16px',
-          border: '1px solid rgba(51, 65, 85, 0.6)',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.5)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Tab Toggle */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #1e293b' }}>
+      {/* Main Architectural Modal Card */}
+      <div className="relative w-full max-w-[420px] bg-white rounded-3xl border border-[#D9D7D0] shadow-[0_24px_60px_-15px_rgba(28,27,27,0.22)] p-6 sm:p-8 overflow-hidden">
+        {/* Subtle Architectural Accent Line */}
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#FF4B2B] via-[#1c1b1b] to-[#FF4B2B]" />
+
+        {/* Close Button */}
+        {onClose && (
           <button
             type="button"
-            onClick={() => { setIsLogin(true); setError(''); }}
-            style={{
-              flex: 1,
-              padding: '14px',
-              background: isLogin ? 'rgba(30, 41, 59, 0.7)' : 'transparent',
-              border: 'none',
-              borderBottom: isLogin ? '2px solid #3b82f6' : '2px solid transparent',
-              color: isLogin ? '#f8fafc' : '#64748b',
-              fontWeight: 600,
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
+            onClick={onClose}
+            className="absolute top-5 right-5 w-8 h-8 rounded-full bg-[#F4F3EF] hover:bg-[#EAE8E2] text-[#8C8880] hover:text-[#1c1b1b] flex items-center justify-center transition-all cursor-pointer border border-[#EAE8E2]"
+            title="Close dialog (Esc)"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        )}
+
+        {/* Brand Header */}
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-[#FAF9F5] border border-[#D9D7D0] flex items-center justify-center gap-[3px] mb-3 shadow-xs">
+            <span className="auth-bar" style={{ animationDelay: '0s' }} />
+            <span className="auth-bar" style={{ animationDelay: '0.2s', backgroundColor: '#FF4B2B' }} />
+            <span className="auth-bar" style={{ animationDelay: '0.4s' }} />
+            <span className="auth-bar" style={{ animationDelay: '0.15s' }} />
+          </div>
+
+          <div className="font-mono text-[10px] font-semibold tracking-[0.25em] text-[#8C8880] uppercase mb-1">
+            ProxiSpeak · Spatial Network
+          </div>
+          <h2 className="text-xl font-bold tracking-tight text-[#1c1b1b]">
+            {isLogin ? 'Welcome Back' : 'Create Spatial Profile'}
+          </h2>
+          <p className="text-xs text-[#8C8880] mt-1 max-w-[280px]">
+            {isLogin
+              ? 'Sign in to access your proximity audio workspaces & team rooms.'
+              : 'Register to unlock persistent spatial avatar credentials & private suites.'}
+          </p>
+
+          {defaultRoomName && (
+            <div className="mt-3 px-3 py-1 rounded-full bg-[#FAF9F5] border border-[#D9D7D0] text-[11px] font-mono text-[#5e5f5c] flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FF4B2B] animate-pulse" />
+              <span>Invited to: <strong>{defaultRoomName}</strong></span>
+            </div>
+          )}
+        </div>
+
+        {/* Segmented Tab Pill Control */}
+        <div className="bg-[#F4F3EF] p-1 rounded-xl flex items-center mb-6 border border-[#EAE8E2]">
+          <button
+            type="button"
+            onClick={() => {
+              setIsLogin(true);
+              setError('');
+              setSuggestSwitch(null);
             }}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer text-center ${
+              isLogin
+                ? 'bg-white text-[#1c1b1b] shadow-xs'
+                : 'text-[#8C8880] hover:text-[#1c1b1b]'
+            }`}
           >
             Sign In
           </button>
           <button
             type="button"
-            onClick={() => { setIsLogin(false); setError(''); }}
-            style={{
-              flex: 1,
-              padding: '14px',
-              background: !isLogin ? 'rgba(30, 41, 59, 0.7)' : 'transparent',
-              border: 'none',
-              borderBottom: !isLogin ? '2px solid #3b82f6' : '2px solid transparent',
-              color: !isLogin ? '#f8fafc' : '#64748b',
-              fontWeight: 600,
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
+            onClick={() => {
+              setIsLogin(false);
+              setError('');
+              setSuggestSwitch(null);
             }}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer text-center ${
+              !isLogin
+                ? 'bg-white text-[#1c1b1b] shadow-xs'
+                : 'text-[#8C8880] hover:text-[#1c1b1b]'
+            }`}
           >
             Create Account
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} style={{ padding: '24px' }}>
-          {error && (
-            <div
-              style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid rgba(239, 68, 68, 0.4)',
-                borderRadius: '8px',
-                padding: '10px 14px',
-                color: '#fca5a5',
-                fontSize: '13px',
-                marginBottom: '16px',
-              }}
-            >
-              <div style={{ marginBottom: '6px' }}>⚠️ {error}</div>
+        {/* Error / Smart Feedback Banner */}
+        {error && (
+          <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+            <div className="flex items-start gap-2">
+              <span className="material-symbols-outlined text-[16px] text-rose-600 mt-0.5">error</span>
+              <div className="flex-1 leading-relaxed">
+                <span>{error}</span>
+                {suggestSwitch === 'register' && (
+                  <button
+                    type="button"
+                    onClick={handleSwitchToRegister}
+                    className="mt-1.5 block font-semibold text-[#FF4B2B] hover:underline cursor-pointer"
+                  >
+                    Don&apos;t have an account yet? Click here to register with this email →
+                  </button>
+                )}
+                {suggestSwitch === 'login' && (
+                  <button
+                    type="button"
+                    onClick={handleSwitchToLogin}
+                    className="mt-1.5 block font-semibold text-[#FF4B2B] hover:underline cursor-pointer"
+                  >
+                    Already registered? Click here to sign in instead →
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Form Inputs */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {isLogin ? (
+            /* Sign In Fields */
+            <div>
+              <label className="block font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase mb-1.5">
+                Username or Email
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="e.g. alex or alex@team.com"
+                  autoComplete="username"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F3EF] border border-[#D9D7D0] text-sm text-[#1c1b1b] placeholder:text-[#BDBAB2] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#1c1b1b] transition-all"
+                />
+              </div>
+            </div>
+          ) : (
+            /* Registration Fields */
+            <>
+              <div>
+                <label className="block font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase mb-1.5">
+                  Display / Username
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. Alex Rivera"
+                  autoComplete="name"
+                  maxLength={30}
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F3EF] border border-[#D9D7D0] text-sm text-[#1c1b1b] placeholder:text-[#BDBAB2] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#1c1b1b] transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase mb-1.5">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="alex@team.com"
+                  autoComplete="email"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F3EF] border border-[#D9D7D0] text-sm text-[#1c1b1b] placeholder:text-[#BDBAB2] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#1c1b1b] transition-all"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Password Field */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase">
+                Password
+              </label>
+              {!isLogin && (
+                <span className="text-[10px] text-[#8C8880]">Min. 6 characters</span>
+              )}
+            </div>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={isLogin ? 'Enter your password' : 'Create a secure password'}
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
+                required
+                className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#F4F3EF] border border-[#D9D7D0] text-sm text-[#1c1b1b] placeholder:text-[#BDBAB2] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#1c1b1b] transition-all"
+              />
               <button
                 type="button"
-                onClick={handleGuestJoin}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#93c5fd',
-                  textDecoration: 'underline',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C8880] hover:text-[#1c1b1b] transition-colors cursor-pointer"
+                title={showPassword ? 'Hide password' : 'Show password'}
               >
-                👉 Or click here to enter immediately as Guest
+                <span className="material-symbols-outlined text-[18px]">
+                  {showPassword ? 'visibility_off' : 'visibility'}
+                </span>
               </button>
             </div>
-          )}
-
-          {/* Identifier / Username */}
-          <div style={{ marginBottom: '14px' }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#94a3b8',
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-              }}
-            >
-              {isLogin ? 'Username or Email' : 'Username'}
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={isLogin ? 'e.g. alex or alex@team.com' : 'Choose a unique username'}
-              maxLength={30}
-              required
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                background: '#0f172a',
-                border: '1px solid #334155',
-                borderRadius: '8px',
-                color: '#f8fafc',
-                fontSize: '14px',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
           </div>
 
-          {/* Email for Registration */}
+          {/* Avatar Color Swatches (Registration only) */}
           {!isLogin && (
-            <div style={{ marginBottom: '14px' }}>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#94a3b8',
-                  marginBottom: '6px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                Email Address
+            <div>
+              <label className="block font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase mb-2">
+                Spatial Avatar Badge Color
               </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@company.com"
-                required
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#f8fafc',
-                  fontSize: '14px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-          )}
-
-          {/* Password */}
-          <div style={{ marginBottom: !isLogin ? '14px' : '20px' }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#94a3b8',
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-              }}
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={isLogin ? 'Enter your password' : 'At least 6 characters'}
-              required
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                background: '#0f172a',
-                border: '1px solid #334155',
-                borderRadius: '8px',
-                color: '#f8fafc',
-                fontSize: '14px',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-            {isLogin && (
-              <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#64748b' }}>
-                💡 Tip: If you don&apos;t have an account yet, one will be created automatically.
-              </p>
-            )}
-          </div>
-
-          {/* Avatar Color Picker (Registration only) */}
-          {!isLogin && (
-            <div style={{ marginBottom: '20px' }}>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#94a3b8',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                Avatar Color
-              </label>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {AVATAR_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setSelectedColor(color)}
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      background: color,
-                      border: selectedColor === color ? '3px solid #ffffff' : '2px solid transparent',
-                      boxShadow: selectedColor === color ? `0 0 10px ${color}` : 'none',
-                      cursor: 'pointer',
-                      transition: 'transform 0.15s ease',
-                      transform: selectedColor === color ? 'scale(1.15)' : 'scale(1)',
-                      outline: 'none',
-                    }}
-                  />
-                ))}
+              <div className="flex items-center gap-2 flex-wrap">
+                {AVATAR_COLORS.map((col) => {
+                  const isSelected = selectedColor === col;
+                  return (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setSelectedColor(col)}
+                      style={{ backgroundColor: col }}
+                      className={`w-7 h-7 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
+                        isSelected ? 'scale-110 ring-2 ring-offset-2 ring-[#1c1b1b]' : 'opacity-85 hover:opacity-100 hover:scale-105'
+                      }`}
+                    >
+                      {isSelected && (
+                        <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px',
-              borderRadius: '8px',
-              border: 'none',
-              background: loading ? '#475569' : '#2563eb',
-              color: '#ffffff',
-              fontSize: '14px',
-              fontWeight: 700,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'background 0.2s ease',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
-            }}
-          >
-            {loading ? 'Please wait...' : isLogin ? 'Sign In →' : 'Create Account & Enter →'}
-          </button>
-
-          {/* Divider */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              margin: '16px 0',
-              color: '#64748b',
-              fontSize: '12px',
-            }}
-          >
-            <div style={{ flex: 1, height: '1px', background: '#334155' }} />
-            <span style={{ padding: '0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or</span>
-            <div style={{ flex: 1, height: '1px', background: '#334155' }} />
+          {/* Primary Action Button */}
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 rounded-xl bg-[#1c1b1b] hover:bg-black text-white text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+                  <span>Verifying Credentials...</span>
+                </>
+              ) : (
+                <>
+                  <span>{isLogin ? 'Sign In' : 'Create Account'}</span>
+                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </>
+              )}
+            </button>
           </div>
-
-          {/* Quick Join as Guest */}
-          <button
-            type="button"
-            onClick={handleGuestJoin}
-            style={{
-              width: '100%',
-              padding: '11px',
-              borderRadius: '8px',
-              border: '1px dashed #475569',
-              background: 'rgba(30, 41, 59, 0.4)',
-              color: '#94a3b8',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#60a5fa';
-              e.currentTarget.style.color = '#f8fafc';
-              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#475569';
-              e.currentTarget.style.color = '#94a3b8';
-              e.currentTarget.style.background = 'rgba(30, 41, 59, 0.4)';
-            }}
-          >
-            <span>⚡</span>
-            <span>Quick Join as Guest (No Password Required)</span>
-          </button>
         </form>
-      </div>
 
-      {/* Footer Instructions */}
-      <p style={{ color: '#64748b', fontSize: '12px', marginTop: '20px' }}>
-        Move with <kbd style={{ background: '#1e293b', padding: '2px 6px', borderRadius: '4px', color: '#cbd5e1' }}>W A S D</kbd>
-        {' '}or Arrow Keys · Spatial audio activates when avatars approach
-      </p>
+        {/* Divider */}
+        <div className="relative my-5 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-[#EAE8E2]" />
+          </div>
+          <span className="relative bg-white px-3 font-mono text-[9px] uppercase tracking-widest text-[#BDBAB2]">
+            or
+          </span>
+        </div>
+
+        {/* Guest Join Quick Action */}
+        <button
+          type="button"
+          onClick={handleGuestJoin}
+          className="w-full py-2.5 rounded-xl border border-[#D9D7D0] hover:bg-[#F4F3EF] hover:border-[#BDBAB2] text-[#1c1b1b] text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[16px] text-[#FF4B2B]">bolt</span>
+          <span>Quick Join as Guest (Instant Access)</span>
+        </button>
+
+        {/* Security & Architectural Note */}
+        <div className="mt-5 pt-3 border-t border-[#EAE8E2] text-center">
+          <span className="font-mono text-[9px] tracking-wider text-[#BDBAB2] uppercase">
+            End-to-End Encrypted Session · ProxiSpeak Auth v2.1
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
