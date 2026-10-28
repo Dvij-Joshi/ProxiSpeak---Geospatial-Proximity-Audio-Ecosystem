@@ -151,42 +151,86 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-[#141413]/70 backdrop-blur-md transition-all select-none overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-[#141413]/65 backdrop-blur-md select-none overflow-y-auto animate-overlay"
       onClick={(e) => {
         if (e.target === e.currentTarget && onClose) onClose();
       }}
     >
+      <style>{`
+        @keyframes modalOverlayFade {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes modalSlideUp {
+          from {
+            opacity: 0;
+            transform: scale(0.96) translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        @keyframes formFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-overlay {
+          animation: modalOverlayFade 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-modal-card {
+          animation: modalSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-form-pane {
+          animation: formFadeIn 0.18s ease-out forwards;
+        }
+        /* Refined WebKit autofill styling to match natural input background */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus {
+          -webkit-box-shadow: 0 0 0px 1000px #F4F3EF inset !important;
+          -webkit-text-fill-color: #1c1b1b !important;
+          transition: background-color 5000s ease-in-out 0s;
+        }
+      `}</style>
+
       {/* Precision Studio Modal Container */}
-      <div className="relative w-full max-w-4xl bg-[#FFFDF8] rounded-2xl border border-[#D9D7D0] shadow-[0_24px_70px_rgba(20,20,19,0.25)] overflow-hidden flex flex-col md:flex-row my-auto">
-        {/* Minimalist Close Button */}
+      <div className="relative w-full max-w-4xl bg-[#FFFDF8] rounded-2xl border border-[#D9D7D0] shadow-[0_24px_70px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col md:flex-row my-auto animate-modal-card">
+        {/* Minimalist Close Button - Flush with Corner */}
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 z-20 w-8 h-8 rounded-lg bg-white/90 hover:bg-white text-[#5e5f5c] hover:text-[#1c1b1b] flex items-center justify-center transition-all cursor-pointer border border-[#D9D7D0] shadow-2xs"
+            className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full text-[#8C8880] hover:text-[#1c1b1b] hover:bg-[#F4F3EF] flex items-center justify-center transition-all cursor-pointer"
             title="Close modal (Esc)"
           >
-            <span className="material-symbols-outlined text-[16px]">close</span>
+            <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         )}
 
         {/* ── Left Column: Precision Spatial Audio Architecture ── */}
-        <div className="w-full md:w-[45%] bg-[#151514] text-white p-7 sm:p-8 flex flex-col justify-between relative overflow-hidden border-b md:border-b-0 md:border-r border-[#262624]">
+        <div className="w-full md:w-[44%] bg-[#151514] text-white p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden border-b md:border-b-0 md:border-r border-[#262624]">
           {/* Subtle Technical Blueprint Background Grid */}
           <div
-            className="absolute inset-0 pointer-events-none opacity-30"
+            className="absolute inset-0 pointer-events-none opacity-25"
             style={{
               backgroundImage:
-                'linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)',
+                'linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)',
               backgroundSize: '24px 24px',
             }}
           />
 
           {/* Top Brand & Status */}
           <div className="relative z-10">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-md bg-[#FAF9F5] text-[#151514] flex items-center justify-center font-bold text-xs">
+                <div className="w-7 h-7 rounded-lg bg-[#FAF9F5] text-[#151514] flex items-center justify-center font-bold text-xs shadow-2xs">
                   <span className="material-symbols-outlined text-[16px]">graphic_eq</span>
                 </div>
                 <span className="font-sans text-sm font-semibold tracking-tight text-white">ProxiSpeak</span>
@@ -208,7 +252,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
           </div>
 
           {/* Center: Precision Architectural Acoustic Soundstage Diagram */}
-          <div className="relative z-10 my-6">
+          <div className="relative z-10 my-5">
             <div className="w-full rounded-xl bg-[#1B1B1A] border border-[#2B2B28] p-3 flex flex-col justify-between relative overflow-hidden">
               {/* Corner Registration Crosshairs */}
               <span className="absolute top-2 left-2 font-mono text-[10px] text-white/20 select-none">+</span>
@@ -284,7 +328,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
             </div>
 
             {defaultRoomName && (
-              <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-[#1B1B1A] border border-[#2B2B28] text-[10px] font-mono text-[#A6A49F] flex items-center justify-between">
+              <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-[#1B1B1A] border border-[#2B2B28] text-[10px] font-mono text-[#A6A49F] flex items-center justify-between">
                 <span className="text-[#8C8880] uppercase tracking-wider">TARGET ROOM</span>
                 <span className="font-semibold text-white">{defaultRoomName}</span>
               </div>
@@ -304,30 +348,23 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
           </div>
         </div>
 
-        {/* ── Right Column: Precision Authentication Gateway ── */}
-        <div className="w-full md:w-[55%] p-6 sm:p-9 flex flex-col justify-between bg-[#FFFDF8]">
-          <div>
-            {/* Header / Mode Indicator */}
-            <div className="flex items-center justify-between mb-5">
-              <span className="font-mono text-[10px] tracking-[0.2em] text-[#8C8880] uppercase">
-                {isLogin ? 'SESSION ACCESS // 01' : 'NEW REGISTRATION // 02'}
-              </span>
-              <span className="font-mono text-[9px] text-[#5e5f5c] bg-[#F4F3EF] px-2 py-0.5 rounded border border-[#D9D7D0]">
-                SECURE AUTH
-              </span>
+        {/* ── Right Column: Clean, Focused Authentication Console ── */}
+        <div className="w-full md:w-[56%] p-6 sm:p-9 flex flex-col justify-between bg-[#FFFDF8]">
+          <div className="w-full">
+            {/* Header: Clean & Focused Title */}
+            <div className="mb-5 pr-8">
+              <h2 className="font-sans text-2xl font-bold tracking-tight text-[#1c1b1b]">
+                {isLogin ? 'Sign In' : 'Create Account'}
+              </h2>
+              <p className="text-xs text-[#5e5f5c] mt-1">
+                {isLogin
+                  ? 'Enter your credentials to access your spatial workspace.'
+                  : 'Set up your profile to start hosting spatial meetings.'}
+              </p>
             </div>
 
-            <h2 className="font-sans text-2xl font-bold tracking-tight text-[#1c1b1b] mb-1">
-              {isLogin ? 'Sign In to Workspace' : 'Create Spatial Profile'}
-            </h2>
-            <p className="text-xs text-[#5e5f5c] mb-6">
-              {isLogin
-                ? 'Enter your account credentials to access spatial audio suites.'
-                : 'Configure your profile name, email, and spatial identity swatch.'}
-            </p>
-
-            {/* Architectural Segmented Tab Bar */}
-            <div className="grid grid-cols-2 p-1 bg-[#F4F3EF] rounded-xl border border-[#D9D7D0] mb-6">
+            {/* Seamless Segmented Mode Switcher */}
+            <div className="grid grid-cols-2 p-1 bg-[#F4F3EF] rounded-xl border border-[#D9D7D0] mb-5">
               <button
                 type="button"
                 onClick={() => {
@@ -335,13 +372,13 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                   setError('');
                   setSuggestSwitch(null);
                 }}
-                className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 text-xs font-semibold rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 ${
                   isLogin
                     ? 'bg-white text-[#1c1b1b] shadow-2xs border border-[#D9D7D0]/60'
                     : 'text-[#8C8880] hover:text-[#1c1b1b]'
                 }`}
               >
-                <span className="material-symbols-outlined text-[16px]">login</span>
+                <span className="material-symbols-outlined text-[15px]">login</span>
                 <span>Sign In</span>
               </button>
               <button
@@ -351,21 +388,21 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                   setError('');
                   setSuggestSwitch(null);
                 }}
-                className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 text-xs font-semibold rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 ${
                   !isLogin
                     ? 'bg-white text-[#1c1b1b] shadow-2xs border border-[#D9D7D0]/60'
                     : 'text-[#8C8880] hover:text-[#1c1b1b]'
                 }`}
               >
-                <span className="material-symbols-outlined text-[16px]">person_add</span>
-                <span>Create Account</span>
+                <span className="material-symbols-outlined text-[15px]">person_add</span>
+                <span>Register</span>
               </button>
             </div>
 
-            {/* Error / Smart Handoff Notice */}
+            {/* Error / Smart Suggestion Banner */}
             {error && (
-              <div className="mb-5 p-3.5 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#991B1B] text-xs">
-                <div className="flex items-start gap-2.5">
+              <div className="mb-4 p-3 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#991B1B] text-xs">
+                <div className="flex items-start gap-2">
                   <span className="material-symbols-outlined text-[16px] text-rose-600 mt-0.5">warning</span>
                   <div className="flex-1 leading-relaxed">
                     <span className="font-medium">{error}</span>
@@ -373,7 +410,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                       <button
                         type="button"
                         onClick={handleSwitchToRegister}
-                        className="mt-1.5 block font-semibold text-[#FF4B2B] hover:underline cursor-pointer"
+                        className="mt-1 block font-semibold text-[#FF4B2B] hover:underline cursor-pointer"
                       >
                         Account not found. Click here to register with this email
                       </button>
@@ -382,7 +419,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                       <button
                         type="button"
                         onClick={handleSwitchToLogin}
-                        className="mt-1.5 block font-semibold text-[#FF4B2B] hover:underline cursor-pointer"
+                        className="mt-1 block font-semibold text-[#FF4B2B] hover:underline cursor-pointer"
                       >
                         Email already registered. Click here to sign in instead
                       </button>
@@ -392,13 +429,13 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
               </div>
             )}
 
-            {/* Input Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Input Form with Subtle Transition */}
+            <form onSubmit={handleSubmit} className="space-y-3.5 animate-form-pane">
               {isLogin ? (
                 /* ── Login Form ── */
                 <div>
-                  <label className="block font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase mb-1.5">
-                    Email Address or Username
+                  <label className="block text-xs font-medium text-[#5e5f5c] mb-1.5">
+                    Email address or username
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8880] text-[18px]">
@@ -419,8 +456,8 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                 /* ── Registration Form ── */
                 <>
                   <div>
-                    <label className="block font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase mb-1.5">
-                      Full Name / Display Name
+                    <label className="block text-xs font-medium text-[#5e5f5c] mb-1.5">
+                      Display name
                     </label>
                     <div className="relative">
                       <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8880] text-[18px]">
@@ -440,8 +477,8 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                   </div>
 
                   <div>
-                    <label className="block font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase mb-1.5">
-                      Work / Personal Email
+                    <label className="block text-xs font-medium text-[#5e5f5c] mb-1.5">
+                      Email address
                     </label>
                     <div className="relative">
                       <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8880] text-[18px]">
@@ -464,11 +501,11 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
               {/* Password Field */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase">
+                  <label className="text-xs font-medium text-[#5e5f5c]">
                     Password
                   </label>
                   {!isLogin && (
-                    <span className="font-mono text-[9px] text-[#8C8880]">6+ characters</span>
+                    <span className="text-[11px] text-[#8C8880]">6+ characters</span>
                   )}
                 </div>
                 <div className="relative">
@@ -479,7 +516,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder={isLogin ? 'Enter password' : 'Create secure password'}
+                    placeholder={isLogin ? 'Enter your password' : 'Create a secure password'}
                     autoComplete={isLogin ? 'current-password' : 'new-password'}
                     required
                     className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#F4F3EF] border border-[#D9D7D0] text-sm text-[#1c1b1b] placeholder:text-[#BDBAB2] focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#1c1b1b] focus:border-[#1c1b1b] transition-all font-sans"
@@ -500,8 +537,8 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
               {/* Avatar Swatch Selection (Register only) */}
               {!isLogin && (
                 <div>
-                  <label className="block font-mono text-[10px] font-semibold text-[#5e5f5c] tracking-wider uppercase mb-2">
-                    Spatial Avatar Swatch
+                  <label className="block text-xs font-medium text-[#5e5f5c] mb-2">
+                    Spatial avatar color
                   </label>
                   <div className="flex items-center gap-2 flex-wrap">
                     {AVATAR_COLORS.map((col) => {
@@ -533,7 +570,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 rounded-xl bg-[#1c1b1b] hover:bg-black text-white text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-2.5 rounded-xl bg-[#1c1b1b] hover:bg-black text-white text-xs font-bold uppercase tracking-wider transition-all duration-150 shadow-sm cursor-pointer disabled:opacity-50 active:scale-[0.99] flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <>
@@ -542,7 +579,7 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
                     </>
                   ) : (
                     <>
-                      <span>{isLogin ? 'Sign In to Workspace' : 'Register Profile & Enter'}</span>
+                      <span>{isLogin ? 'Sign In to Workspace' : 'Create Account & Enter'}</span>
                       <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                     </>
                   )}
@@ -551,15 +588,31 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
             </form>
           </div>
 
-          {/* Bottom Security Assurance */}
-          <div className="mt-6 pt-4 border-t border-[#D9D7D0] flex items-center justify-between text-[#8C8880] font-mono text-[10px]">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              AES-256 Encrypted Session
-            </span>
-            <span className="uppercase tracking-wider">
-              HRTF Engine · 0% TURN API
-            </span>
+          {/* Clean Understated Footer Link */}
+          <div className="mt-6 pt-4 border-t border-[#D9D7D0]/60 text-center text-xs text-[#5e5f5c]">
+            {isLogin ? (
+              <span>
+                Don't have an account?{' '}
+                <button
+                  type="button"
+                  onClick={handleSwitchToRegister}
+                  className="font-semibold text-[#1c1b1b] hover:text-[#FF4B2B] hover:underline cursor-pointer transition-colors"
+                >
+                  Create one now
+                </button>
+              </span>
+            ) : (
+              <span>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={handleSwitchToLogin}
+                  className="font-semibold text-[#1c1b1b] hover:text-[#FF4B2B] hover:underline cursor-pointer transition-colors"
+                >
+                  Sign in
+                </button>
+              </span>
+            )}
           </div>
         </div>
       </div>
