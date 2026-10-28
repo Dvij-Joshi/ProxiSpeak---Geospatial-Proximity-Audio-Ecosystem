@@ -130,27 +130,44 @@ function saveAccountToCache(account) {
 
 async function syncCachedAccountsToDb() {
   if (!isDbConnected() || memoryAccounts.size === 0) return;
-  try {
-    for (const acc of memoryAccounts.values()) {
-      try {
-        const existing = await Account.findByCredentials(acc.username);
-        if (!existing) {
-          const created = await Account.create({
-            username: acc.username,
-            usernameLower: acc.username.toLowerCase(),
-            email: acc.email,
-            passwordHash: acc.passwordHash,
-            avatarColor: acc.avatarColor,
-          });
-          acc._id = created._id;
-          acc.id = created._id.toString();
-          acc.savedInDb = true;
-          console.log(`[Sync] Backfilled cached user "${acc.username}" into MongoDB.`);
-        }
-      } catch (_e) {}
+  let synced = 0;
+  let failed = 0;
+  for (const acc of memoryAccounts.values()) {
+    try {
+      // Skip accounts already confirmed in MongoDB with a real ObjectId
+      if (acc.savedInDb && acc._id && !String(acc._id).startsWith('acc_')) continue;
+      const existing = await Account.findByCredentials(acc.username);
+      if (!existing) {
+        const created = await Account.create({
+          username: acc.username,
+          usernameLower: acc.username.toLowerCase(),
+          email: acc.email,
+          passwordHash: acc.passwordHash,
+          avatarColor: acc.avatarColor,
+        });
+        acc._id = created._id;
+        acc.id = created._id.toString();
+        acc.savedInDb = true;
+        synced++;
+        console.log(`[Sync] Backfilled cached user "${acc.username}" into MongoDB [ID: ${acc.id}]`);
+      } else {
+        // Update cache entry with the real MongoDB ID
+        acc._id = existing._id;
+        acc.id = existing._id.toString();
+        acc.savedInDb = true;
+      }
+    } catch (syncErr) {
+      failed++;
+      console.warn(`[Sync] Failed to backfill "${acc.username}": ${syncErr.message}`);
     }
-  } catch (err) {
-    console.warn('[Sync] Syncing cached accounts error:', err.message);
+  }
+  // Persist updated IDs back to disk cache
+  if (synced > 0) {
+    try {
+      const all = Array.from(memoryAccounts.values());
+      fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(all, null, 2), 'utf8');
+    } catch (_e) {}
+    console.log(`[Sync] Complete: ${synced} backfilled, ${failed} failed out of ${memoryAccounts.size} cached accounts.`);
   }
 }
 
@@ -1135,6 +1152,31 @@ io.on('connection', (socket) => {
         pendingKnocks: remainingKnocks,
       });
     }
+  });
+
+
+  // ── Room Chat (Anti-Spam Throttled) ─────────────────────────────────────────
+  socket.on('room:chat:send', ({ roomId: chatRoomId, message }) => {
+    if (!checkThrottle('room:chat:send', 10, 5000)) {
+      console.warn(`[Anti-Spam] Throttled chat from socket ${socket.id}`);
+      return;
+    }
+    const rId = chatRoomId || socket.data.roomId;
+    if (!rId || !message || typeof message !== 'string') return;
+    const trimmed = message.trim().slice(0, 500); // cap at 500 chars
+    if (!trimmed) return;
+    const sender = socket.data.username || 'Anonymous';
+    const senderColor = (getRoomUsers(rId).get(socket.id) || {}).avatarColor || '#3b82f6';
+    const payload = {
+      from: socket.id,
+      username: sender,
+      avatarColor: senderColor,
+      message: trimmed,
+      timestamp: Date.now(),
+    };
+    // Echo back to sender + broadcast to room
+    io.to(rId).emit('room:chat:message', payload);
+    console.log(`[Chat] "${sender}" in "${rId}": ${trimmed.slice(0, 60)}`);
   });
 
   // ── leave-room (End Call) ───────────────────────────────────────────────────
