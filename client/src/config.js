@@ -66,3 +66,4 @@ export const AVATAR_COLORS = [
   '#06b6d4', // Cyan
   '#84cc16', // Lime
 ];
+

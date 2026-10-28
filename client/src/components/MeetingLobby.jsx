@@ -86,18 +86,21 @@ const THEME_OPTIONS = [
   {
     id: 'office',
     name: 'Corporate Office',
+    icon: '🏢',
     desc: 'Executive suites, conference room, lounge, and open desks.',
     image: '/images/office.jpg',
   },
   {
     id: 'conference',
     name: 'Conference & Auditorium',
+    icon: '🏛️',
     desc: 'Keynote stage, presentation hall, and breakout pods.',
     image: '/images/auditorium.jpg',
   },
   {
     id: 'lounge',
     name: 'Rooftop Social Lounge',
+    icon: '☕',
     desc: 'Casual coffee bar, sofa booths, and open air terrace.',
     image: '/images/lounge.jpg',
   },

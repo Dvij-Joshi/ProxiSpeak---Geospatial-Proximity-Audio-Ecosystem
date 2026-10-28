@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { SERVER_URL, AVATAR_COLORS } from '../config';
-import { ArrowRight, Lightbulb, Link2, Mic, TriangleAlert, Zap } from 'lucide-react';
 
 export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -119,7 +118,7 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
     >
       {/* Brand Header */}
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <div style={{ marginBottom: '6px', color: '#94a3b8' }}><Mic size={38} strokeWidth={1.7} aria-hidden="true" /></div>
+        <div style={{ fontSize: '42px', marginBottom: '6px' }}>🎙️</div>
         <h1 style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: '#f8fafc' }}>
           ProxiSpeak
         </h1>
@@ -141,8 +140,7 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
               color: '#60a5fa',
             }}
           >
-            <Link2 size={13} aria-hidden="true" />
-            <span>Invited to join:</span>
+            <span>🔗 Invited to join:</span>
             <strong>{defaultRoomName}</strong>
           </div>
         )}
@@ -215,10 +213,7 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
                 marginBottom: '16px',
               }}
             >
-              <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                <TriangleAlert size={14} aria-hidden="true" />
-                <span>{error}</span>
-              </div>
+              <div style={{ marginBottom: '6px' }}>⚠️ {error}</div>
               <button
                 type="button"
                 onClick={handleGuestJoin}
@@ -233,8 +228,7 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
                   padding: 0,
                 }}
               >
-                <ArrowRight size={13} aria-hidden="true" />
-                <span>Or click here to enter immediately as Guest</span>
+                👉 Or click here to enter immediately as Guest
               </button>
             </div>
           )}
@@ -347,8 +341,7 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
             />
             {isLogin && (
               <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#64748b' }}>
-                <Lightbulb size={12} aria-hidden="true" />
-                <span>Tip: If you don&apos;t have an account yet, one will be created automatically.</span>
+                💡 Tip: If you don&apos;t have an account yet, one will be created automatically.
               </p>
             )}
           </div>
@@ -460,7 +453,7 @@ export default function AuthModal({ onAuthSuccess, defaultRoomName }) {
               e.currentTarget.style.background = 'rgba(30, 41, 59, 0.4)';
             }}
           >
-            <Zap size={15} aria-hidden="true" />
+            <span>⚡</span>
             <span>Quick Join as Guest (No Password Required)</span>
           </button>
         </form>
