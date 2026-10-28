@@ -70,12 +70,12 @@
 **Goal:** Implement MongoDB `$near` queries to group users. Logic to only send WebRTC offer/answers to users within a 100-pixel radius.
 
 #### Tasks
-- [ ] Create `/api/proximity/:userId` endpoint using `$near` with `$maxDistance: 100`
-- [ ] After each `move` event, query nearby users in the same room
-- [ ] Emit `proximity-update` to the mover: `{ inEarshot: [...], leftEarshot: [...] }`
-- [ ] Track per-socket "earshot state" to detect entry/exit events
-- [ ] Only initiate WebRTC offers to newly-entered earshot users
-- [ ] Relay `webrtc-offer`, `webrtc-answer`, `ice-candidate` events between correct socket pairs
+- [x] Create `/api/proximity/:userId` endpoint using `$near` with `$maxDistance: 100`
+- [x] After each `move` event, query nearby users in the same room
+- [x] Emit `proximity-update` to the mover: `{ inEarshot: [...], leftEarshot: [...] }`
+- [x] Track per-socket "earshot state" to detect entry/exit events
+- [x] Only initiate WebRTC offers to newly-entered earshot users
+- [x] Relay `webrtc-offer`, `webrtc-answer`, `ice-candidate` events between correct socket pairs
 
 #### Deliverables
 - `$near` query verified to return only users within 100-unit radius

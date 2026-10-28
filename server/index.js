@@ -770,6 +770,139 @@ app.get('/api/room/:roomId/users', (req, res) => {
   res.json([...users.entries()].map(([id, u]) => ({ id, ...u })));
 });
 
+// ── Proximity Calculations ($near Geospatial Query) ──────────────────────────
+/**
+ * GET /api/proximity/:userId
+ * Finds all active participants within earshot radius (default 100 pixels)
+ * using MongoDB $near planar geospatial queries with in-memory fallback.
+ */
+app.get('/api/proximity/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const radius = Math.min(1000, Math.max(10, Number(req.query.radius) || 100));
+    const queryRoomId = req.query.roomId;
+
+    let targetUser = null;
+
+    // 1. Resolve user by MongoDB ObjectId, socketId, or username
+    if (isDbConnected()) {
+      if (mongoose.Types.ObjectId.isValid(userId)) {
+        targetUser = await User.findById(userId);
+      }
+      if (!targetUser) {
+        targetUser = await User.findOne({
+          $or: [{ socketId: userId }, { username: userId }],
+        });
+      }
+    }
+
+    // Fallback: check in-memory active rooms
+    if (!targetUser) {
+      for (const [rId, users] of rooms.entries()) {
+        for (const [sId, u] of users.entries()) {
+          if (sId === userId || u.username === userId) {
+            targetUser = {
+              _id: sId,
+              socketId: sId,
+              username: u.username,
+              avatarColor: u.avatarColor,
+              roomId: rId,
+              x: u.x,
+              y: u.y,
+              location: [u.x, u.y],
+            };
+            break;
+          }
+        }
+        if (targetUser) break;
+      }
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found or offline',
+      });
+    }
+
+    const targetX = targetUser.location?.[0] ?? targetUser.x;
+    const targetY = targetUser.location?.[1] ?? targetUser.y;
+    const activeRoomId = queryRoomId || targetUser.roomId;
+
+    let nearbyUsers = [];
+
+    // 2. Perform MongoDB $near geospatial query if connected
+    if (isDbConnected()) {
+      try {
+        const mongoResults = await User.find({
+          socketId: { $ne: targetUser.socketId },
+          ...(activeRoomId ? { roomId: activeRoomId } : {}),
+          location: {
+            $near: [targetX, targetY],
+            $maxDistance: radius,
+          },
+        }).lean();
+
+        nearbyUsers = mongoResults.map((u) => {
+          const ux = u.location?.[0] ?? u.x;
+          const uy = u.location?.[1] ?? u.y;
+          const dist = Math.hypot(ux - targetX, uy - targetY);
+          return {
+            _id: u._id,
+            socketId: u.socketId,
+            username: u.username,
+            avatarColor: u.avatarColor,
+            roomId: u.roomId,
+            location: {
+              type: 'Point',
+              coordinates: [ux, uy],
+            },
+            distance: Number(dist.toFixed(1)),
+          };
+        });
+      } catch (dbErr) {
+        console.warn('[$near] Mongo spatial query failed, falling back to in-memory filter:', dbErr.message);
+      }
+    }
+
+    // 3. In-memory proximity fallback (e.g. if DB not connected or indexing warming up)
+    if (nearbyUsers.length === 0 && rooms.has(activeRoomId)) {
+      const roomUsers = rooms.get(activeRoomId);
+      for (const [sId, u] of roomUsers.entries()) {
+        if (sId === targetUser.socketId) continue;
+        const dist = Math.hypot(u.x - targetX, u.y - targetY);
+        if (dist <= radius) {
+          nearbyUsers.push({
+            _id: sId,
+            socketId: sId,
+            username: u.username,
+            avatarColor: u.avatarColor,
+            roomId: activeRoomId,
+            location: {
+              type: 'Point',
+              coordinates: [u.x, u.y],
+            },
+            distance: Number(dist.toFixed(1)),
+          });
+        }
+      }
+      nearbyUsers.sort((a, b) => a.distance - b.distance);
+    }
+
+    return res.json({
+      success: true,
+      userId,
+      center: [targetX, targetY],
+      radius,
+      count: nearbyUsers.length,
+      nearbyUsers,
+    });
+  } catch (err) {
+    console.error('[/api/proximity/:userId]', err);
+    res.status(500).json({ success: false, error: 'Internal server error calculating proximity' });
+  }
+});
+
 // ── Socket.io events ──────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log(`[Socket] connected  : ${socket.id}`);
