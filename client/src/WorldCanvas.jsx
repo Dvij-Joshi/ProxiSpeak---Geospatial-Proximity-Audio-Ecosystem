@@ -980,21 +980,17 @@ export default function WorldCanvas({
       { localRoom: localRoomRef.current }
     );
 
-    // 4. Movement guide bottom-left
-    const userCount = Object.keys(peersRef.current).length + 1;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
-    drawRoundRect(ctx, 16, H - 56, 310, 42, 8);
+    // 4. Compact movement guide bottom-left (non-overlapping)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    drawRoundRect(ctx, 16, H - 42, 160, 26, 8);
     ctx.fill();
     ctx.strokeStyle = '#D9D7D0';
     ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.font = '500 12px Inter, sans-serif';
-    ctx.fillStyle = '#1c1b1b';
-    ctx.textAlign = 'left';
-    ctx.fillText('W A S D to move · [M] Mute · [D] Deafen', 26, H - 36);
+    ctx.font = '500 11px Inter, sans-serif';
     ctx.fillStyle = '#5e5f5c';
-    ctx.font = '11px Inter, sans-serif';
-    ctx.fillText(`${userCount} active in workspace · Hold [Space] Push-to-Talk`, 26, H - 20);
+    ctx.textAlign = 'left';
+    ctx.fillText('W A S D to move', 26, H - 25);
 
     // 5. Connection indicator bottom-right
     const connected = socketRef.current?.connected;
@@ -2433,14 +2429,16 @@ export default function WorldCanvas({
             transform: 'translateX(-50%)',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            background: 'rgba(255, 255, 255, 0.94)',
-            backdropFilter: 'blur(16px)',
-            padding: '6px 8px',
-            borderRadius: '16px',
-            border: '1px solid rgba(217, 215, 208, 0.9)',
-            boxShadow: '0 12px 32px -4px rgba(0,0,0,0.12), 0 4px 12px -2px rgba(0,0,0,0.04)',
-            zIndex: 10,
+            gap: '5px',
+            background: 'rgba(255, 255, 255, 0.96)',
+            backdropFilter: 'blur(20px)',
+            padding: '4px 6px',
+            borderRadius: '12px',
+            border: '1px solid #D9D7D0',
+            boxShadow: '0 8px 24px -4px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.04)',
+            zIndex: 15,
+            whiteSpace: 'nowrap',
+            boxSizing: 'border-box',
           }}
         >
           {/* Microphone Toggle Button */}
@@ -2451,11 +2449,12 @@ export default function WorldCanvas({
               handleToggleMic();
             }}
             style={{
-              display: 'flex',
+              height: '32px',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '7px 13px',
-              borderRadius: '10px',
+              padding: '0 12px',
+              borderRadius: '8px',
               border: isMuted ? '1px solid #fecaca' : 'none',
               background: !micActive
                 ? '#1c1b1b'
@@ -2466,11 +2465,13 @@ export default function WorldCanvas({
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              transition: 'all 0.12s ease',
             }}
-            title={!micActive ? 'Click to grant microphone access' : isMuted ? 'Click to Unmute' : 'Click to Mute'}
+            title={!micActive ? 'Click to grant microphone access [M]' : isMuted ? 'Click to Unmute [M]' : 'Click to Mute [M]'}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
               {!micActive ? 'mic' : isMuted ? 'mic_off' : 'mic'}
             </span>
             <span>
@@ -2482,20 +2483,23 @@ export default function WorldCanvas({
           {isPttActive && (
             <div
               style={{
-                display: 'flex',
+                height: '32px',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '10px',
+                gap: '4px',
+                padding: '0 8px',
+                borderRadius: '8px',
                 background: '#fef3c7',
                 border: '1px solid #fde68a',
                 color: '#92400e',
                 fontSize: '11px',
                 fontWeight: 700,
                 letterSpacing: '0.04em',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>push_to_talk</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>push_to_talk</span>
               <span>PTT</span>
             </div>
           )}
@@ -2504,18 +2508,21 @@ export default function WorldCanvas({
           {micActive && !isMuted && (
             <div
               style={{
-                display: 'flex',
+                height: '32px',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '6px 10px',
-                borderRadius: '10px',
+                gap: '5px',
+                padding: '0 8px',
+                borderRadius: '8px',
                 background: '#F4F3EF',
                 border: '1px solid #D9D7D0',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
               title="Live voice intensity level"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#8C8880' }}>graphic_eq</span>
-              <div style={{ width: '48px', height: '6px', background: '#E9E8E4', borderRadius: '3px', overflow: 'hidden' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#8C8880' }}>graphic_eq</span>
+              <div style={{ width: '40px', height: '5px', background: '#E9E8E4', borderRadius: '3px', overflow: 'hidden' }}>
                 <div
                   ref={voiceMeterBarRef}
                   style={{
@@ -2531,7 +2538,7 @@ export default function WorldCanvas({
           )}
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '20px', background: '#D9D7D0', margin: '0 2px' }} />
+          <div style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
 
           {/* Deafen Toggle Button */}
           <button
@@ -2541,22 +2548,25 @@ export default function WorldCanvas({
               handleToggleDeafen();
             }}
             style={{
-              display: 'flex',
+              height: '32px',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '7px 12px',
-              borderRadius: '10px',
+              padding: '0 11px',
+              borderRadius: '8px',
               border: '1px solid ' + (isDeafened ? '#fecaca' : '#D9D7D0'),
               background: isDeafened ? '#fef2f2' : '#F4F3EF',
               color: isDeafened ? '#dc2626' : '#1c1b1b',
               fontSize: '12px',
               fontWeight: 500,
               cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              transition: 'all 0.12s ease',
             }}
-            title={isDeafened ? 'Click to un-deafen' : 'Click to mute all incoming audio'}
+            title={isDeafened ? 'Click to un-deafen [D]' : 'Click to mute all incoming audio [D]'}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{isDeafened ? 'headset_off' : 'headphones'}</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>{isDeafened ? 'headset_off' : 'headphones'}</span>
             <span>{isDeafened ? 'Deafened' : 'Audio On'}</span>
           </button>
 
@@ -2565,31 +2575,30 @@ export default function WorldCanvas({
             <button
               onClick={() => handleToggleDoor(roomDoorKey)}
               style={{
-                display: 'flex',
+                height: '32px',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '7px 14px',
-                borderRadius: '10px',
+                gap: '5px',
+                padding: '0 11px',
+                borderRadius: '8px',
                 border: '1px solid ' + (isRoomDoorOpen ? '#fde68a' : '#bbf7d0'),
                 background: isRoomDoorOpen ? '#fffbeb' : '#f0fdf4',
                 color: isRoomDoorOpen ? '#92400e' : '#166534',
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                transition: 'all 0.12s ease',
               }}
               title={
                 isRoomDoorOpen
-                  ? 'Close the door to make this room private and soundproof'
-                  : 'Open the door to welcome other members in'
+                  ? `Close door to make ${DOORS[roomDoorKey]?.name || 'room'} private`
+                  : `Open door to welcome other members in`
               }
             >
-              <span className="material-symbols-outlined" style={{ fontSize: "15px" }}>{isRoomDoorOpen ? "lock" : "meeting_room"}</span>
-              <span>
-                {isRoomDoorOpen
-                  ? `Close Door (${DOORS[roomDoorKey]?.name || 'Room'})`
-                  : `Open Door (${DOORS[roomDoorKey]?.name || 'Room'})`}
-              </span>
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{isRoomDoorOpen ? 'lock' : 'meeting_room'}</span>
+              <span>{isRoomDoorOpen ? 'Close Door' : 'Open Door'}</span>
             </button>
           )}
 
@@ -2600,26 +2609,26 @@ export default function WorldCanvas({
                 <button
                   onClick={() => handleToggleDoor(nearbyDoor)}
                   style={{
-                    display: 'flex',
+                    height: '32px',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    padding: '7px 14px',
-                    borderRadius: '10px',
+                    gap: '5px',
+                    padding: '0 11px',
+                    borderRadius: '8px',
                     border: '1px solid ' + (isNearbyDoorOpen ? '#fde68a' : '#bbf7d0'),
                     background: isNearbyDoorOpen ? '#fffbeb' : '#f0fdf4',
                     color: isNearbyDoorOpen ? '#92400e' : '#166534',
                     fontSize: '12px',
                     fontWeight: 600,
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    transition: 'all 0.12s ease',
                   }}
+                  title={isNearbyDoorOpen ? 'Close door' : 'Open door'}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: "15px" }}>{isNearbyDoorOpen ? "lock" : "meeting_room"}</span>
-                  <span>
-                    {isNearbyDoorOpen
-                      ? `Close Door (${DOORS[nearbyDoor]?.name || 'Room'})`
-                      : `Open Door (${DOORS[nearbyDoor]?.name || 'Room'})`}
-                  </span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{isNearbyDoorOpen ? 'lock' : 'meeting_room'}</span>
+                  <span>{isNearbyDoorOpen ? 'Close Door' : 'Open Door'}</span>
                 </button>
               )}
               {nearbyDoorOccupants > 0 && (
@@ -2630,112 +2639,129 @@ export default function WorldCanvas({
                         <button
                           onClick={() => handleToggleDoor(nearbyDoor)}
                           style={{
-                            display: 'flex',
+                            height: '32px',
+                            display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '7px 14px',
-                            borderRadius: '10px',
+                            gap: '5px',
+                            padding: '0 11px',
+                            borderRadius: '8px',
                             border: '1px solid #bbf7d0',
                             background: '#f0fdf4',
                             color: '#166534',
                             fontSize: '12px',
                             fontWeight: 600,
                             cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
                           }}
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: "15px" }}>meeting_room</span>
-                          <span>Enter Room (Welcomed In!)</span>
+                          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>meeting_room</span>
+                          <span>Enter Room</span>
                         </button>
                       ) : myKnockStatus?.doorKey === nearbyDoor && myKnockStatus?.status === 'waiting' ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                           <div
                             style={{
-                              display: 'flex',
+                              height: '32px',
+                              display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '6px',
-                              padding: '7px 12px',
-                              borderRadius: '10px',
+                              gap: '4px',
+                              padding: '0 9px',
+                              borderRadius: '8px',
                               background: '#fffbeb',
                               border: '1px solid #fde68a',
                               color: '#92400e',
                               fontSize: '12px',
                               fontWeight: 600,
+                              whiteSpace: 'nowrap',
                             }}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>hourglass_top</span>
-                            <span>Waiting for Occupants...</span>
+                            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>hourglass_top</span>
+                            <span>Waiting...</span>
                           </div>
                           <button
                             onClick={() => handleCancelKnock(nearbyDoor)}
                             style={{
-                              padding: '7px 10px',
-                              borderRadius: '10px',
+                              height: '32px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '0 8px',
+                              borderRadius: '8px',
                               border: '1px solid #D9D7D0',
                               background: '#F4F3EF',
                               color: '#5e5f5c',
                               fontSize: '11px',
                               fontWeight: 500,
                               cursor: 'pointer',
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             Cancel
                           </button>
                         </div>
                       ) : myKnockStatus?.doorKey === nearbyDoor && myKnockStatus?.status === 'declined' ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                           <div
                             style={{
-                              display: 'flex',
+                              height: '32px',
+                              display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '6px',
-                              padding: '7px 12px',
-                              borderRadius: '10px',
+                              gap: '4px',
+                              padding: '0 9px',
+                              borderRadius: '8px',
                               background: '#fef2f2',
                               border: '1px solid #fecaca',
                               color: '#dc2626',
                               fontSize: '12px',
                               fontWeight: 600,
+                              whiteSpace: 'nowrap',
                             }}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>lock</span>
-                            <span>Private (Declined)</span>
+                            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>lock</span>
+                            <span>Private</span>
                           </div>
                           <button
                             onClick={() => handleKnockDoor(nearbyDoor)}
                             style={{
-                              padding: '7px 12px',
-                              borderRadius: '10px',
+                              height: '32px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '0 9px',
+                              borderRadius: '8px',
                               border: '1px solid #D9D7D0',
                               background: '#1c1b1b',
                               color: '#ffffff',
-                              fontSize: '12px',
+                              fontSize: '11px',
                               fontWeight: 600,
                               cursor: 'pointer',
+                              whiteSpace: 'nowrap',
                             }}
                           >
-                            Knock Again
+                            Knock
                           </button>
                         </div>
                       ) : (
                         <button
                           onClick={() => handleKnockDoor(nearbyDoor)}
                           style={{
-                            display: 'flex',
+                            height: '32px',
+                            display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '7px 14px',
-                            borderRadius: '10px',
+                            gap: '5px',
+                            padding: '0 11px',
+                            borderRadius: '8px',
                             border: '1px solid #D9D7D0',
                             background: '#1c1b1b',
                             color: '#ffffff',
                             fontSize: '12px',
                             fontWeight: 600,
                             cursor: 'pointer',
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
                           }}
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>doorbell</span>
-                          <span>Knock to Enter (${DOORS[nearbyDoor]?.name || 'Room'})</span>
+                          <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>doorbell</span>
+                          <span>Knock to Enter</span>
                         </button>
                       )}
                     </>
@@ -2743,20 +2769,23 @@ export default function WorldCanvas({
                   {isNearbyDoorOpen && (
                     <div
                       style={{
-                        display: 'flex',
+                        height: '32px',
+                        display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '6px',
-                        padding: '7px 12px',
-                        borderRadius: '10px',
+                        gap: '4px',
+                        padding: '0 9px',
+                        borderRadius: '8px',
                         background: '#f0fdf4',
                         border: '1px solid #bbf7d0',
                         color: '#166534',
                         fontSize: '12px',
                         fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
                       }}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>meeting_room</span>
-                      <span>Door Open — Step Inside</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>meeting_room</span>
+                      <span>Door Open</span>
                     </div>
                   )}
                 </>
@@ -2765,32 +2794,35 @@ export default function WorldCanvas({
           )}
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '20px', background: '#D9D7D0', margin: '0 2px' }} />
+          <div style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
 
           {/* In-Earshot Proximity Counter */}
           <div
             style={{
-              display: 'flex',
+              height: '32px',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 11px',
-              borderRadius: '10px',
+              gap: '5px',
+              padding: '0 9px',
+              borderRadius: '8px',
               background: '#F4F3EF',
               border: '1px solid #D9D7D0',
               fontSize: '12px',
               color: '#5e5f5c',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
             <span
               style={{
-                width: '7px',
-                height: '7px',
+                width: '6px',
+                height: '6px',
                 borderRadius: '50%',
                 backgroundColor: inEarshotCount > 0 ? '#10b981' : '#BDBAB2',
                 flexShrink: 0,
               }}
             />
-            <span style={{ color: inEarshotCount > 0 ? '#059669' : '#5e5f5c', fontWeight: 500 }}>
+            <span style={{ color: inEarshotCount > 0 ? '#059669' : '#5e5f5c', fontWeight: 500, whiteSpace: 'nowrap' }}>
               {inEarshotCount} nearby
             </span>
           </div>
@@ -2802,93 +2834,101 @@ export default function WorldCanvas({
               setShowDiagnostics((prev) => !prev);
             }}
             style={{
-              display: 'flex',
+              height: '32px',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
-              padding: '6px 11px',
-              borderRadius: '10px',
+              gap: '4px',
+              padding: '0 9px',
+              borderRadius: '8px',
               border: '1px solid ' + (showDiagnostics ? '#1c1b1b' : '#D9D7D0'),
               background: showDiagnostics ? '#E9E8E4' : '#F4F3EF',
               color: '#1c1b1b',
               fontSize: '12px',
               fontWeight: 500,
               cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              transition: 'all 0.12s ease',
             }}
             title="Audio & WebRTC Connection Diagnostics"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>tune</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>tune</span>
             <span>Diag</span>
           </button>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '20px', background: '#D9D7D0', margin: '0 2px' }} />
+          <div style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
 
           {/* Chat Toggle Button */}
           <button
             onClick={() => setShowChat((prev) => !prev)}
             style={{
-              display: 'flex',
+              height: '32px',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
-              padding: '6px 11px',
-              borderRadius: '10px',
+              gap: '4px',
+              padding: '0 10px',
+              borderRadius: '8px',
               border: '1px solid ' + (showChat ? '#1c1b1b' : '#D9D7D0'),
               background: showChat ? '#1c1b1b' : '#F4F3EF',
               color: showChat ? '#ffffff' : '#1c1b1b',
               fontSize: '12px',
               fontWeight: 500,
               cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              transition: 'all 0.12s ease',
               position: 'relative',
             }}
             title="Toggle room chat"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>chat</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>chat</span>
             <span>Chat</span>
             {chatMessages.length > 0 && !showChat && (
               <span style={{
                 position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                width: '8px',
-                height: '8px',
+                top: '4px',
+                right: '4px',
+                width: '6px',
+                height: '6px',
                 borderRadius: '50%',
                 background: '#FF4B2B',
-                border: '1.5px solid #FAF9F5',
               }} />
             )}
           </button>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '20px', background: '#D9D7D0', margin: '0 2px' }} />
+          <div style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
 
           {/* End Call / Leave Room Button */}
           <button
             onClick={handleLeaveCall}
             style={{
-              display: 'flex',
+              height: '32px',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '7px 13px',
-              borderRadius: '10px',
+              gap: '5px',
+              padding: '0 12px',
+              borderRadius: '8px',
               border: 'none',
               background: '#dc2626',
               color: '#ffffff',
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
-              transition: 'background 0.15s ease',
-              boxShadow: '0 2px 6px rgba(220,38,38,0.25)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              transition: 'background 0.12s ease',
+              boxShadow: '0 2px 6px rgba(220,38,38,0.20)',
             }}
             title="End call and leave room"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>call_end</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>call_end</span>
             <span>End Call</span>
           </button>
         </div>
-        </div>
       </div>
     </div>
-  );
+  </div>
+);
 }
