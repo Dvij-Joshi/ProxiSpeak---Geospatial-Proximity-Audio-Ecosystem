@@ -980,7 +980,7 @@ io.on('connection', (socket) => {
   const checkThrottle = createSocketEventThrottler();
 
   // ── join-room (Anti-Spam Throttled) ─────────────────────────────────────────
-  socket.on('join-room', async ({ username, avatarColor, roomId = 'main-office', isMuted = true }) => {
+  socket.on('join-room', async ({ userId, username, avatarColor, roomId = 'main-office', isMuted = true }) => {
     try {
       if (!checkThrottle('join-room', 4, 5000)) {
         console.warn(`[Anti-Spam] Throttled join-room from socket ${socket.id}`);
@@ -990,20 +990,45 @@ io.on('connection', (socket) => {
       const spawnX = 560 + Math.floor(Math.random() * 120);
       const spawnY = 340 + Math.floor(Math.random() * 100);
       const userMuted = typeof isMuted === 'boolean' ? isMuted : true;
+      const effectiveUserId = userId || `usr_${username}`;
 
       const roomUsers = getRoomUsers(roomId);
-      roomUsers.set(socket.id, { username, avatarColor, x: spawnX, y: spawnY, isMuted: userMuted });
+
+      // Deduplicate: Clean up any stale/previous socket for this same participant ID in the room
+      for (const [existingSocketId, existingUser] of roomUsers.entries()) {
+        if (existingSocketId !== socket.id && (existingUser.userId === effectiveUserId || existingUser.username === username)) {
+          console.log(`[Room] Replacing stale socket ${existingSocketId} for participant "${username}" (ID: ${effectiveUserId}) with ${socket.id}`);
+          roomUsers.delete(existingSocketId);
+          io.to(roomId).emit('user-left', { id: existingSocketId, userId: effectiveUserId });
+          const oldSock = io.sockets.sockets.get(existingSocketId);
+          if (oldSock) {
+            try { oldSock.leave(roomId); } catch (_e) {}
+          }
+        }
+      }
+
+      roomUsers.set(socket.id, {
+        userId: effectiveUserId,
+        username,
+        avatarColor,
+        x: spawnX,
+        y: spawnY,
+        isMuted: userMuted,
+      });
 
       socket.join(roomId);
-      socket.data.roomId  = roomId;
+      socket.data.roomId   = roomId;
+      socket.data.userId   = effectiveUserId;
       socket.data.username = username;
-      socket.data.x = spawnX;
-      socket.data.y = spawnY;
+      socket.data.x        = spawnX;
+      socket.data.y        = spawnY;
 
       socket.emit('room-state', {
         selfId: socket.id,
+        selfUserId: effectiveUserId,
         users: [...roomUsers.entries()].map(([id, u]) => ({
           id,
+          userId:      u.userId,
           username:    u.username,
           avatarColor: u.avatarColor,
           x: u.x,
@@ -1015,6 +1040,7 @@ io.on('connection', (socket) => {
 
       socket.to(roomId).emit('user-joined', {
         id: socket.id,
+        userId: effectiveUserId,
         username,
         avatarColor,
         x: spawnX,
@@ -1055,7 +1081,7 @@ io.on('connection', (socket) => {
     const user = getRoomUsers(roomId).get(socket.id);
     if (user) { user.x = x; user.y = y; }
 
-    socket.to(roomId).emit('user-moved', { id: socket.id, x, y });
+    socket.to(roomId).emit('user-moved', { id: socket.id, userId: socket.data.userId, x, y });
 
     User.findOneAndUpdate(
       { socketId: socket.id },
@@ -1391,7 +1417,7 @@ io.on('connection', (socket) => {
         const roomUsers = getRoomUsers(rId);
         roomUsers.delete(socket.id);
         socket.leave(rId);
-        io.to(rId).emit('user-left', { id: socket.id });
+        io.to(rId).emit('user-left', { id: socket.id, userId: socket.data.userId });
         console.log(`[Room] "${username}" left room "${rId}" | online: ${roomUsers.size}`);
         socket.data.roomId = null;
       }
@@ -1408,7 +1434,7 @@ io.on('connection', (socket) => {
       if (roomId) {
         const roomUsers = getRoomUsers(roomId);
         roomUsers.delete(socket.id);
-        io.to(roomId).emit('user-left', { id: socket.id });
+        io.to(roomId).emit('user-left', { id: socket.id, userId: socket.data.userId });
         console.log(`[Room] "${username}" left "${roomId}" | online: ${roomUsers.size}`);
 
         for (const [, rKnocks] of pendingKnocks) {

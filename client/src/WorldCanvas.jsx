@@ -761,6 +761,20 @@ export default function WorldCanvas({
   const themeKey = (room?.theme && THEMES[room.theme]) ? room.theme : (propTheme && THEMES[propTheme] ? propTheme : 'office');
   const activeTheme = THEMES[themeKey] || THEMES.office;
 
+  // Stable participant identifier across socket reconnects & page reloads
+  const stableUserId = useMemo(() => {
+    return user?.id || user?._id || user?.userId || (() => {
+      const storageKey = `proxispeak_uid_${username}`;
+      let stored = null;
+      try { stored = localStorage.getItem(storageKey); } catch (_e) {}
+      if (!stored) {
+        stored = 'usr_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);
+        try { localStorage.setItem(storageKey, stored); } catch (_e) {}
+      }
+      return stored;
+    })();
+  }, [user, username]);
+
   const canvasRef   = useRef(null);
   const stateRef    = useRef({ x: activeTheme.spawn.x, y: activeTheme.spawn.y, keys: {}, moving: false });
   const peersRef    = useRef({}); // { socketId: { x, y, username, avatarColor, isMuted } }
@@ -918,7 +932,17 @@ export default function WorldCanvas({
 
     // 2. Draw remote peers — 60fps smooth interpolation & walking dynamics
     const LERP = 0.20; // 60fps convergence factor for 50ms socket updates
+    const renderedParticipants = new Set();
+    if (stableUserId) renderedParticipants.add(stableUserId);
+    if (username) renderedParticipants.add(username);
+
     for (const [peerId, peer] of Object.entries(peersRef.current)) {
+      // Strict canvas deduplication: exactly 1 avatar per unique participant ID / username
+      const pKey = peer.userId || peer.username;
+      if (pKey && renderedParticipants.has(pKey)) {
+        continue;
+      }
+      if (pKey) renderedParticipants.add(pKey);
       const vol = peerVolumesRef.current[peerId] || 0;
       const intensity = peerIntensitiesRef.current[peerId] || 0;
       const acoustic = peerAcousticsRef.current[peerId] || null;
@@ -1151,11 +1175,11 @@ export default function WorldCanvas({
 
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
-      socket.emit('join-room', { username, avatarColor, roomId, isMuted: isMutedRef.current });
+      socket.emit('join-room', { userId: stableUserId, username, avatarColor, roomId, isMuted: isMutedRef.current });
     });
 
-    // Populate existing peers and initiate WebRTC connections
-    socket.on('room-state', ({ selfId, users, doors: initialDoors }) => {
+    // Populate existing peers and initiate WebRTC connections (deduplicated by stable userId)
+    socket.on('room-state', ({ selfId, selfUserId, users, doors: initialDoors }) => {
       if (initialDoors) {
         setDoors((prev) => {
           const next = { ...prev };
@@ -1174,25 +1198,61 @@ export default function WorldCanvas({
           return next;
         });
       }
-      peersRef.current = {};
+
+      const newPeers = {};
+      const activeSocketIds = new Set();
+      const myUid = selfUserId || stableUserId;
+
       for (const u of users) {
-        if (u.id !== selfId) {
-          peersRef.current[u.id] = {
-            x: u.x,
-            y: u.y,
-            targetX: u.x,
-            targetY: u.y,
-            renderX: u.x,
-            renderY: u.y,
-            username: u.username,
-            avatarColor: u.avatarColor,
-            isMuted: u.isMuted ?? false,
-          };
-          if (!webrtc.peers.has(u.id)) {
-            webrtc.connectToPeer(u.id);
+        // Skip self: Never add local participant to remote peers list
+        if (u.id === selfId || (u.userId && u.userId === myUid) || u.username === username) {
+          continue;
+        }
+
+        // Deduplication: If this userId already exists in newPeers, remove the older socket reference
+        if (u.userId) {
+          const existingEntry = Object.entries(newPeers).find(([_, p]) => p.userId === u.userId);
+          if (existingEntry) {
+            const [oldId] = existingEntry;
+            delete newPeers[oldId];
+            webrtc.removePeer(oldId);
+            spatialAudio.removePeerStream(oldId);
           }
         }
+
+        activeSocketIds.add(u.id);
+        const prev = peersRef.current[u.id];
+
+        newPeers[u.id] = {
+          userId: u.userId,
+          x: u.x,
+          y: u.y,
+          targetX: u.x,
+          targetY: u.y,
+          renderX: prev?.renderX ?? u.x,
+          renderY: prev?.renderY ?? u.y,
+          username: u.username,
+          avatarColor: u.avatarColor,
+          isMuted: u.isMuted ?? false,
+        };
+
+        if (!webrtc.peers.has(u.id)) {
+          webrtc.connectToPeer(u.id);
+        }
       }
+
+      // Cleanup any active connections for peers that are no longer in room-state
+      for (const oldId of Object.keys(peersRef.current)) {
+        if (!activeSocketIds.has(oldId)) {
+          webrtc.removePeer(oldId);
+          spatialAudio.removePeerStream(oldId);
+          delete peerVolumesRef.current[oldId];
+          delete peerIntensitiesRef.current[oldId];
+          delete peerAcousticsRef.current[oldId];
+        }
+      }
+
+      peersRef.current = newPeers;
     });
 
     // Door state changed (opened or closed by a member)
@@ -1274,9 +1334,29 @@ export default function WorldCanvas({
       showToast(`${dName}: ${reason}`, 'alert');
     });
 
-    // Existing user gets notified of new peer
-    socket.on('user-joined', ({ id, username: uname, avatarColor: ucolor, x, y, isMuted: peerMuted }) => {
+    // Existing user gets notified of new peer (deduplicated by stable userId)
+    socket.on('user-joined', ({ id, userId: peerUserId, username: uname, avatarColor: ucolor, x, y, isMuted: peerMuted }) => {
+      // Ignore self notifications
+      if (id === socket.id || (peerUserId && peerUserId === stableUserId) || uname === username) {
+        return;
+      }
+
+      // If an existing entry for this userId is present under another socket, replace it cleanly
+      if (peerUserId) {
+        for (const [existingId, peer] of Object.entries(peersRef.current)) {
+          if (peer.userId === peerUserId || existingId === id) {
+            delete peersRef.current[existingId];
+            delete peerVolumesRef.current[existingId];
+            delete peerIntensitiesRef.current[existingId];
+            delete peerAcousticsRef.current[existingId];
+            webrtc.removePeer(existingId);
+            spatialAudio.removePeerStream(existingId);
+          }
+        }
+      }
+
       peersRef.current[id] = {
+        userId: peerUserId,
         x,
         y,
         targetX: x,
@@ -1292,13 +1372,17 @@ export default function WorldCanvas({
       }
     });
 
-    // Peer moves — update target for interpolation, not the rendered position
-    socket.on('user-moved', ({ id, x, y }) => {
-      if (peersRef.current[id]) {
-        peersRef.current[id].x = x;
-        peersRef.current[id].y = y;
-        peersRef.current[id].targetX = x;
-        peersRef.current[id].targetY = y;
+    // Peer moves — update target for interpolation by socket ID or stable userId
+    socket.on('user-moved', ({ id, userId: moverUserId, x, y }) => {
+      let peer = peersRef.current[id];
+      if (!peer && moverUserId) {
+        peer = Object.values(peersRef.current).find((p) => p.userId === moverUserId);
+      }
+      if (peer) {
+        peer.x = x;
+        peer.y = y;
+        peer.targetX = x;
+        peer.targetY = y;
       }
     });
 
@@ -1310,13 +1394,26 @@ export default function WorldCanvas({
     });
 
     // Peer leaves
-    socket.on('user-left', ({ id }) => {
+    socket.on('user-left', ({ id, userId: leftUserId }) => {
       delete peersRef.current[id];
       delete peerVolumesRef.current[id];
       delete peerIntensitiesRef.current[id];
       delete peerAcousticsRef.current[id];
       webrtc.removePeer(id);
       spatialAudio.removePeerStream(id);
+
+      if (leftUserId) {
+        for (const [sockId, peer] of Object.entries(peersRef.current)) {
+          if (peer.userId === leftUserId) {
+            delete peersRef.current[sockId];
+            delete peerVolumesRef.current[sockId];
+            delete peerIntensitiesRef.current[sockId];
+            delete peerAcousticsRef.current[sockId];
+            webrtc.removePeer(sockId);
+            spatialAudio.removePeerStream(sockId);
+          }
+        }
+      }
     });
 
     // Room chat messages

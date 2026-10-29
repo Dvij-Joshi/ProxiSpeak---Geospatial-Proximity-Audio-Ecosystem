@@ -126,10 +126,15 @@ class WebRTCManager {
     const timer = setTimeout(() => {
       this._offerWatchdogs.delete(peerId);
       if (this.peers.has(peerId) && pc.signalingState === 'have-local-offer') {
-        console.warn(`[WebRTC] Offer to ${peerId} timed out in have-local-offer. Auto-recovering peer connection.`);
-        this.resetPeer(peerId);
+        console.warn(`[WebRTC] Offer to ${peerId} timed out in have-local-offer. Attempting targeted ICE restart recovery.`);
+        try {
+          if (typeof pc.restartIce === 'function') pc.restartIce();
+          this.initiateOffer(peerId, pc, 0, true);
+        } catch (_e) {
+          this.resetPeer(peerId);
+        }
       }
-    }, 3800);
+    }, 6500);
     this._offerWatchdogs.set(peerId, timer);
   }
 
@@ -158,27 +163,19 @@ class WebRTCManager {
         const isPolite = Boolean(this.socket && this.socket.id < from);
         const offerCollision = meta.isMakingOffer || pc.signalingState !== 'stable';
 
-        // Glare handling
-        if (offerCollision) {
-          if (!isPolite && pc.signalingState === 'have-local-offer') {
-            console.warn(`[WebRTC] Glare with ${from}: impolite peer ignoring colliding offer`);
-            return;
-          }
+        meta.isIgnoringOffer = !isPolite && offerCollision;
+        if (meta.isIgnoringOffer) {
+          console.warn(`[WebRTC] Glare with ${from}: impolite peer safely ignoring colliding offer`);
+          return;
+        }
 
+        // Polite peer yields and rolls back local description to accept the remote offer
+        if (offerCollision && isPolite) {
           if (pc.signalingState === 'have-local-offer') {
-            let rolledBack = false;
             try {
               await pc.setLocalDescription({ type: 'rollback' });
-              rolledBack = (pc.signalingState === 'stable');
             } catch (_rbErr) {
-              rolledBack = false;
-            }
-
-            if (!rolledBack) {
-              // Rollback unsupported (Safari/WebKit) — recreate peer cleanly to accept remote offer
-              console.log(`[WebRTC] Glare rollback unsupported on this browser; cleanly resetting peer for ${from}`);
-              this.removePeer(from);
-              pc = this.getOrCreatePeer(from, false);
+              console.warn('[WebRTC] Rollback error:', _rbErr.message);
             }
           }
         }
@@ -522,16 +519,23 @@ class WebRTCManager {
           } catch (_e) {}
         }
 
-        // Ensure transceiver direction is sendrecv
+        // Ensure transceiver direction is sendrecv and renegotiate if media direction upgraded
         const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
         const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
-        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
-          console.log(`[WebRTC] Upgrading transceiver direction to sendrecv for ${peerId}`);
-          audioTransceiver.direction = 'sendrecv';
-          needsRenegotiation = true;
+        if (audioTransceiver) {
+          if (audioTransceiver.direction !== 'sendrecv') {
+            console.log(`[WebRTC] Upgrading transceiver direction to sendrecv for ${peerId}`);
+            audioTransceiver.direction = 'sendrecv';
+            needsRenegotiation = true;
+          }
+          // If the last negotiated SDP direction was recvonly or inactive, we MUST renegotiate to send audio packets!
+          if (audioTransceiver.currentDirection && audioTransceiver.currentDirection !== 'sendrecv') {
+            console.log(`[WebRTC] currentDirection is ${audioTransceiver.currentDirection}; triggering renegotiation to sendrecv for ${peerId}`);
+            needsRenegotiation = true;
+          }
         }
 
-        // Only renegotiate if transceiver direction actually changed or new track added
+        // Renegotiate when media upgrade requires SDP update
         if (needsRenegotiation) {
           if (pc.signalingState === 'stable') {
             this.initiateOffer(peerId, pc);
@@ -621,6 +625,9 @@ class WebRTCManager {
 
       event.track.onunmute = () => {
         console.log(`[WebRTC] Remote track unmuted for ${peerId}`);
+        if (this.onRemoteTrackCallback) {
+          this.onRemoteTrackCallback(peerId, remoteStream);
+        }
       };
 
       event.track.onmute = () => {

@@ -516,7 +516,7 @@ class SpatialAudioManager {
     if (existing && existing.stream) {
       const existingTrack = existing.stream.getAudioTracks()[0];
       const newTrack = mediaStream.getAudioTracks()[0];
-      if (existingTrack && newTrack && existingTrack.id === newTrack.id) {
+      if (existingTrack && newTrack && existingTrack.id === newTrack.id && existingTrack.readyState === 'live') {
         console.log(`[SpatialAudio] Track ${newTrack.id} already active for ${peerId}`);
         if (existing.audioEl && existing.audioEl.paused) {
           existing.audioEl.play().catch(() => {});
