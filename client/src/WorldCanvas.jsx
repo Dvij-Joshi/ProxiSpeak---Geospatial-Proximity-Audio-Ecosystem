@@ -607,7 +607,7 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
   if (isMe) {
     ctx.beginPath();
     ctx.arc(x, y, MAX_DISTANCE, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.22)';
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.32)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 6]);
     ctx.stroke();
@@ -918,7 +918,15 @@ export default function WorldCanvas({
 
     // 2. Draw remote peers — 60fps smooth interpolation & walking dynamics
     const LERP = 0.20; // 60fps convergence factor for 50ms socket updates
+    const myNameNorm = username?.trim().toLowerCase();
     for (const [peerId, peer] of Object.entries(peersRef.current)) {
+      if (peerId === socketRef.current?.id || (myNameNorm && peer.username?.trim().toLowerCase() === myNameNorm)) {
+        delete peersRef.current[peerId];
+        delete peerVolumesRef.current[peerId];
+        delete peerIntensitiesRef.current[peerId];
+        delete peerAcousticsRef.current[peerId];
+        continue;
+      }
       const vol = peerVolumesRef.current[peerId] || 0;
       const intensity = peerIntensitiesRef.current[peerId] || 0;
       const acoustic = peerAcousticsRef.current[peerId] || null;
@@ -1175,8 +1183,10 @@ export default function WorldCanvas({
         });
       }
       peersRef.current = {};
+      const myNameNorm = username?.trim().toLowerCase();
       for (const u of users) {
-        if (u.id !== selfId) {
+        const uNameNorm = u.username?.trim().toLowerCase();
+        if (u.id !== selfId && (!myNameNorm || uNameNorm !== myNameNorm)) {
           peersRef.current[u.id] = {
             x: u.x,
             y: u.y,
@@ -1276,6 +1286,11 @@ export default function WorldCanvas({
 
     // Existing user gets notified of new peer
     socket.on('user-joined', ({ id, username: uname, avatarColor: ucolor, x, y, isMuted: peerMuted }) => {
+      const myNameNorm = username?.trim().toLowerCase();
+      const uNameNorm = uname?.trim().toLowerCase();
+      if (id === socket.id || (myNameNorm && uNameNorm === myNameNorm)) {
+        return;
+      }
       peersRef.current[id] = {
         x,
         y,
@@ -1294,6 +1309,7 @@ export default function WorldCanvas({
 
     // Peer moves — update target for interpolation, not the rendered position
     socket.on('user-moved', ({ id, x, y }) => {
+      if (id === socket.id) return;
       if (peersRef.current[id]) {
         peersRef.current[id].x = x;
         peersRef.current[id].y = y;
@@ -1392,6 +1408,16 @@ export default function WorldCanvas({
       const checkDoors = Boolean(activeTheme.hasDoors);
       if (dx && !collidesWithWall(s.x + dx, s.y, activeTheme.walls, doorsRef.current, checkDoors)) s.x += dx;
       if (dy && !collidesWithWall(s.x, s.y + dy, activeTheme.walls, doorsRef.current, checkDoors)) s.y += dy;
+
+      // Purge any duplicate of self before calculating spatial audio
+      for (const [peerId, peer] of Object.entries(peersRef.current)) {
+        if (peerId === socketRef.current?.id || (myNameNorm && peer.username?.trim().toLowerCase() === myNameNorm)) {
+          delete peersRef.current[peerId];
+          delete peerVolumesRef.current[peerId];
+          delete peerIntensitiesRef.current[peerId];
+          delete peerAcousticsRef.current[peerId];
+        }
+      }
 
       // Update Web Audio distance attenuation, room isolation & wall raycasting
       const themeKey = activeTheme?.id || 'office';

@@ -9,8 +9,8 @@
  *  - Comprehensive Browser Autoplay Recovery & Audio Unlock
  */
 
-export const MIN_DISTANCE = 30;
-export const MAX_DISTANCE = 420; // 420px hearing range on 1200px canvas for clear pod-to-pod voice
+export const MIN_DISTANCE = 25;
+export const MAX_DISTANCE = 100; // 100px hearing range
 
 const W = 1200;
 const H = 680;
@@ -78,35 +78,35 @@ export const ROOMS = [
     name: 'Meeting Room',
     bounds: { x1: 18, y1: 18, x2: 320, y2: 268 },
     isIsolated: true,
-    maxDistance: 360,
+    maxDistance: 100,
   },
   {
     id: 'manager-office',
     name: "Manager's Office",
     bounds: { x1: 350, y1: 18, x2: 590, y2: 235 },
     isIsolated: true,
-    maxDistance: 320,
+    maxDistance: 100,
   },
   {
     id: 'tech-server',
     name: 'Tech / Server',
     bounds: { x1: 860, y1: 18, x2: 1182, y2: 245 },
     isIsolated: false,
-    maxDistance: 320,
+    maxDistance: 100,
   },
   {
     id: 'lounge-break',
     name: 'Lounge & Break',
     bounds: { x1: 18, y1: 485, x2: 300, y2: 670 },
     isIsolated: false,
-    maxDistance: 320,
+    maxDistance: 100,
   },
   {
     id: 'print-copy',
     name: 'Print / Copy',
     bounds: { x1: 935, y1: 480, x2: 1182, y2: 670 },
     isIsolated: false,
-    maxDistance: 300,
+    maxDistance: 100,
   },
 ];
 
@@ -255,7 +255,7 @@ export function calculateAcoustics(localPos, remotePos, doorStates = {}, theme =
         filterFreq = 300;
         status = isDoorClosed ? 'door-closed' : 'blocked-wall';
       } else {
-        const doorwayMaxD = 220;
+        const doorwayMaxD = 100;
         if (distance < doorwayMaxD) {
           const ratio = distance / doorwayMaxD;
           targetGain = Math.pow(1 - ratio, 1.25) * 0.75;

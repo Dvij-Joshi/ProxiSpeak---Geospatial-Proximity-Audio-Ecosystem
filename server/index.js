@@ -992,6 +992,28 @@ io.on('connection', (socket) => {
       const userMuted = typeof isMuted === 'boolean' ? isMuted : true;
 
       const roomUsers = getRoomUsers(roomId);
+
+      // Evict any stale duplicate sockets for this username across all rooms
+      const targetUserLower = username?.trim().toLowerCase();
+      for (const [rId, usersMap] of rooms.entries()) {
+        for (const [existingSocketId, existingUser] of usersMap.entries()) {
+          const existingUserLower = existingUser.username?.trim().toLowerCase();
+          if (
+            (existingSocketId === socket.id || (targetUserLower && existingUserLower === targetUserLower)) &&
+            (rId !== roomId || existingSocketId !== socket.id)
+          ) {
+            console.log(`[Room] Evicting stale duplicate session for "${username}" in "${rId}" (old socket: ${existingSocketId})`);
+            usersMap.delete(existingSocketId);
+            io.to(rId).emit('user-left', { id: existingSocketId });
+            const oldSocket = io.sockets.sockets.get(existingSocketId);
+            if (oldSocket && existingSocketId !== socket.id) {
+              oldSocket.leave(rId);
+              oldSocket.disconnect(true);
+            }
+          }
+        }
+      }
+
       roomUsers.set(socket.id, { username, avatarColor, x: spawnX, y: spawnY, isMuted: userMuted });
 
       socket.join(roomId);
