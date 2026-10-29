@@ -994,15 +994,24 @@ io.on('connection', (socket) => {
 
       const roomUsers = getRoomUsers(roomId);
 
-      // Deduplicate: Clean up any stale/previous socket for this same participant ID in the room
-      for (const [existingSocketId, existingUser] of roomUsers.entries()) {
-        if (existingSocketId !== socket.id && (existingUser.userId === effectiveUserId || existingUser.username === username)) {
-          console.log(`[Room] Replacing stale socket ${existingSocketId} for participant "${username}" (ID: ${effectiveUserId}) with ${socket.id}`);
-          roomUsers.delete(existingSocketId);
-          io.to(roomId).emit('user-left', { id: existingSocketId, userId: effectiveUserId });
-          const oldSock = io.sockets.sockets.get(existingSocketId);
-          if (oldSock) {
-            try { oldSock.leave(roomId); } catch (_e) {}
+      // Evict any stale duplicate sockets for this participant ID or username across all rooms
+      const targetUserLower = username?.trim().toLowerCase();
+      for (const [rId, usersMap] of rooms.entries()) {
+        for (const [existingSocketId, existingUser] of usersMap.entries()) {
+          const existingUserLower = existingUser.username?.trim().toLowerCase();
+          const isSameParticipant = existingUser.userId === effectiveUserId || (targetUserLower && existingUserLower === targetUserLower);
+          if (
+            (existingSocketId !== socket.id && isSameParticipant) ||
+            (existingSocketId === socket.id && rId !== roomId)
+          ) {
+            console.log(`[Room] Evicting stale duplicate session for "${username}" (ID: ${effectiveUserId}) in "${rId}" (old socket: ${existingSocketId})`);
+            usersMap.delete(existingSocketId);
+            io.to(rId).emit('user-left', { id: existingSocketId, userId: effectiveUserId });
+            const oldSocket = io.sockets.sockets.get(existingSocketId);
+            if (oldSocket && existingSocketId !== socket.id) {
+              try { oldSocket.leave(rId); } catch (_e) {}
+              try { oldSocket.disconnect(true); } catch (_e) {}
+            }
           }
         }
       }
