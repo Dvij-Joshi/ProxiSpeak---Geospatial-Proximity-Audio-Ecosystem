@@ -755,6 +755,7 @@ export default function WorldCanvas({
   onLeave,
 }) {
   const username = user?.username || propUsername || 'Anonymous';
+  const myNameNorm = username.trim().toLowerCase();
   const avatarColor = user?.avatarColor || propAvatarColor || '#3b82f6';
   const roomId = room?.roomId || propRoomId || 'main-office';
   const roomName = room?.name || propRoomName || 'Workspace';
