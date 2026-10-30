@@ -4,409 +4,393 @@
 1. [Base URL](#base-url)
 2. [Authentication](#authentication)
 3. [REST Endpoints](#rest-endpoints)
-   - [Health Check](#health-check)
-   - [Proximity](#proximity)
-   - [Users](#users)
-4. [Socket.io Events](#socketio-events)
-   - [Client → Server](#client--server-events)
-   - [Server → Client](#server--client-events)
-5. [Data Models](#data-models)
-6. [Error Codes](#error-codes)
+   - [Authentication Endpoints](#authentication-endpoints)
+   - [Room Management](#room-management)
+   - [ICE & NAT Traversal](#ice--nat-traversal)
+   - [Health Diagnostics](#health-diagnostics)
+   - [Proximity Endpoints](#proximity-endpoints)
+4. [Socket.io Event Specification](#socketio-event-specification)
+   - [Connection & Room Lifecycle](#connection--room-lifecycle)
+   - [Movement & Coordinates](#movement--coordinates)
+   - [WebRTC Signaling](#webrtc-signaling)
+   - [Room Chat](#room-chat)
+   - [Door Access & Knock-to-Enter](#door-access--knock-to-enter)
+5. [Error Handling & Status Codes](#error-handling--status-codes)
 
 ---
 
 ## Base URL
 
 ```
-http://localhost:5000/api
+http://localhost:5000
 ```
-
-In production, replace with your deployed server URL.
+In production, replace with your deployed server URL (e.g., `https://proxispeak-server.onrender.com`).
 
 ---
 
 ## Authentication
 
-> Currently, ProxiSpeak uses **socket-based session identity** (no JWT). The `socketId` is automatically assigned by Socket.io on connection. Future versions will support JWT for persistent user accounts.
+ProxiSpeak uses **JWT (JSON Web Tokens)** for account authentication. Upon successful registration or login, the server returns a signed token with 14-day validity.
+
+Protected REST endpoints require the token in the HTTP `Authorization` header:
+```http
+Authorization: Bearer <jwt_token>
+```
 
 ---
 
 ## REST Endpoints
 
-### Health Check
+### Authentication Endpoints
 
-#### `GET /health`
-
-Returns server health status.
-
-**Response `200 OK`:**
-```json
-{
-  "status": "ok",
-  "uptime": 3621.44,
-  "timestamp": "2025-10-10T10:00:00.000Z",
-  "db": "connected"
-}
-```
-
----
-
-### Proximity
-
-#### `GET /api/proximity/:userId`
-
-Finds all users currently within earshot (100-unit radius) of the given user.
-
-**URL Parameters:**
-
-| Parameter | Type | Description |
-|---|---|---|
-| `userId` | `string` | The MongoDB `_id` of the querying user |
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "userId": "64f3a2b1c0d1234567890abc",
-  "nearbyUsers": [
-    {
-      "_id": "64f3a2b1c0d1234567890def",
-      "username": "Alice",
-      "avatarColor": "#4A90D9",
-      "location": {
-        "type": "Point",
-        "coordinates": [245, 312]
-      },
-      "distance": 43.2
-    }
-  ],
-  "count": 1
-}
-```
-
-**Response `404 Not Found`:**
-```json
-{
-  "success": false,
-  "error": "User not found"
-}
-```
-
----
-
-#### `POST /api/proximity/update`
-
-Updates the authenticated user's geospatial position. Called when the avatar moves significantly (debounced on client).
+#### `POST /api/auth/register`
+Creates a new persistent user account.
 
 **Request Body:**
 ```json
 {
-  "userId": "64f3a2b1c0d1234567890abc",
-  "x": 300,
-  "y": 450,
-  "roomId": "main-office"
-}
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `userId` | `string` | ✅ | MongoDB user `_id` |
-| `x` | `number` | ✅ | Canvas X coordinate (0–1920) |
-| `y` | `number` | ✅ | Canvas Y coordinate (0–1080) |
-| `roomId` | `string` | ✅ | Virtual room identifier |
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "updated": {
-    "_id": "64f3a2b1c0d1234567890abc",
-    "location": { "type": "Point", "coordinates": [300, 450] }
-  },
-  "nearbyUsers": ["64f3a2b1c0d1234567890def"]
-}
-```
-
----
-
-#### `GET /api/proximity/room/:roomId`
-
-Returns all active users in a given virtual room along with their positions.
-
-**URL Parameters:**
-
-| Parameter | Type | Description |
-|---|---|---|
-| `roomId` | `string` | The room identifier (e.g., `main-office`) |
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "roomId": "main-office",
-  "users": [
-    {
-      "_id": "64f3a2b1c0d1234567890abc",
-      "username": "Bob",
-      "avatarColor": "#E94E4E",
-      "location": { "type": "Point", "coordinates": [150, 200] }
-    }
-  ],
-  "count": 1
-}
-```
-
----
-
-### Users
-
-#### `POST /api/users/join`
-
-Registers a new user session when they join the virtual office.
-
-**Request Body:**
-```json
-{
-  "username": "Dvij",
-  "avatarColor": "#6A0DAD",
-  "roomId": "main-office",
-  "socketId": "abc123xyz"
+  "username": "dvijjoshi",
+  "email": "dvij@example.com",
+  "password": "SecurePassword123!",
+  "avatarColor": "#3b82f6"
 }
 ```
 
 **Response `201 Created`:**
 ```json
 {
-  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
-    "_id": "64f3a2b1c0d1234567890abc",
-    "username": "Dvij",
-    "avatarColor": "#6A0DAD",
-    "roomId": "main-office",
-    "location": { "type": "Point", "coordinates": [960, 540] }
+    "id": "67213456789abcdef0123456",
+    "username": "dvijjoshi",
+    "email": "dvij@example.com",
+    "avatarColor": "#3b82f6"
   }
 }
 ```
 
 ---
 
-#### `DELETE /api/users/:socketId`
+#### `POST /api/auth/login`
+Authenticates an existing user via case-insensitive username or email.
 
-Removes a user from the active session (called on socket disconnect).
+**Request Body:**
+```json
+{
+  "identifier": "dvijjoshi",
+  "password": "SecurePassword123!"
+}
+```
+
+**Response `200 OK`:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "67213456789abcdef0123456",
+    "username": "dvijjoshi",
+    "email": "dvij@example.com",
+    "avatarColor": "#3b82f6"
+  }
+}
+```
+
+---
+
+#### `GET /api/auth/me`
+Fetches the currently authenticated profile. Requires `Authorization: Bearer <token>`.
+
+**Response `200 OK`:**
+```json
+{
+  "user": {
+    "id": "67213456789abcdef0123456",
+    "username": "dvijjoshi",
+    "email": "dvij@example.com",
+    "avatarColor": "#3b82f6"
+  }
+}
+```
+
+---
+
+### Room Management
+
+#### `GET /api/rooms`
+Returns a list of all active public workspaces (defaults, memory rooms, and MongoDB database rooms) with real-time occupant counts.
+
+**Response `200 OK`:**
+```json
+[
+  {
+    "roomId": "main-office",
+    "name": "Corporate Office",
+    "theme": "office",
+    "description": "Executive suites, conference tables, and open team desks.",
+    "createdBy": "system",
+    "isPublic": true,
+    "activeUsers": 4
+  },
+  {
+    "roomId": "conference-hall",
+    "name": "Conference & Breakout Center",
+    "theme": "conference",
+    "description": "Keynote stage, presentation hall, and discussion breakouts.",
+    "createdBy": "system",
+    "isPublic": true,
+    "activeUsers": 0
+  }
+]
+```
+
+---
+
+#### `POST /api/rooms`
+Creates a new formally hosted meeting room and persists it in MongoDB. Rate-limited to prevent spam.
+
+**Request Body:**
+```json
+{
+  "name": "Design Sprint Pod",
+  "theme": "office",
+  "createdBy": "dvijjoshi"
+}
+```
+
+**Response `201 Created`:**
+```json
+{
+  "roomId": "design-sprin-a3b4",
+  "name": "Design Sprint Pod",
+  "theme": "office",
+  "createdBy": "dvijjoshi",
+  "isPublic": true,
+  "activeUsers": 0
+}
+```
+
+---
+
+#### `GET /api/rooms/:roomId`
+Fetches metadata for a specific room. Falls back to generating a valid ad-hoc room configuration if joining via shared link.
+
+**Response `200 OK`:**
+```json
+{
+  "roomId": "team-standup-a4f2",
+  "name": "Team Standup",
+  "theme": "office",
+  "createdBy": "dvijjoshi",
+  "activeUsers": 2
+}
+```
+
+---
+
+### ICE & NAT Traversal
+
+#### `GET /api/ice-servers`
+Fetches dynamically configured STUN/TURN credentials from the Metered API with automated domain normalization and fallback Google STUN servers.
+
+**Response `200 OK`:**
+```json
+[
+  {
+    "urls": "stun:stun.relay.metered.ca:80"
+  },
+  {
+    "urls": "turn:standard.relay.metered.ca:80",
+    "username": "c8a4...",
+    "credential": "f7b2..."
+  }
+]
+```
+
+---
+
+### Health Diagnostics
+
+#### `GET /api/health`
+Returns comprehensive operational metrics, database connection status, active room counts, and server uptime.
+
+**Response `200 OK`:**
+```json
+{
+  "status": "ok",
+  "service": "ProxiSpeak API Server",
+  "database": "connected (MongoDB)",
+  "dbReadyState": 1,
+  "registeredAccountsInMemory": 12,
+  "activeRoomCount": 3,
+  "uptimeSeconds": 14250,
+  "timestamp": "2026-10-30T15:40:00.000Z"
+}
+```
+
+---
+
+### Proximity Endpoints
+
+#### `GET /api/proximity/:userId`
+Queries nearby users using MongoDB's `$near` planar spatial operator within the 100-pixel radius.
 
 **Response `200 OK`:**
 ```json
 {
   "success": true,
-  "message": "User removed from session"
+  "userId": "67213456789abcdef0123456",
+  "nearbyUsers": [
+    {
+      "_id": "67213456789abcdef0123499",
+      "username": "kunj",
+      "avatarColor": "#10b981",
+      "location": [640, 360],
+      "distance": 32.5
+    }
+  ],
+  "count": 1
 }
 ```
 
 ---
 
-## Socket.io Events
+## Socket.io Event Specification
 
-Connect to the Socket.io server at `ws://localhost:5000`.
+### Connection & Room Lifecycle
 
-### Client → Server Events
-
-#### `join-room`
-Emitted when a user enters the virtual office.
-
-```js
-socket.emit("join-room", {
-  userId: "64f3a2b1c0d1234567890abc",
-  username: "Dvij",
+#### `join-room` (Client → Server)
+Emitted immediately upon entering a workspace. The server registers the socket, evicts any stale duplicate sessions, and responds with the room state.
+```javascript
+socket.emit('join-room', {
+  username: "dvijjoshi",
+  avatarColor: "#3b82f6",
   roomId: "main-office",
-  x: 960,
-  y: 540
+  isMuted: true
 });
+```
+
+#### `room-state` (Server → Client)
+Dispatched exclusively to the joining socket. Contains all current room occupants and door states.
+```javascript
+socket.on('room-state', ({ selfId, users, doors }) => {
+  // users: [{ id, username, avatarColor, x, y, isMuted }]
+  // doors: { 'meeting-room': { isOpen, accessed, changedBy } }
+});
+```
+
+#### `user-joined` (Server → Client)
+Broadcast to all existing room occupants when a new peer arrives.
+```javascript
+socket.on('user-joined', ({ id, username, avatarColor, x, y, isMuted }) => { ... });
+```
+
+#### `user-left` (Server → Client)
+Broadcast when a peer disconnects or leaves the room.
+```javascript
+socket.on('user-left', ({ id }) => { ... });
 ```
 
 ---
 
-#### `move`
-Emitted when the user's avatar changes position. Throttled to max once per **50ms** on the client.
+### Movement & Coordinates
 
-```js
-socket.emit("move", {
-  userId: "64f3a2b1c0d1234567890abc",
-  x: 320,
-  y: 450,
+#### `move` (Client → Server)
+Emitted by the client when the avatar moves. Throttled to 20 Hz (every 50ms) and rate-limited on the server to 45 packets/sec.
+```javascript
+socket.emit('move', {
+  x: 615,
+  y: 382,
   roomId: "main-office"
 });
 ```
 
+#### `user-moved` (Server → Client)
+Broadcast to other room members to update their LERP interpolation targets (`targetX`, `targetY`).
+```javascript
+socket.on('user-moved', ({ id, x, y }) => { ... });
+```
+
 ---
 
-#### `webrtc-offer`
-Relays a WebRTC SDP offer to a specific peer.
+### WebRTC Signaling
 
-```js
-socket.emit("webrtc-offer", {
-  to: "targetSocketId",
-  from: socket.id,
-  offer: RTCSessionDescriptionInit   // { type: "offer", sdp: "..." }
+#### `webrtc-offer` (Bidirectional)
+Relays SDP offer between peers within the same room.
+```javascript
+socket.emit('webrtc-offer', { to: peerSocketId, offer: sdpOffer });
+socket.on('webrtc-offer', ({ from, offer }) => { ... });
+```
+
+#### `webrtc-answer` (Bidirectional)
+Relays SDP answer back to the initiating peer.
+```javascript
+socket.emit('webrtc-answer', { to: peerSocketId, answer: sdpAnswer });
+socket.on('webrtc-answer', ({ from, answer }) => { ... });
+```
+
+#### `ice-candidate` (Bidirectional)
+Relays candidate network pathways for peer connectivity.
+```javascript
+socket.emit('ice-candidate', { to: peerSocketId, candidate: iceCandidate });
+socket.on('ice-candidate', ({ from, candidate }) => { ... });
+```
+
+---
+
+### Room Chat
+
+#### `room:chat:message` (Bidirectional)
+Relays text messages strictly within the active workspace.
+```javascript
+// Send
+socket.emit('room:chat:message', {
+  roomId: "main-office",
+  sender: "dvijjoshi",
+  message: "Can everyone hear me clearly?"
 });
+
+// Receive
+socket.on('room:chat:message', ({ id, sender, message, avatarColor, timestamp }) => { ... });
 ```
 
 ---
 
-#### `webrtc-answer`
-Relays a WebRTC SDP answer back to the initiating peer.
+### Door Access & Knock-to-Enter
 
-```js
-socket.emit("webrtc-answer", {
-  to: "targetSocketId",
-  from: socket.id,
-  answer: RTCSessionDescriptionInit  // { type: "answer", sdp: "..." }
-});
+#### `toggle-door` (Client → Server)
+Requests to open or close an enclosed room door.
+```javascript
+socket.emit('toggle-door', { roomId: "main-office", doorKey: "meeting-room", isOpen: false });
+```
+
+#### `knock-door` (Client → Server)
+Knocks on an occupied room door from the hallway. Cooldown of 3 seconds.
+```javascript
+socket.emit('knock-door', { roomId: "main-office", doorKey: "meeting-room" });
+```
+
+#### `welcome-visitor` (Client → Server)
+Occupants welcome a waiting visitor into their room.
+```javascript
+socket.emit('welcome-visitor', { roomId: "main-office", doorKey: "meeting-room", visitorSocketId });
+```
+
+#### `decline-visitor` (Client → Server)
+Occupants decline a visitor's knock request.
+```javascript
+socket.emit('decline-visitor', { roomId: "main-office", doorKey: "meeting-room", visitorSocketId, reason });
 ```
 
 ---
 
-#### `ice-candidate`
-Relays an ICE candidate to a peer for NAT traversal.
+## Error Handling & Status Codes
 
-```js
-socket.emit("ice-candidate", {
-  to: "targetSocketId",
-  from: socket.id,
-  candidate: RTCIceCandidateInit
-});
-```
-
----
-
-### Server → Client Events
-
-#### `room-users`
-Sent immediately after `join-room`. Contains the current list of all users in the room.
-
-```js
-socket.on("room-users", (data) => {
-  // data: { users: [{ userId, username, x, y, socketId }] }
-});
-```
-
----
-
-#### `user-moved`
-Broadcast to all users in the room when any avatar moves.
-
-```js
-socket.on("user-moved", (data) => {
-  // data: { userId, x, y, socketId }
-});
-```
-
----
-
-#### `proximity-update`
-Sent to the mover when their proximity cluster changes (someone enters or leaves earshot).
-
-```js
-socket.on("proximity-update", (data) => {
-  // data: {
-  //   inEarshot: [{ userId, socketId, distance, deltaX }],
-  //   leftEarshot: ["socketId1", "socketId2"]
-  // }
-});
-```
-
----
-
-#### `webrtc-offer`
-Received by the target peer to begin answering a WebRTC offer.
-
-```js
-socket.on("webrtc-offer", ({ from, offer }) => {
-  // Create answer and emit "webrtc-answer"
-});
-```
-
----
-
-#### `webrtc-answer`
-Received by the initiating peer after the target accepts.
-
-```js
-socket.on("webrtc-answer", ({ from, answer }) => {
-  // Set remote description on RTCPeerConnection
-});
-```
-
----
-
-#### `ice-candidate`
-Received ICE candidate from a peer for NAT traversal.
-
-```js
-socket.on("ice-candidate", ({ from, candidate }) => {
-  // Add to RTCPeerConnection
-});
-```
-
----
-
-#### `user-disconnected`
-Emitted when a user leaves the office, so peers can close connections.
-
-```js
-socket.on("user-disconnected", ({ socketId }) => {
-  // Close and remove the RTCPeerConnection for this socketId
-});
-```
-
----
-
-## Data Models
-
-### User
-```ts
-interface User {
-  _id: string;              // MongoDB ObjectId
-  socketId: string;         // Current Socket.io session ID
-  username: string;         // Display name (max 30 chars)
-  avatarColor: string;      // Hex color string, e.g. "#4A90D9"
-  roomId: string;           // Virtual office room identifier
-  location: {
-    type: "Point";
-    coordinates: [number, number];  // [x, y] canvas coordinates
-  };
-  lastSeen: string;         // ISO 8601 timestamp
-}
-```
-
-### ProximityResult
-```ts
-interface ProximityResult {
-  userId: string;
-  socketId: string;
-  distance: number;         // Euclidean distance in canvas units
-  deltaX: number;           // Horizontal offset (for stereo panning)
-  deltaY: number;           // Vertical offset
-}
-```
-
----
-
-## Error Codes
-
-| HTTP Code | Code String | Description |
+| Code | Meaning | Context |
 |---|---|---|
-| `400` | `INVALID_COORDINATES` | X or Y coordinates out of bounds |
-| `400` | `MISSING_REQUIRED_FIELD` | Required field missing in request body |
-| `404` | `USER_NOT_FOUND` | No user with given `userId` or `socketId` |
-| `404` | `ROOM_NOT_FOUND` | No active users in specified room |
-| `500` | `DB_ERROR` | MongoDB query or connection error |
-| `500` | `INTERNAL_ERROR` | Unexpected server error |
-
-All error responses follow the format:
-```json
-{
-  "success": false,
-  "error": "ERROR_CODE",
-  "message": "Human-readable description"
-}
-```
+| `200 OK` | Request succeeded | Standard GET responses, successful login |
+| `201 Created` | Resource created | Account registered, meeting room created |
+| `400 Bad Request` | Invalid payload | Missing required username/password, malformed room data |
+| `401 Unauthorized` | Authentication failed | Incorrect password, missing or invalid JWT |
+| `404 Not Found` | Resource not found | Non-existent user ID |
+| `429 Too Many Requests` | Rate limit exceeded | Exceeded room creation or auth attempt thresholds |
+| `500 Server Error` | Internal server exception | Unhandled database or connection error |

@@ -3,84 +3,81 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18-blue)](https://reactjs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-6.x-brightgreen)](https://www.mongodb.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-brightgreen)](https://www.mongodb.com/)
 [![Socket.io](https://img.shields.io/badge/Socket.io-4.x-black)](https://socket.io/)
-[![WebRTC](https://img.shields.io/badge/WebRTC-Enabled-orange)](https://webrtc.org/)
+[![WebRTC](https://img.shields.io/badge/WebRTC-P2P%20Mesh-orange)](https://webrtc.org/)
 
-> **Remote collaboration reimagined** — a 2D virtual office where audio naturally fades in and out based on your avatar's physical proximity to others.
+> **Remote collaboration reimagined** — an interactive 2D spatial workspace where peer-to-peer WebRTC audio naturally attenuates, pans, and occludes through physical walls and doors based on your avatar's real-time position.
 
 ---
 
 ## 🌐 Problem Statement
 
-Remote collaboration tools (like Zoom) force users into rigid "rooms" where only one person can speak at a time. They lack the **spontaneous, spatial dynamics** of a real office where you can hear people talking nearby and organically walk over to join a conversation.
+Traditional video conferencing platforms force teams into rigid, static "call rooms" where only one person can effectively speak at a time. They lack the spontaneous, spatial dynamics of a physical workspace—where you can naturally overhear nearby discussions, walk over to collaborate, step into private soundproof meeting rooms, or socialize in casual lounge areas.
 
 ---
 
 ## 💡 What is ProxiSpeak?
 
-**ProxiSpeak** is a real-time, geospatially-aware audio communication platform. Users navigate a **2D virtual office** rendered via React Canvas. As your avatar moves closer to a colleague, WebRTC audio dynamically **crossfades and becomes louder**. Walk away, and it fades. No rooms. No buttons. Just natural spatial presence.
+**ProxiSpeak** is a real-time, geospatially-aware audio communication platform. Users navigate an interactive **2D virtual world** rendered at **60 FPS** via HTML5 Canvas. As avatars approach one another:
+- WebRTC audio dynamically **fades in and pans in 3D stereo** across a calibrated **100-pixel earshot zone**.
+- **Acoustic raycasting** simulates physical wall sound absorption and door muffling.
+- **Interactive soundproof rooms** provide private spaces with a structured **Knock-to-Enter** protocol.
+- All spatial audio calculations execute **100% on the client edge** using the native Web Audio API, keeping server resource usage near zero.
 
 ---
 
 ## 🏗️ Architecture at a Glance
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        CLIENT (React)                       │
-│  ┌──────────────┐  ┌────────────────┐  ┌────────────────┐  │
-│  │ WorldCanvas  │  │  WebRTC Mgr    │  │  Audio Mixer   │  │
-│  │ (HTML5 2D)   │  │  (P2P Streams) │  │  (Web Audio)   │  │
-│  └──────┬───────┘  └───────┬────────┘  └───────┬────────┘  │
-│         │  coordinates     │ offer/answer       │ gain/pan  │
-└─────────┼──────────────────┼────────────────────┼───────────┘
-          │                  │                    │
-          ▼        Socket.io / WebSocket          │
-┌─────────────────────────────────────────────────────────────┐
-│                    SERVER (Node.js + Express)               │
-│  ┌──────────────────┐       ┌───────────────────────────┐   │
-│  │  Signaling Srvr  │       │  Geospatial Engine        │   │
-│  │  (Socket.io)     │       │  (MongoDB $near/$geoW.)   │   │
-│  └──────────────────┘       └───────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                        ┌─────▼─────┐
-                        │  MongoDB  │
-                        │ (GeoJSON) │
-                        └───────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                             CLIENT (React 18)                          │
+│                                                                        │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────┐  │
+│  │   WorldCanvas    │  │   WebRTC Mesh    │  │  Spatial Audio Engine│  │
+│  │ (60fps LERP 2D)  │  │  (RTCPeerConn.)  │  │  (Web Audio API DSP) │  │
+│  └─────────┬────────┘  └────────┬─────────┘  └──────────┬───────────┘  │
+│            │ coordinates        │ SDP & ICE candidates  │ gain, pan,   │
+│            │ (20 Hz throttled)  │ signaling             │ low-pass filter
+└────────────┼────────────────────┼───────────────────────┼──────────────┘
+             │                    │                       │
+             ▼                    ▼                       ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                   CONTROL PLANE (Node.js + Express)                    │
+│                                                                        │
+│  - Socket.IO signaling broker & coordinate relay                       │
+│  - JWT authentication & bcrypt salted credential verification          │
+│  - Anti-spam throttled event routing & session deduplication           │
+│  - Room chat relay & interactive door state coordination               │
+│  * ZERO audio bytes touch or pass through this server                  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        DATA TIER (MongoDB Atlas)                       │
+│                                                                        │
+│  - Accounts: usernameLower, email, bcrypt passwordHash, avatarColor    │
+│  - Users: active presence, socketId, location: [x, y] (2d planar index)│
+│  - Rooms: persistent hosted workspace definitions & themes             │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-See [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for a detailed breakdown.
-
 ---
 
-## ✨ Key Features
+## ✨ Key Technical Capabilities
 
-| Feature | Technology |
-|---|---|
-| Real-time avatar movement | React + HTML5 Canvas |
-| Geospatial proximity clustering | MongoDB `$near` + `$geoWithin` |
-| P2P audio streaming | WebRTC (getUserMedia) |
-| Dynamic volume based on distance | Web Audio API (GainNode) |
-| 3D stereo panning (L/R ear) | Web Audio API (StereoPannerNode) |
-| Scalable WebSocket signaling | Socket.io + Redis Pub/Sub |
-| 50+ concurrent users | Node.js cluster + Redis |
-
----
-
-## 🔑 Key Modules
-
-### 1. Geospatial Engine (MongoDB `$near` & `$geoWithin`)
-Tracks real-time X/Y coordinates of all users and calculates physical proximity clusters using MongoDB's native geospatial operators.
-
-### 2. Signaling Server (Node.js & Socket.io)
-Orchestrates WebRTC peer-to-peer connection handshakes based on who is within **"earshot"** (100-pixel radius).
-
-### 3. Spatial Audio Mixer (Web Audio API)
-Frontend module that dynamically adjusts the **gain (volume)** and **3D panning (left/right ear)** of peer audio tracks based on relative avatar distance.
-
-### 4. 2D Virtual World (React & HTML5 Canvas)
-A high-performance rendering engine for the virtual office map and real-time avatar movements at a steady **60 FPS**.
+| Feature | Implementation | Description |
+|---|---|---|
+| **P2P Audio Mesh** | WebRTC + Opus 48kHz | Direct browser-to-browser encrypted UDP streams (no central audio mixer) |
+| **NAT Traversal** | Metered STUN / TURN | Automated STUN public IP discovery with fallback TURN relay for symmetric firewalls |
+| **Spatial Attenuation** | Web Audio API `GainNode` | Natural power-curve volume decay across a calibrated **100-pixel earshot radius** |
+| **3D Stereo Panning** | `StereoPannerNode` | Dynamic binaural left/right channel separation based on horizontal delta-X |
+| **Acoustic Raycasting** | 2D Line-Segment Intersection | Raycasts line of sight through walls to apply $0.35^{\text{hits}}$ volume decay & $450\text{Hz}$ low-pass muffling |
+| **Soundproof Doors** | Dynamic Arc Walls | Enclosed rooms provide private audio isolation; occupants manage knock requests |
+| **60 FPS Motion LERP** | Canvas `requestAnimationFrame` | Linear interpolation smoothly converges 20 Hz network packets into continuous 60 FPS motion |
+| **Authentication** | bcrypt + JWT | Case-insensitive accounts, salted password hashing (10 rounds), and Bearer tokens |
+| **Room Chat Sidebar** | Socket.IO Room Broadcast | Integrated real-time text chat scoped strictly to the current room |
+| **Ghost Deduplication** | Client & Server Purge | Multi-layer session cleanup eliminates stale duplicate avatars upon reconnecting |
 
 ---
 
@@ -88,41 +85,47 @@ A high-performance rendering engine for the virtual office map and real-time ava
 
 ```
 ProxiSpeak/
-├── server/                    # Node.js + Express backend
+├── server/
 │   ├── config/
-│   │   └── db.js              # MongoDB connection
+│   │   └── db.js                 # MongoDB Atlas Mongoose connection & lifecycle
 │   ├── controllers/
-│   │   └── proximityController.js
+│   │   └── proximityController.js# Geospatial distance queries
 │   ├── models/
-│   │   └── User.js            # GeoJSON user schema
+│   │   ├── Account.js            # User credentials, bcrypt hash, usernameLower index
+│   │   ├── User.js               # Active sessions, socketId, 2d planar indexed location
+│   │   └── Room.js               # Persistent hosted workspace definitions
 │   ├── routes/
-│   │   └── proximity.js       # /api/proximity endpoints
-│   ├── socket/
-│   │   └── signalingServer.js # WebRTC signaling via Socket.io
-│   └── index.js               # Entry point
+│   │   └── proximity.js          # Proximity REST routes
+│   ├── seeds/
+│   │   └── officeLayout.js       # Default workspace room layouts & boundary seeds
+│   └── index.js                  # Express API, Socket.IO signaling, rate limiting & keepalive
 │
-├── client/                    # React frontend
-│   └── src/
-│       ├── components/
-│       │   ├── WorldCanvas.jsx  # HTML5 Canvas 2D world
-│       │   └── Avatar.jsx       # Avatar rendering & movement
-│       ├── services/
-│       │   ├── webrtcManager.js # WebRTC P2P connections
-│       │   └── audioMixer.js    # Web Audio API spatial mixing
-│       ├── App.jsx
-│       └── index.jsx
+├── client/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── WorldCanvas.jsx   # 60fps Canvas engine, HUD dock, chat drawer, doors
+│   │   │   ├── MeetingLobby.jsx  # Workspace browser, quick join, host meeting modal
+│   │   │   └── AuthModal.jsx     # Architectural sign-in & registration studio
+│   │   ├── services/
+│   │   │   ├── spatialAudio.js   # Web Audio DSP pipeline, raycasting & acoustic rooms
+│   │   │   └── webrtc.js         # Peer connection mesh, STUN/TURN ICE negotiation
+│   │   ├── config.js             # Environment endpoints & tunnel URL fallbacks
+│   │   ├── App.jsx               # Top-level state router & audio initialization
+│   │   └── index.css             # Architectural styling system & Tailwind integration
+│   ├── index.html                # Entry HTML & luxury typography definitions
+│   └── vite.config.js            # Vite build pipeline & module optimization
 │
-├── docs/                      # Documentation
-│   ├── ARCHITECTURE.md
-│   ├── API.md
-│   └── DEVELOPMENT_PLAN.md
+├── docs/
+│   ├── ARCHITECTURE.md           # In-depth system architecture & DSP mathematical models
+│   ├── API.md                    # REST endpoints & Socket.IO event reference
+│   ├── DEVELOPMENT_PLAN.md       # Week-wise plan & deliverable completion records
+│   ├── ROADMAP.md                # Feature roadmap, scope boundaries & post-MVP goals
+│   └── MID_REVIEW_NOTES.md       # Mid-review defense audits, benchmarks & test results
 │
-├── .env.example               # Environment variable template
-├── .gitignore
-├── CHANGELOG.md
-├── CODE_OF_CONDUCT.md
-├── CONTRIBUTING.md
-└── README.md
+├── CHANGELOG.md                  # Version release history
+├── CONTRIBUTING.md               # Team development guidelines & git workflows
+├── LICENSE                       # MIT License
+└── render.yaml                   # Production Render infrastructure blueprint
 ```
 
 ---
@@ -130,9 +133,9 @@ ProxiSpeak/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- MongoDB 6.x (local or Atlas)
-- A modern browser with WebRTC support
+- **Node.js**: 18.0 or higher
+- **MongoDB**: Local instance or MongoDB Atlas cluster connection string
+- **Browser**: Modern Chromium, Firefox, or Safari with WebRTC & Web Audio support
 
 ### 1. Clone the Repository
 ```bash
@@ -140,55 +143,50 @@ git clone https://github.com/Dvij-Joshi/ProxiSpeak---Geospatial-Proximity-Audio-
 cd ProxiSpeak---Geospatial-Proximity-Audio-Ecosystem
 ```
 
-### 2. Configure Environment
-```bash
-cp .env.example .env
-# Edit .env with your MongoDB URI and other values
+### 2. Configure Environment Variables
+Create `.env` in the project root:
+```env
+PORT=5000
+MONGODB_URI=your_mongodb_atlas_connection_string
+JWT_SECRET=your_secure_jwt_secret_key
+CLIENT_URL=http://localhost:5173
+METERED_DOMAIN=your_metered_app_name.metered.live
+METERED_SECRET_KEY=your_metered_api_key
 ```
 
-### 3. Start the Backend (Root directory)
+### 3. Start the Backend Server
 ```bash
 npm install
 npm run server
 ```
 
-### 4. Start the Frontend
+### 4. Start the Frontend Client
 ```bash
+npm --prefix client install
 npm run client
-# or: cd client && npm install && npm run dev
+# Available locally at http://localhost:5173
 ```
-
-### 5. Open in Browser
-Navigate to `http://localhost:5173` and allow microphone access.
 
 ---
 
-## 📅 Development Timeline
+## 📅 Development Roadmap & Status
 
-| Week | Backend | Frontend |
-|------|---------|----------|
-| Week 1 | Signaling & Movement | World Rendering |
-| Week 2 | Proximity Calculations | WebRTC Integration |
-| Mid-Review | Spatial Audit (<20ms) | Audio Check |
-| Week 3 | Mesh Scaling + Redis | Dynamic Attenuation |
-| Week 4 | Room Persistence | Refine & Polish (60 FPS) |
-
-See [DEVELOPMENT_PLAN.md](./docs/DEVELOPMENT_PLAN.md) for detailed weekly goals.
+| Milestone | Backend Deliverables | Frontend Deliverables | Status |
+|---|---|---|:---:|
+| **Week 1** | Signaling server, MongoDB schema, `move` and `join-room` events | 2D canvas world rendering, keyboard/mouse movement loop | ✅ Completed |
+| **Week 2** | Geospatial queries, earshot detection, WebRTC signaling relay | `webrtc.js` peer connection management, microphone capture | ✅ Completed |
+| **Mid-Review** | Sub-20ms spatial query benchmark, connection reliability audit | Dual-browser audio check, memory leak audits, zero-zombie connections | ✅ Completed |
+| **Week 3** | Anti-spam throttling, Redis Pub/Sub adapter, room-scoped relay | `spatialAudio.js` Web Audio graph, 100px earshot, stereo delta-X panning | ✅ Completed |
+| **Week 4** | `Room` and `Account` persistence, bcrypt hashing, door state broker | 60 FPS LERP smoothing, acoustic raycasting, soundproof doors, room chat | ✅ Completed |
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) before submitting a PR.
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) for branch management and pull request protocols.
 
 ---
 
 ## 📄 License
 
 This project is licensed under the MIT License — see [LICENSE](./LICENSE) for details.
-
----
-
-<div align="center">
-  Made with ❤️ as part of the Infotact Solutions internship program
-</div>

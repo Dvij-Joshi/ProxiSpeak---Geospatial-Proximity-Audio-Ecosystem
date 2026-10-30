@@ -1,118 +1,59 @@
 # Changelog
 
-All notable changes to **ProxiSpeak** will be documented in this file.
+All notable changes to **ProxiSpeak** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
-
-### Planned
-- JWT-based persistent user authentication
-- Multiple virtual room support with distinct layouts
-- Mobile touch controls for avatar movement
-- Recording / replay of spatial audio sessions
-- Admin dashboard for room management
-
----
-
-## [0.4.0] — Week 4 (Planned)
+## [1.0.0] — 2026-10-30
 
 ### Added
-- `Room` MongoDB schema for persistent office layouts
-- `POST /api/rooms` and `GET /api/rooms/:roomId` endpoints
-- Acoustic shadowing: walls reduce peer audio gain by 50%
-- Room seed script for default `main-office` layout
-- Avatar movement interpolation (smooth position transitions)
-- Furniture/wall rendering on HTML5 Canvas
-- Speaking indicator ring around active audio avatars
-- Connection status HUD (user count, mic status, FPS counter)
-- Delta-time smoothing in `requestAnimationFrame` loop
-
-### Fixed
-- Memory leaks from zombie RTCPeerConnection objects after disconnect
-- Canvas flicker on rapid avatar movement
-
----
-
-## [0.3.0] — Week 3 (Planned)
-
-### Added
-- Redis Pub/Sub adapter (`@socket.io/redis-adapter`) for multi-node Socket.io
-- Node.js `cluster` module integration for multi-core utilization
-- `audioMixer.js` — Web Audio API spatial mixing service
-- Dynamic gain attenuation: `gain = 1 - (distance / 100)`
-- Stereo panning: `pan = deltaX / 100` clamped to `[-1, 1]`
-- Real-time audio updates on every `user-moved` event
+- **100-Pixel Spatial Earshot Zone:** Calibrated intimate proximity zone ($\le 25\text{px}$ 100% gain, $25\text{px}–100\text{px}$ gradual power decay, $\ge 100\text{px}$ complete silence).
+- **60 FPS Motion LERP Interpolation:** Remote peer avatars glide smoothly across the screen via linear interpolation ($\alpha = 0.20$), converting 20 Hz network packets into seamless 60 FPS motion.
+- **Acoustic Wall Raycasting:** 2D line-segment intersection detects physical walls between avatars and applies $0.35^{\text{hits}}$ volume decay and a $450\text{Hz}$ low-pass filter to simulate sound absorption through barriers.
+- **Interactive Soundproof Doors & Knock-to-Enter:** Enclosed rooms (Meeting Room, Manager's Office) isolate audio when closed; outside visitors knock and occupants can accept or decline entry.
+- **Persistent Account Authentication:** Secure user registration and login using **bcrypt** password hashing (10 salt rounds), case-insensitive usernames, and 14-day signed JWT tokens.
+- **Room Persistence:** Hosted custom workspaces persisted in MongoDB via `Room` model and `/api/rooms` REST endpoints.
+- **Room Chat Sidebar:** Real-time text chat drawer scoped strictly to the current room.
+- **Three Spatial Soundstages:** Corporate Office, Conference Auditorium (PA broadcast stage), and Rooftop Social Lounge.
+- **Session Deduplication Engine:** Server-side socket eviction and client-side render filtering completely eliminate ghost duplicate avatars upon reconnecting.
+- **Render Keepalive Worker:** Self-ping background interval queries `/api/health` every 2.5 minutes to prevent free-tier cloud sleep.
+- **Metered STUN / TURN NAT Traversal:** Automated public IP discovery with fallback TURN relay for enterprise symmetric firewalls.
 
 ### Changed
-- Socket.io events now route through Redis for cross-process delivery
+- Replaced 420px legacy hearing radius with 100px earshot perimeter to prevent audio bleeding across room partitions.
+- Transitioned MongoDB user location from spherical `2dsphere` to bounded planar 2D index (`min: 0, max: 2000`) for canvas coordinate compatibility.
+- Upgraded UI/UX to a modern architectural dark/light theme, removing cheap emojis in favor of crisp SVG iconography.
 
 ---
 
-## [0.2.0] — Week 2 (Planned)
+## [0.3.0] — Week 3
 
 ### Added
-- MongoDB `$near` geospatial proximity query (`$maxDistance: 100`)
-- `proximity-update` Socket.io event with `inEarshot` / `leftEarshot` arrays
-- Per-socket earshot state tracking for entry/exit detection
-- `webrtcManager.js` — manages RTCPeerConnection lifecycle
-- `getUserMedia` microphone access on page load
-- WebRTC offer/answer exchange triggered by earshot entry
-- ICE candidate relay through signaling server
-- Auto-close peer connections on earshot exit or user disconnect
-- REST endpoint: `GET /api/proximity/:userId`
-
-### Changed
-- `move` event now triggers server-side proximity re-calculation
+- Web Audio API spatial processing graph (`AudioContext`, `GainNode`, `StereoPannerNode`, `BiquadFilterNode`).
+- Dynamic stereo panning: channels balance left and right based on horizontal displacement ($\Delta x / 75$).
+- Anti-spam event bucket throttler capping movement emissions at 45 packets/sec.
+- Redis Pub/Sub adapter integration for multi-node horizontal scaling.
 
 ---
 
-## [0.1.0] — Week 1 (Planned)
+## [0.2.0] — Week 2
 
 ### Added
-- Node.js + Express project scaffold
-- MongoDB connection via Mongoose (`config/db.js`)
-- `User` Mongoose model with GeoJSON Point + `2dsphere` index
-- Socket.io server setup
-- `join-room` event — registers user and stores initial position
-- `move` event — updates MongoDB position + broadcasts `user-moved`
-- `disconnect` event — removes user + notifies room
-- `GET /health` REST endpoint
-- Vite + React 18 frontend scaffold
-- `<WorldCanvas>` component with 60 FPS `requestAnimationFrame` loop
-- Office background rendering (grid tiles + colored zones)
-- `<Avatar>` component with colored circle + name label
-- Keyboard movement (WASD / arrow keys)
-- Mouse-click movement with smooth interpolation
-- Socket.io client integration — emit `move` throttled to 50ms
-- Real-time other-user avatar rendering via `user-moved`
-
-### Security
-- `.env.example` template — no secrets committed to repository
-- `.gitignore` excludes `node_modules`, `.env`, build artifacts
+- WebRTC P2P mesh network using browser `getUserMedia` and `RTCPeerConnection`.
+- Signaling relay broker for `webrtc-offer`, `webrtc-answer`, and `ice-candidate` events.
+- Audio input device enumeration and live runtime microphone switching.
+- MongoDB `$near` geospatial query endpoint (`/api/proximity/:userId`).
 
 ---
 
-## [0.0.1] — Repository Initialization
+## [0.1.0] — Week 1
 
 ### Added
-- `README.md` with project overview, architecture diagram, and getting started guide
-- `docs/ARCHITECTURE.md` — detailed 3-tier architecture documentation
-- `docs/API.md` — full REST and Socket.io event API reference
-- `docs/DEVELOPMENT_PLAN.md` — week-wise development tasks and success metrics
-- `CONTRIBUTING.md` — contribution guidelines and commit conventions
-- `CODE_OF_CONDUCT.md` — Contributor Covenant v2.1
-- `CHANGELOG.md` — this file
-- `LICENSE` — MIT License
-- `.gitignore` — Node.js + React standard ignores
-- `.env.example` — environment variable template
-
-[Unreleased]: https://github.com/Dvij-Joshi/ProxiSpeak---Geospatial-Proximity-Audio-Ecosystem/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/Dvij-Joshi/ProxiSpeak---Geospatial-Proximity-Audio-Ecosystem/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/Dvij-Joshi/ProxiSpeak---Geospatial-Proximity-Audio-Ecosystem/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/Dvij-Joshi/ProxiSpeak---Geospatial-Proximity-Audio-Ecosystem/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/Dvij-Joshi/ProxiSpeak---Geospatial-Proximity-Audio-Ecosystem/compare/v0.0.1...v0.1.0
-[0.0.1]: https://github.com/Dvij-Joshi/ProxiSpeak---Geospatial-Proximity-Audio-Ecosystem/releases/tag/v0.0.1
+- Node.js + Express backend scaffold with Socket.IO real-time engine.
+- MongoDB Atlas connection with Mongoose ODM.
+- React 18 + Vite frontend with 2D HTML5 Canvas rendering loop.
+- WASD and Arrow key avatar navigation with collision detection.
+- Initial project documentation, architecture specifications, and API reference.
