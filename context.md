@@ -163,28 +163,48 @@ ProxiSpeak strictly separates the **Control Plane** from the **Media Plane**:
 
 ---
 
-## 7. Git Workflow & Deployment Commands
+## 7. Git Workflow & Staging (`dev`) Deployment Commands
 
-All work must follow this strict branch and deployment protocol:
+To ensure production (`main`) is never broken by untested commits, all work follows the **Staging / Dev Flow**:
+
+```
+Feature / Contributor Branch (`branch-dvij`, `branch-kunj`)
+                       │
+                       ▼
+             Staging Branch (`dev`)  <── Vercel Preview Deployment & Team Integration Testing
+                       │
+                       ▼ (After thorough verification)
+            Production Branch (`main`) <── Live Production (Vercel + Render)
+```
+
+### Daily Development & Testing Commands:
 
 ```bash
-# 1. Always work and commit on branch-dvij
+# Step 1: Work and commit on your personal / feature branch
 git checkout branch-dvij
-git add <files>
+git add <modified-files>
 git commit -m "feat/fix: descriptive message"
 git push origin branch-dvij
 
-# 2. Merge to main and push with bypass
-git checkout main
+# Step 2: Merge into dev for integration & preview testing
+git checkout dev
+git pull origin dev
 git merge branch-dvij --no-edit
+git push origin dev
+
+# Step 3: Test on Vercel Preview URL
+# Vercel automatically creates a preview deployment for `dev` (e.g., https://proxispeak-git-dev-....vercel.app)
+# Open the preview link, test multi-peer movement, WebRTC voice, and console errors.
+
+# Step 4: Promote to Production (main) ONLY after dev tests pass
+git checkout main
+git pull origin main
+git merge dev --no-edit
 git push -o bypass origin main
 
-# 3. Return to branch-dvij for subsequent work
+# Step 5: Switch back to your working branch
 git checkout branch-dvij
 ```
-
-* **Vercel Frontend:** Automatically builds and deploys from `main` (build command: `npm --prefix client run build`).
-* **Render Backend:** Automatically builds and deploys from `main` (start command: `node server/index.js`).
 
 ---
 
@@ -202,6 +222,8 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Current Commit on `main` and `branch-dvij`:** `89b443c` (`docs: update architecture, API, roadmap, and development plan to reflect 1.0.0 production state`)
+* **Production Branch:** `main` (Auto-deployed to Vercel Production & Render)
+* **Staging / Testing Branch:** `dev` (Auto-deployed to Vercel Preview Environments)
+* **Feature Branches:** `branch-dvij`, `branch-kunj`, `branch-sumit`, `branch-Uma`
 * **Client Build:** Verified clean (0 errors, Vite bundle ~360 kB, build duration ~1.2s).
 * **Server Health:** Verified clean (0 syntax errors, Node 18+ ES modules).
