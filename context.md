@@ -222,8 +222,9 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Production Branch:** `main` (Auto-deployed to Vercel Production & Render)
-* **Staging / Testing Branch:** `dev` (Auto-deployed to Vercel Preview Environments)
+* **Latest Commit Hash:** `6cefa46` (`ci(render): configure proxispeak-server-dev service on dev branch and clean obsolete voice-server`)
+* **Production Branch:** `main` (Auto-deployed to Vercel Production & Render `proxispeak-server`)
+* **Staging / Testing Branch:** `dev` (Auto-deployed to Vercel Preview & Render `proxispeak-server-dev`)
 * **Feature Branches:** `branch-dvij`, `branch-kunj`, `branch-sumit`, `branch-Uma`
 * **Client Build:** Verified clean (0 errors, Vite bundle ~360 kB, build duration ~1.2s).
 * **Server Health:** Verified clean (0 syntax errors, Node 18+ ES modules).
