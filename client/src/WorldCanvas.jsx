@@ -5,140 +5,176 @@ import { webrtc } from './services/webrtc';
 import { SERVER_URL } from './config';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
-const W = 1200;
-const H = 680;
-const SPEED = 2.8;
-const R = 14; // avatar radius
+const W = 2200;
+const H = 1300;
+const SPEED = 3.6; // Responsive movement speed for 2200x1300 world
+const R = 15; // avatar radius
 const MOVE_THROTTLE_MS = 50; // emit move at most every 50ms
 
-// ─── Office Theme Layout ───────────────────────────────────────────────────────
+// ─── Office Theme Layout (Expanded 2200x1300 World) ──────────────────────────
 const OFFICE_FLOORS = [
-  { x: 18, y: 18, w: W - 36, h: H - 36, color: '#f0ede8' },
-  { x: 18, y: 18, w: 298, h: 248, color: '#ddedf7' },
-  { x: 358, y: 18, w: 228, h: 215, color: '#f7f0e0' },
-  { x: 868, y: 18, w: 314, h: 225, color: '#e0f0e8' },
-  { x: 18, y: 492, w: 278, h: H - 510, color: '#fff4e0' },
-  { x: 942, y: 490, w: 240, h: H - 508, color: '#f0e8f8' },
+  { x: 18, y: 18, w: W - 36, h: H - 36, color: '#f8fafc' },
+  // Meeting Room (Top-Left)
+  { x: 18, y: 18, w: 580, h: 480, color: '#e0f2fe' },
+  // Manager's Office (Top-Center)
+  { x: 678, y: 18, w: 450, h: 420, color: '#fef3c7' },
+  // Tech / Server Lab (Top-Right)
+  { x: 1620, y: 18, w: 562, h: 440, color: '#dcfce7' },
+  // Lounge & Cafeteria (Bottom-Left)
+  { x: 18, y: 920, w: 560, h: 362, color: '#ffedd5' },
+  // Print & Design Studio (Bottom-Right)
+  { x: 1720, y: 920, w: 462, h: 362, color: '#f3e8ff' },
 ];
 
 const OFFICE_LABELS = [
-  { text: 'Meeting Room',     x: 167, y: 40 },
-  { text: "Manager's Office", x: 472, y: 40 },
-  { text: 'Tech / Server',    x: 1025, y: 40 },
-  { text: 'Lounge & Break',   x: 157, y: 515 },
-  { text: 'Print / Copy',     x: 1062, y: 512 },
-  { text: 'Open Workspace',   x: 630, y: 318 },
+  { text: 'Executive Boardroom', x: 300, y: 46 },
+  { text: "Manager's Suite", x: 900, y: 46 },
+  { text: 'Cloud Infrastructure & Server Lab', x: 1900, y: 46 },
+  { text: 'Cafeteria & Lounge', x: 290, y: 948 },
+  { text: 'Design & Print Studio', x: 1940, y: 948 },
+  { text: 'Central Collaboration Floor', x: 1100, y: 510 },
 ];
 
 const OFFICE_WALLS = [
-  { x: 10,      y: 10,     w: W - 20, h: 8   },
-  { x: 10,      y: 10,     w: 8,      h: H - 20 },
-  { x: W - 18,  y: 10,     w: 8,      h: H - 20 },
-  { x: 10,      y: H - 18, w: W - 20, h: 8   },
-  { x: 313, y: 18,  w: 8, h: 188 },
-  { x: 18,  y: 261, w: 258, h: 8 },
-  { x: 353, y: 18, w: 8, h: 215 },
-  { x: 583, y: 18, w: 8, h: 215 },
-  { x: 361, y: 228, w: 182, h: 8 },
-  { x: 863, y: 18,  w: 8, h: 137 },
-  { x: 871, y: 238, w: 311, h: 8 },
-  { x: 18,  y: 487, w: 222, h: 8 },
-  { x: 291, y: 487, w: 8,   h: H - 505 },
-  { x: 937, y: 490, w: 8, h: 80 },
-  { x: 945, y: 485, w: 237, h: 8 },
-  { x: 863, y: 155, w: 8, h: 8 },
+  { x: 10, y: 10, w: W - 20, h: 8 },
+  { x: 10, y: 10, w: 8, h: H - 20 },
+  { x: W - 18, y: 10, w: 8, h: H - 20 },
+  { x: 10, y: H - 18, w: W - 20, h: 8 },
+  // Meeting Room (Top-Left)
+  { x: 598, y: 18, w: 8, h: 480 },
+  { x: 18, y: 498, w: 490, h: 8 },
+  // Manager's Office (Top-Center)
+  { x: 670, y: 18, w: 8, h: 420 },
+  { x: 1128, y: 18, w: 8, h: 420 },
+  { x: 678, y: 438, w: 350, h: 8 },
+  // Tech / Server Room (Top-Right)
+  { x: 1612, y: 18, w: 8, h: 320 },
+  { x: 1620, y: 458, w: 562, h: 8 },
+  // Lounge & Break (Bottom-Left)
+  { x: 18, y: 912, w: 460, h: 8 },
+  { x: 578, y: 920, w: 8, h: 362 },
+  // Print & Copy (Bottom-Right)
+  { x: 1720, y: 912, w: 462, h: 8 },
+  { x: 1712, y: 920, w: 8, h: 250 },
 ];
 
 const OFFICE_FURNITURE = [
-  { type: 'rect',   x: 55,  y: 80,  w: 200, h: 100, color: '#b5896a', rx: 6 },
-  { type: 'chair',  x: 85,  y: 68 }, { type: 'chair', x: 145, y: 68 },
-  { type: 'chair',  x: 205, y: 68 }, { type: 'chair', x: 85,  y: 192 },
-  { type: 'chair',  x: 145, y: 192 },{ type: 'chair', x: 205, y: 192 },
-  { type: 'chair',  x: 42,  y: 130 },{ type: 'chair', x: 268, y: 130 },
-  { type: 'plant',  x: 290, y: 40,  r: 13 },{ type: 'plant', x: 290, y: 240, r: 13 },
-  { type: 'rect',   x: 375, y: 55,  w: 170, h: 55, color: '#b5896a', rx: 4 },
-  { type: 'rect',   x: 375, y: 55,  w: 55,  h: 100, color: '#b5896a', rx: 4 },
-  { type: 'screen', x: 455, y: 50 }, { type: 'chair', x: 460, y: 125 },
-  { type: 'plant',  x: 560, y: 50, r: 14 }, { type: 'plant', x: 365, y: 215, r: 11 },
-  { type: 'rect', x: 890, y: 35, w: 32, h: 185, color: '#4a5568', rx: 2 },
-  { type: 'rect', x: 938, y: 35, w: 32, h: 185, color: '#4a5568', rx: 2 },
-  { type: 'rect', x: 986, y: 35, w: 32, h: 185, color: '#4a5568', rx: 2 },
-  { type: 'rect', x: 1055, y: 45, w: 115, h: 80, color: '#5a6577', rx: 3 },
-  { type: 'screen', x: 1095, y: 40 },
-  { type: 'rect', x: 894, y: 50, w: 24, h: 4, color: '#22d3ee', rx: 1 },
-  { type: 'rect', x: 894, y: 65, w: 24, h: 4, color: '#22d3ee', rx: 1 },
-  { type: 'rect', x: 942, y: 50, w: 24, h: 4, color: '#4ade80', rx: 1 },
-  { type: 'rect', x: 942, y: 65, w: 24, h: 4, color: '#4ade80', rx: 1 },
-  { type: 'rect', x: 990, y: 50, w: 24, h: 4, color: '#f87171', rx: 1 },
-  { type: 'rect', x: 990, y: 65, w: 24, h: 4, color: '#facc15', rx: 1 },
-  { type: 'rect',  x: 370, y: 310, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 390, y: 305 }, { type: 'chair', x: 414, y: 372 },
-  { type: 'rect',  x: 480, y: 310, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 500, y: 305 }, { type: 'chair', x: 524, y: 372 },
-  { type: 'rect',  x: 590, y: 310, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 610, y: 305 }, { type: 'chair', x: 634, y: 372 },
-  { type: 'rect',  x: 700, y: 310, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 720, y: 305 }, { type: 'chair', x: 744, y: 372 },
-  { type: 'rect',  x: 370, y: 410, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 390, y: 420 }, { type: 'chair', x: 414, y: 398 },
-  { type: 'rect',  x: 480, y: 410, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 500, y: 420 }, { type: 'chair', x: 524, y: 398 },
-  { type: 'rect',  x: 590, y: 410, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 610, y: 420 }, { type: 'chair', x: 634, y: 398 },
-  { type: 'rect',  x: 700, y: 410, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 720, y: 420 }, { type: 'chair', x: 744, y: 398 },
-  { type: 'rect',  x: 700, y: 510, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 720, y: 505 }, { type: 'chair', x: 744, y: 572 },
-  { type: 'rect',  x: 800, y: 510, w: 88, h: 50, color: '#c9a67a', rx: 3 },
-  { type: 'screen',x: 820, y: 505 }, { type: 'chair', x: 844, y: 572 },
-  { type: 'plant', x: 348, y: 280, r: 14 }, { type: 'plant', x: 810, y: 280, r: 14 },
-  { type: 'plant', x: 810, y: 470, r: 14 }, { type: 'plant', x: 348, y: 480, r: 14 },
-  { type: 'rect',  x: 30,  y: 540, w: 130, h: 38, color: '#d97706', rx: 8 },
-  { type: 'rect',  x: 30,  y: 578, w: 38,  h: 80, color: '#d97706', rx: 8 },
-  { type: 'rect',  x: 90,  y: 620, w: 80,  h: 45, color: '#92400e', rx: 4 },
-  { type: 'plant', x: 265, y: 510, r: 14 }, { type: 'plant', x: 265, y: 650, r: 14 },
-  { type: 'plant', x: 30,  y: 650, r: 12 },
-  { type: 'rect',  x: 960, y: 512, w: 90, h: 60, color: '#9ca3af', rx: 4 },
-  { type: 'rect',  x: 1065, y: 512, w: 100, h: 55, color: '#9ca3af', rx: 4 },
-  { type: 'rect',  x: 960, y: 590, w: 205, h: 25, color: '#b0b8c4', rx: 2 },
-  { type: 'plant', x: 1165, y: 490, r: 12 },
+  // ── Meeting Room (Top-Left): Large Boardroom Table + 10 Chairs + Screen ──
+  { type: 'rect', x: 110, y: 150, w: 360, h: 180, color: '#b5896a', rx: 8 },
+  { type: 'screen', x: 290, y: 46 },
+  { type: 'chair', x: 160, y: 136 }, { type: 'chair', x: 230, y: 136 }, { type: 'chair', x: 300, y: 136 }, { type: 'chair', x: 370, y: 136 },
+  { type: 'chair', x: 160, y: 344 }, { type: 'chair', x: 230, y: 344 }, { type: 'chair', x: 300, y: 344 }, { type: 'chair', x: 370, y: 344 },
+  { type: 'chair', x: 94,  y: 240 }, { type: 'chair', x: 486, y: 240 },
+  { type: 'plant', x: 540, y: 60, r: 16 }, { type: 'plant', x: 60, y: 60, r: 16 }, { type: 'plant', x: 60, y: 440, r: 16 },
+
+  // ── Manager's Executive Suite (Top-Center): L-Desk + Executive Chair + Guest Chairs ──
+  { type: 'rect', x: 740, y: 100, w: 280, h: 65, color: '#b5896a', rx: 4 },
+  { type: 'rect', x: 740, y: 100, w: 65, h: 180, color: '#b5896a', rx: 4 },
+  { type: 'screen', x: 880, y: 92 },
+  { type: 'chair', x: 885, y: 190 }, // Manager chair
+  { type: 'chair', x: 840, y: 70 },  { type: 'chair', x: 930, y: 70 }, // Guest chairs
+  { type: 'plant', x: 1090, y: 55, r: 16 }, { type: 'plant', x: 705, y: 55, r: 14 },
+
+  // ── Cloud Infrastructure & Server Lab (Top-Right): Server Racks + Console ──
+  { type: 'rect', x: 1700, y: 60, w: 42, h: 260, color: '#334155', rx: 4 },
+  { type: 'rect', x: 1770, y: 60, w: 42, h: 260, color: '#334155', rx: 4 },
+  { type: 'rect', x: 1840, y: 60, w: 42, h: 260, color: '#334155', rx: 4 },
+  { type: 'rect', x: 1910, y: 60, w: 42, h: 260, color: '#334155', rx: 4 },
+  // LED Status lights on racks
+  { type: 'rect', x: 1708, y: 80, w: 26, h: 4, color: '#22d3ee', rx: 1 },
+  { type: 'rect', x: 1778, y: 80, w: 26, h: 4, color: '#4ade80', rx: 1 },
+  { type: 'rect', x: 1848, y: 80, w: 26, h: 4, color: '#facc15', rx: 1 },
+  { type: 'rect', x: 1918, y: 80, w: 26, h: 4, color: '#f87171', rx: 1 },
+  // Engineering Console desk
+  { type: 'rect', x: 2000, y: 80, w: 140, h: 80, color: '#475569', rx: 4 },
+  { type: 'screen', x: 2070, y: 72 }, { type: 'chair', x: 2070, y: 185 },
+
+  // ── Central Open Collaboration Floor: 6 Team Pods + Plants ──
+  // Pod 1 (West Upper)
+  { type: 'rect', x: 720, y: 580, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
+  { type: 'screen', x: 760, y: 572 }, { type: 'screen', x: 840, y: 572 },
+  { type: 'chair', x: 760, y: 685 }, { type: 'chair', x: 840, y: 685 },
+
+  // Pod 2 (East Upper)
+  { type: 'rect', x: 1320, y: 580, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
+  { type: 'screen', x: 1360, y: 572 }, { type: 'screen', x: 1440, y: 572 },
+  { type: 'chair', x: 1360, y: 685 }, { type: 'chair', x: 1440, y: 685 },
+
+  // Pod 3 (West Middle)
+  { type: 'rect', x: 720, y: 740, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
+  { type: 'screen', x: 760, y: 732 }, { type: 'screen', x: 840, y: 732 },
+  { type: 'chair', x: 760, y: 845 }, { type: 'chair', x: 840, y: 845 },
+
+  // Pod 4 (East Middle)
+  { type: 'rect', x: 1320, y: 740, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
+  { type: 'screen', x: 1360, y: 732 }, { type: 'screen', x: 1440, y: 732 },
+  { type: 'chair', x: 1360, y: 845 }, { type: 'chair', x: 1440, y: 845 },
+
+  // Pod 5 (West Lower)
+  { type: 'rect', x: 720, y: 900, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
+  { type: 'screen', x: 760, y: 892 }, { type: 'screen', x: 840, y: 892 },
+  { type: 'chair', x: 760, y: 1005 }, { type: 'chair', x: 840, y: 1005 },
+
+  // Pod 6 (East Lower)
+  { type: 'rect', x: 1320, y: 900, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
+  { type: 'screen', x: 1360, y: 892 }, { type: 'screen', x: 1440, y: 892 },
+  { type: 'chair', x: 1360, y: 1005 }, { type: 'chair', x: 1440, y: 1005 },
+
+  // Central Aisle Plants & Feature Trees
+  { type: 'plant', x: 1040, y: 620, r: 18 }, { type: 'plant', x: 1160, y: 620, r: 18 },
+  { type: 'plant', x: 1040, y: 780, r: 18 }, { type: 'plant', x: 1160, y: 780, r: 18 },
+  { type: 'plant', x: 1040, y: 940, r: 18 }, { type: 'plant', x: 1160, y: 940, r: 18 },
+
+  // ── Cafeteria & Lounge (Bottom-Left): Sofas + Espresso Counter ──
+  { type: 'rect', x: 60, y: 980, w: 260, h: 60, color: '#d97706', rx: 8 },
+  { type: 'rect', x: 60, y: 1040, w: 60, h: 160, color: '#d97706', rx: 8 },
+  { type: 'rect', x: 160, y: 1080, w: 120, h: 70, color: '#92400e', rx: 6 },
+  { type: 'rect', x: 360, y: 980, w: 180, h: 50, color: '#78350f', rx: 4 }, // Bar counter
+  { type: 'chair', x: 380, y: 1045 }, { type: 'chair', x: 440, y: 1045 }, { type: 'chair', x: 500, y: 1045 },
+  { type: 'plant', x: 530, y: 1230, r: 18 }, { type: 'plant', x: 60, y: 1230, r: 18 },
+
+  // ── Design & Print Studio (Bottom-Right): Plotter Benches + Tables ──
+  { type: 'rect', x: 1760, y: 980, w: 180, h: 90, color: '#94a3b8', rx: 4 },
+  { type: 'rect', x: 1980, y: 980, w: 160, h: 90, color: '#94a3b8', rx: 4 },
+  { type: 'rect', x: 1760, y: 1120, w: 380, h: 60, color: '#cbd5e1', rx: 4 },
+  { type: 'plant', x: 2130, y: 1230, r: 18 },
 ];
 
-// ─── Conference & Auditorium Layout ───────────────────────────────────────────
+// ─── Conference & Auditorium Layout (Expanded 2200x1300 World) ──────────────
 const CONF_WALLS = [
   { x: 10, y: 10, w: W - 20, h: 8 },
   { x: 10, y: 10, w: 8, h: H - 20 },
   { x: W - 18, y: 10, w: 8, h: H - 20 },
   { x: 10, y: H - 18, w: W - 20, h: 8 },
-  // West Breakout Wing wall
-  { x: 280, y: 18, w: 8, h: 180 },
-  { x: 280, y: 280, w: 8, h: 215 },
-  // East Breakout Wing wall
-  { x: 915, y: 18, w: 8, h: 180 },
-  { x: 915, y: 280, w: 8, h: 215 },
+  // West Breakout Pod wall
+  { x: 492, y: 18, w: 8, h: 420 },
+  { x: 492, y: 560, w: 8, h: 400 },
+  // East Breakout Pod wall
+  { x: 1700, y: 18, w: 8, h: 420 },
+  { x: 1700, y: 560, w: 8, h: 400 },
   // Stage barriers
-  { x: 288, y: 168, w: 240, h: 8 },
-  { x: 672, y: 168, w: 243, h: 8 },
+  { x: 500, y: 310, w: 420, h: 8 },
+  { x: 1280, y: 310, w: 420, h: 8 },
   // Foyer divider
-  { x: 18, y: 495, w: 460, h: 8 },
-  { x: 722, y: 495, w: 460, h: 8 },
+  { x: 18, y: 970, w: 850, h: 8 },
+  { x: 1332, y: 970, w: 850, h: 8 },
 ];
 
-// ─── Rooftop Lounge Layout ────────────────────────────────────────────────────
+// ─── Rooftop Lounge Layout (Expanded 2200x1300 World) ─────────────────────────
 const LOUNGE_WALLS = [
   { x: 10, y: 10, w: W - 20, h: 8 },
   { x: 10, y: 10, w: 8, h: H - 20 },
   { x: W - 18, y: 10, w: 8, h: H - 20 },
   { x: 10, y: H - 18, w: W - 20, h: 8 },
   // VIP west partition
-  { x: 295, y: 18, w: 8, h: 180 },
-  { x: 295, y: 280, w: 8, h: 195 },
+  { x: 540, y: 18, w: 8, h: 360 },
+  { x: 540, y: 520, w: 8, h: 380 },
   // Games east partition
-  { x: 895, y: 18, w: 8, h: 180 },
-  { x: 895, y: 280, w: 8, h: 195 },
+  { x: 1660, y: 18, w: 8, h: 360 },
+  { x: 1660, y: 520, w: 8, h: 380 },
   // Terrace balustrade
-  { x: 18, y: 475, w: 450, h: 6 },
-  { x: 732, y: 475, w: 450, h: 6 },
+  { x: 18, y: 920, w: 860, h: 6 },
+  { x: 1322, y: 920, w: 860, h: 6 },
 ];
 
 // ─── Drawing Helpers ──────────────────────────────────────────────────────────
@@ -551,7 +587,7 @@ const THEMES = {
     name: 'Corporate Office',
     icon: 'apartment',
     badgeColor: '#3b82f6',
-    spawn: { x: 620, y: 390 },
+    spawn: { x: 1100, y: 720 },
     draw: drawOffice,
     walls: OFFICE_WALLS,
     hasDoors: true,
@@ -561,7 +597,7 @@ const THEMES = {
     name: 'Conference & Auditorium',
     icon: 'account_balance',
     badgeColor: '#8b5cf6',
-    spawn: { x: 600, y: 570 },
+    spawn: { x: 1100, y: 1050 },
     draw: drawConference,
     walls: CONF_WALLS,
     hasDoors: false,
@@ -571,7 +607,7 @@ const THEMES = {
     name: 'Rooftop Social Lounge',
     icon: 'local_cafe',
     badgeColor: '#10b981',
-    spawn: { x: 600, y: 360 },
+    spawn: { x: 1100, y: 650 },
     draw: drawLounge,
     walls: LOUNGE_WALLS,
     hasDoors: false,
@@ -670,7 +706,7 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
   ctx.font = '600 12px Inter, sans-serif';
   ctx.textAlign = 'center';
   const isActuallySpeaking = !isMuted && (isSpeaking || voiceIntensity > 0.04);
-  const micIcon = isMuted ? '🔇' : (isActuallySpeaking ? '🗣️' : '🎙️');
+  const micIcon = isMuted ? '[Mute]' : (isActuallySpeaking ? '[Live]' : '[Mic]');
   const label = isMe ? `${username} (you)` : username;
   const fullTag = `${micIcon} ${label}`;
   const tw = ctx.measureText(fullTag).width;
@@ -763,6 +799,13 @@ export default function WorldCanvas({
   const activeTheme = THEMES[themeKey] || THEMES.office;
 
   const canvasRef   = useRef(null);
+  const containerRef = useRef(null);
+  const minimapCanvasRef = useRef(null);
+  const cameraRef   = useRef({ x: activeTheme.spawn.x, y: activeTheme.spawn.y });
+  const zoomRef     = useRef(1.0);
+  const [zoom, setZoom] = useState(1.0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showRadar, setShowRadar] = useState(true);
   const stateRef    = useRef({ x: activeTheme.spawn.x, y: activeTheme.spawn.y, keys: {}, moving: false });
   const peersRef    = useRef({}); // { socketId: { x, y, username, avatarColor, isMuted } }
   const peerVolumesRef = useRef({}); // peerId -> volume
@@ -900,12 +943,140 @@ export default function WorldCanvas({
     }
   }, [roomId, onLeaveRoom, onLeave]);
 
+  // Handle container and viewport resizing
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current && canvasRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const nw = Math.max(640, Math.floor(rect.width));
+        const nh = Math.max(480, Math.floor(rect.height));
+        if (canvasRef.current.width !== nw || canvasRef.current.height !== nh) {
+          canvasRef.current.width = nw;
+          canvasRef.current.height = nh;
+        }
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, [isFullscreen]);
+
+  // Minimap Radar Drawing Routine
+  const drawMinimap = useCallback(() => {
+    const mini = minimapCanvasRef.current;
+    if (!mini) return;
+    const mctx = mini.getContext('2d');
+    const mw = mini.width;
+    const mh = mini.height;
+    const sx = mw / W;
+    const sy = mh / H;
+
+    mctx.clearRect(0, 0, mw, mh);
+
+    // Mini floors
+    for (const f of OFFICE_FLOORS) {
+      mctx.fillStyle = f.color === '#f8fafc' ? '#1e293b' : f.color;
+      mctx.fillRect(f.x * sx, f.y * sy, f.w * sx, f.h * sy);
+    }
+
+    // Mini walls
+    mctx.fillStyle = '#475569';
+    for (const w of activeTheme.walls) {
+      mctx.fillRect(w.x * sx, w.y * sy, Math.max(1, w.w * sx), Math.max(1, w.h * sy));
+    }
+
+    // Mini doors
+    if (activeTheme.hasDoors) {
+      for (const [key, d] of Object.entries(DOORS)) {
+        if (d.wall) {
+          const isOpen = isDoorOpen(doorsRef.current, key);
+          mctx.fillStyle = isOpen ? '#22c55e' : '#ef4444';
+          mctx.fillRect(d.wall.x * sx, d.wall.y * sy, Math.max(2, d.wall.w * sx), Math.max(2, d.wall.h * sy));
+        }
+      }
+    }
+
+    // Mini peer blips
+    for (const [peerId, peer] of Object.entries(peersRef.current)) {
+      const px = (peer.renderX ?? peer.x) * sx;
+      const py = (peer.renderY ?? peer.y) * sy;
+      mctx.beginPath();
+      mctx.arc(px, py, 3.5, 0, Math.PI * 2);
+      mctx.fillStyle = peer.avatarColor || '#a855f7';
+      mctx.fill();
+      if ((peerIntensitiesRef.current[peerId] || 0) > 0.05) {
+        mctx.strokeStyle = '#22c55e';
+        mctx.lineWidth = 1.5;
+        mctx.stroke();
+      }
+    }
+
+    // Local player blip + earshot circle on radar
+    const lx = stateRef.current.x * sx;
+    const ly = stateRef.current.y * sy;
+
+    mctx.beginPath();
+    mctx.arc(lx, ly, MAX_DISTANCE * sx, 0, Math.PI * 2);
+    mctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+    mctx.lineWidth = 1;
+    mctx.stroke();
+
+    mctx.beginPath();
+    mctx.arc(lx, ly, 4, 0, Math.PI * 2);
+    mctx.fillStyle = avatarColor;
+    mctx.fill();
+    mctx.strokeStyle = '#ffffff';
+    mctx.lineWidth = 1.5;
+    mctx.stroke();
+
+    // Camera Viewport Frustum Box
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const z = zoomRef.current;
+      const vw = canvas.width / z;
+      const vh = canvas.height / z;
+      const vx = cameraRef.current.x - vw / 2;
+      const vy = cameraRef.current.y - vh / 2;
+      mctx.strokeStyle = '#38bdf8';
+      mctx.lineWidth = 1.5;
+      mctx.setLineDash([3, 2]);
+      mctx.strokeRect(vx * sx, vy * sy, vw * sx, vh * sy);
+      mctx.setLineDash([]);
+    }
+  }, [activeTheme, avatarColor]);
+
+  // Zoom handlers
+  const handleZoomStep = (delta) => {
+    setZoom((prev) => {
+      const next = Math.min(1.5, Math.max(0.55, Number((prev + delta).toFixed(2))));
+      zoomRef.current = next;
+      return next;
+    });
+  };
+
+  const handleZoomReset = () => {
+    zoomRef.current = 1.0;
+    setZoom(1.0);
+  };
+
   // Render loop
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const s = stateRef.current;
+    const vw = canvas.width;
+    const vh = canvas.height;
+    const z = zoomRef.current;
+
+    // Clear viewport
+    ctx.clearRect(0, 0, vw, vh);
+
+    // Save context for Camera Viewport Transform (World Space)
+    ctx.save();
+    ctx.translate(vw / 2, vh / 2);
+    ctx.scale(z, z);
+    ctx.translate(-cameraRef.current.x, -cameraRef.current.y);
 
     // 1. Static themed canvas background layer
     if (offscreenRef.current) {
@@ -989,32 +1160,38 @@ export default function WorldCanvas({
       { localRoom: localRoomRef.current }
     );
 
-    // 4. Compact movement guide bottom-left (non-overlapping)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-    drawRoundRect(ctx, 16, H - 42, 160, 26, 8);
+    // Restore context from Camera World Space back to Screen Space
+    ctx.restore();
+
+    // 4. Compact movement guide bottom-left (Screen-pinned HUD)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+    drawRoundRect(ctx, 16, vh - 42, 185, 28, 8);
     ctx.fill();
     ctx.strokeStyle = '#D9D7D0';
     ctx.lineWidth = 1;
     ctx.stroke();
     ctx.font = '500 11px Inter, sans-serif';
-    ctx.fillStyle = '#5e5f5c';
+    ctx.fillStyle = '#374151';
     ctx.textAlign = 'left';
-    ctx.fillText('W A S D to move', 26, H - 25);
+    ctx.fillText('WASD to move • Scroll to zoom', 26, vh - 24);
 
-    // 5. Connection indicator bottom-right
+    // 5. Connection indicator bottom-right (Screen-pinned HUD)
     const connected = socketRef.current?.connected;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
-    drawRoundRect(ctx, W - 116, H - 38, 102, 26, 13);
+    drawRoundRect(ctx, vw - 116, vh - 38, 102, 26, 13);
     ctx.fill();
     ctx.strokeStyle = '#D9D7D0';
     ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.beginPath(); ctx.arc(W - 102, H - 25, 4, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(vw - 102, vh - 25, 4, 0, Math.PI * 2);
     ctx.fillStyle = connected ? '#10b981' : '#ef4444'; ctx.fill();
     ctx.font = '500 11px Inter, sans-serif'; ctx.textAlign = 'left';
     ctx.fillStyle = connected ? '#047857' : '#b91c1c';
-    ctx.fillText(connected ? 'Connected' : 'Offline', W - 92, H - 21);
-  }, [username, avatarColor, activeTheme]);
+    ctx.fillText(connected ? 'Connected' : 'Offline', vw - 92, vh - 21);
+
+    // 6. Update Minimap Radar
+    drawMinimap();
+  }, [username, avatarColor, activeTheme, drawMinimap]);
 
   renderRef.current = render;
 
@@ -1409,6 +1586,11 @@ export default function WorldCanvas({
       const checkDoors = Boolean(activeTheme.hasDoors);
       if (dx && !collidesWithWall(s.x + dx, s.y, activeTheme.walls, doorsRef.current, checkDoors)) s.x += dx;
       if (dy && !collidesWithWall(s.x, s.y + dy, activeTheme.walls, doorsRef.current, checkDoors)) s.y += dy;
+
+      // Smooth camera interpolation tracking avatar
+      const camLerp = 0.12;
+      cameraRef.current.x += (s.x - cameraRef.current.x) * camLerp;
+      cameraRef.current.y += (s.y - cameraRef.current.y) * camLerp;
 
       // Purge any duplicate of self before calculating spatial audio
       for (const [peerId, peer] of Object.entries(peersRef.current)) {
@@ -1833,17 +2015,23 @@ export default function WorldCanvas({
           </div>
         </div>
 
-        {/* Canvas Frame Container with Dockable Chat Sidebar */}
+        {/* Canvas Frame Container with Responsive Viewport & Follow Camera */}
         <div
+          ref={containerRef}
           style={{
-            position: 'relative',
-            width: `${W}px`,
-            height: `${H}px`,
-            borderRadius: '16px',
+            position: isFullscreen ? 'fixed' : 'relative',
+            top: isFullscreen ? 0 : 'auto',
+            left: isFullscreen ? 0 : 'auto',
+            width: isFullscreen ? '100vw' : '100%',
+            maxWidth: isFullscreen ? 'none' : '1440px',
+            height: isFullscreen ? '100vh' : '700px',
+            borderRadius: isFullscreen ? '0px' : '16px',
             overflow: 'hidden',
-            border: '1px solid #D9D7D0',
-            boxShadow: '0 20px 45px -10px rgba(0,0,0,0.08), 0 8px 16px -6px rgba(0,0,0,0.04)',
-            background: '#ffffff',
+            border: isFullscreen ? 'none' : '1px solid #D9D7D0',
+            boxShadow: isFullscreen ? 'none' : '0 24px 50px -12px rgba(0,0,0,0.12), 0 8px 20px -6px rgba(0,0,0,0.06)',
+            background: '#0f172a',
+            zIndex: isFullscreen ? 9999 : 1,
+            transition: 'border-radius 0.2s ease',
           }}
         >
         {/* Door Event Toast Banner */}
@@ -2010,20 +2198,202 @@ export default function WorldCanvas({
           </div>
         )}
 
+        {/* Minimap Radar Floating Card (Top-Right) */}
+        {showRadar && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: showChat ? '336px' : '16px',
+              background: 'rgba(15, 23, 42, 0.88)',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '12px',
+              padding: '8px 10px',
+              boxShadow: '0 12px 28px rgba(0, 0, 0, 0.35)',
+              zIndex: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              transition: 'right 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              pointerEvents: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#38bdf8' }}>radar</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#e2e8f0', letterSpacing: '0.5px' }}>
+                  HQ RADAR
+                </span>
+              </div>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: '#94a3b8' }}>
+                {Math.round(zoom * 100)}%
+              </span>
+            </div>
+            <canvas
+              ref={minimapCanvasRef}
+              width={210}
+              height={124}
+              style={{
+                display: 'block',
+                borderRadius: '8px',
+                background: '#0b0f19',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            />
+          </div>
+        )}
+
+        {/* Floating Zoom & Viewport Controls HUD */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '16px',
+            right: showChat ? '336px' : '136px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(12px)',
+            padding: '4px 8px',
+            borderRadius: '12px',
+            border: '1px solid #D9D7D0',
+            boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)',
+            zIndex: 20,
+            transition: 'right 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
+          <button
+            onClick={() => handleZoomStep(-0.15)}
+            style={{
+              padding: '4px',
+              borderRadius: '6px',
+              border: 'none',
+              background: 'transparent',
+              color: '#374151',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title="Zoom out"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>remove</span>
+          </button>
+          <button
+            onClick={handleZoomReset}
+            style={{
+              padding: '4px 6px',
+              borderRadius: '6px',
+              border: 'none',
+              background: 'transparent',
+              color: '#1f2937',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: 600,
+              minWidth: '38px',
+            }}
+            title="Reset zoom to 100%"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            onClick={() => handleZoomStep(0.15)}
+            style={{
+              padding: '4px',
+              borderRadius: '6px',
+              border: 'none',
+              background: 'transparent',
+              color: '#374151',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title="Zoom in"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>add</span>
+          </button>
+          <div style={{ width: '1px', height: '16px', background: '#D9D7D0', margin: '0 2px' }} />
+          <button
+            onClick={() => setShowRadar((v) => !v)}
+            style={{
+              padding: '4px',
+              borderRadius: '6px',
+              border: 'none',
+              background: 'transparent',
+              color: showRadar ? '#0284c7' : '#64748b',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title={showRadar ? 'Hide radar' : 'Show radar'}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>radar</span>
+          </button>
+          <button
+            onClick={() => setIsFullscreen((f) => !f)}
+            style={{
+              padding: '4px',
+              borderRadius: '6px',
+              border: 'none',
+              background: 'transparent',
+              color: isFullscreen ? '#0284c7' : '#64748b',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+              {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+            </span>
+          </button>
+        </div>
+
         <canvas
           ref={canvasRef}
-          width={W}
-          height={H}
+          width={1280}
+          height={700}
           tabIndex={0}
+          onWheel={(e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.08 : 0.08;
+            setZoom((prev) => {
+              const next = Math.min(1.5, Math.max(0.55, Number((prev + delta).toFixed(2))));
+              zoomRef.current = next;
+              return next;
+            });
+          }}
+          onClick={(e) => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const sx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const sy = (e.clientY - rect.top) * (canvas.height / rect.height);
+            const z = zoomRef.current;
+            const wx = (sx - canvas.width / 2) / z + cameraRef.current.x;
+            const wy = (sy - canvas.height / 2) / z + cameraRef.current.y;
+
+            // Check if user clicked a door to toggle
+            if (activeTheme.hasDoors) {
+              for (const [key, d] of Object.entries(DOORS)) {
+                if (d.wall) {
+                  const dcx = d.wall.x + d.wall.w / 2;
+                  const dcy = d.wall.y + d.wall.h / 2;
+                  if (Math.hypot(wx - dcx, wy - dcy) < 65) {
+                    handleToggleDoor(key);
+                    return;
+                  }
+                }
+              }
+            }
+          }}
           style={{
-            display:'block',
-            borderRadius:'16px',
-            outline:'none',
-            border:'1px solid #D9D7D0',
-            boxShadow:'0 20px 45px -10px rgba(0,0,0,0.08), 0 8px 16px -6px rgba(0,0,0,0.04)',
-            cursor:'default',
-            maxWidth:'100%',
-            background:'#ffffff',
+            display: 'block',
+            width: '100%',
+            height: '100%',
+            outline: 'none',
+            cursor: 'default',
+            background: '#0f172a',
           }}
         />
 

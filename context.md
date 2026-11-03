@@ -222,9 +222,15 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Latest Commit Hash:** `2449d0a` (`security: remove exposed MongoDB Atlas credentials from render.yaml, server/db.js, and .env.example`)
+* **Latest Milestone:** Pillar 1 Complete — World & Canvas Viewport Modernization (V2 Engine)
+  * Expanded world coordinate boundary from 1200x680 to 2200x1300 in `client/src/services/spatialAudio.js` and `client/src/WorldCanvas.jsx`.
+  * Implemented smooth follow camera centering on the local player avatar with 60 FPS linear interpolation (`camLerp = 0.12`).
+  * Built dynamic responsive viewport canvas adapting automatically to any container or screen resolution, with one-click Fullscreen mode.
+  * Added live floating Minimap Radar HUD (210x124) displaying scaled room boundaries, walls, doors, remote peers, local earshot ring, and the real-time camera viewport frustum box.
+  * Added on-screen zoom controls (`+`, `-`, `Reset`, `Fullscreen`, `Radar toggle`) and smooth mouse wheel zooming with screen-to-world coordinate unprojection for door toggling.
+  * Enforced strict UI polish and eliminated cheap emojis across canvas tags and badges.
 * **Production Branch:** `main` (Auto-deployed to Vercel Production & Render `proxispeak-server`)
 * **Staging / Testing Branch:** `dev` (Auto-deployed to Vercel Preview & Render `proxispeak-server-dev`)
 * **Feature Branches:** `branch-dvij`, `branch-kunj`, `branch-sumit`, `branch-Uma`
-* **Client Build:** Verified clean (0 errors, Vite bundle ~360 kB, build duration ~1.2s).
+* **Client Build:** Verified clean (0 errors, Vite bundle built in ~1.0s).
 * **Server Health:** Verified clean (0 syntax errors, Node 18+ ES modules).
