@@ -3,6 +3,8 @@ import AuthModal from './components/AuthModal';
 import MeetingLobby from './components/MeetingLobby';
 import WorldCanvas from './WorldCanvas';
 import VoiceTest from './components/VoiceTest';
+import OfficeDesigner from './components/OfficeDesigner';
+import OrganizationHub from './components/OrganizationHub';
 import { SERVER_URL } from './config';
 
 export default function App() {
@@ -11,6 +13,10 @@ export default function App() {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [inviteRoomId, setInviteRoomId] = useState(null);
   const [isVoiceTesting, setIsVoiceTesting] = useState(false);
+  const [isDesigningOffice, setIsDesigningOffice] = useState(false);
+  const [designerOrg, setDesignerOrg] = useState(null);
+  const [showOrgHub, setShowOrgHub] = useState(false);
+  const [activeOrg, setActiveOrg] = useState(null);
 
   // Check URL query parameters (?room=roomId)
   useEffect(() => {
@@ -237,6 +243,21 @@ export default function App() {
     );
   }
 
+  // Interactive Office Designer View (Pillar 2)
+  if (isDesigningOffice) {
+    return (
+      <OfficeDesigner
+        user={user}
+        organization={designerOrg || activeOrg}
+        onBackToLobby={() => setIsDesigningOffice(false)}
+        onLaunchOffice={(officeData) => {
+          setIsDesigningOffice(false);
+          handleJoinRoom(officeData);
+        }}
+      />
+    );
+  }
+
   // Active Workspace & Call Canvas
   if (currentRoom) {
     if (!user) {
@@ -271,7 +292,32 @@ export default function App() {
         onLogout={handleLogout}
         onRequestAuth={() => setShowAuthModal(true)}
         onOpenVoiceTest={() => setIsVoiceTesting(true)}
+        onOpenDesigner={(org) => {
+          setDesignerOrg(org || activeOrg);
+          setIsDesigningOffice(true);
+        }}
+        onOpenOrgHub={() => setShowOrgHub(true)}
+        activeOrg={activeOrg}
       />
+
+      {/* Organization & Office Layouts Hub Modal */}
+      {showOrgHub && (
+        <OrganizationHub
+          user={user}
+          currentOrg={activeOrg}
+          onSelectOrg={(org) => setActiveOrg(org)}
+          onOpenDesigner={(org) => {
+            setShowOrgHub(false);
+            setDesignerOrg(org || activeOrg);
+            setIsDesigningOffice(true);
+          }}
+          onLaunchOffice={(officeData) => {
+            setShowOrgHub(false);
+            handleJoinRoom(officeData);
+          }}
+          onClose={() => setShowOrgHub(false)}
+        />
+      )}
 
       {/* Auth Modal Dialog */}
       {showAuthModal && (

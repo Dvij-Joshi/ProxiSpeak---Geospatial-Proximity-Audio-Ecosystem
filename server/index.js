@@ -19,6 +19,8 @@ import { connectDB } from './db.js';
 import User from './models/User.js';
 import Account from './models/Account.js';
 import Room from './models/Room.js';
+import Organization from './models/Organization.js';
+import OfficeLayout from './models/OfficeLayout.js';
 import {
   generalApiLimiter,
   authLimiter,
@@ -111,9 +113,13 @@ async function initRedisAdapter() {
 const rooms = new Map();
 const memoryAccounts = new Map(); // cleanUsernameLower -> account object
 const memoryRooms = new Map();    // roomId -> room object
+const memoryOrgs = new Map();     // orgId -> organization object
+const memoryLayouts = new Map();  // layoutId -> office layout object
 
 const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
+const ORGS_FILE = path.join(DATA_DIR, 'organizations.json');
+const LAYOUTS_FILE = path.join(DATA_DIR, 'layouts.json');
 
 // Initialize persistent cache from disk
 function loadCachedAccounts() {
@@ -196,6 +202,142 @@ async function syncCachedAccountsToDb() {
 }
 
 loadCachedAccounts();
+loadCachedOrgsAndLayouts();
+// Default seed organizations and office layouts
+const SEED_ORGS = [
+  {
+    orgId: 'acme-corp',
+    name: 'Acme Corporation',
+    slug: 'acme-corp',
+    description: 'Enterprise virtual headquarters with departmental suites and collaboration pods.',
+    logoColor: '#2563eb',
+    owner: 'dvijjoshi',
+    members: [
+      { username: 'dvijjoshi', role: 'owner', avatarColor: '#3b82f6', joinedAt: new Date() },
+      { username: 'kunj', role: 'admin', avatarColor: '#10b981', joinedAt: new Date() },
+      { username: 'sumit', role: 'member', avatarColor: '#f59e0b', joinedAt: new Date() },
+      { username: 'uma', role: 'member', avatarColor: '#ec4899', joinedAt: new Date() },
+    ],
+    createdAt: new Date(),
+  },
+  {
+    orgId: 'deepmind-lab',
+    name: 'DeepMind Research Lab',
+    slug: 'deepmind-lab',
+    description: 'AI intelligence sandbox, keynote auditoriums, and quiet focus pods.',
+    logoColor: '#8b5cf6',
+    owner: 'dvijjoshi',
+    members: [
+      { username: 'dvijjoshi', role: 'owner', avatarColor: '#8b5cf6', joinedAt: new Date() },
+    ],
+    createdAt: new Date(),
+  },
+];
+
+const SEED_LAYOUTS = [
+  {
+    layoutId: 'acme-main-hq',
+    orgId: 'acme-corp',
+    name: 'Engineering Campus HQ',
+    description: 'Flagship multi-department spatial office with meeting rooms and acoustic zones.',
+    theme: 'office',
+    width: 2200,
+    height: 1300,
+    spawnPoint: { x: 1100, y: 720 },
+    createdBy: 'dvijjoshi',
+    isDefault: true,
+    createdAt: new Date(),
+  },
+  {
+    layoutId: 'acme-townhall',
+    orgId: 'acme-corp',
+    name: 'Townhall Auditorium',
+    description: 'Keynote stage, presentation hall, and breakout zones.',
+    theme: 'conference',
+    width: 2200,
+    height: 1300,
+    spawnPoint: { x: 1100, y: 1050 },
+    createdBy: 'kunj',
+    isDefault: false,
+    createdAt: new Date(),
+  },
+  {
+    layoutId: 'acme-lounge',
+    orgId: 'acme-corp',
+    name: 'Executive Sky Lounge',
+    description: 'Relaxed ambient terrace with fireside booths and cocktail bar.',
+    theme: 'lounge',
+    width: 2200,
+    height: 1300,
+    spawnPoint: { x: 1100, y: 650 },
+    createdBy: 'sumit',
+    isDefault: false,
+    createdAt: new Date(),
+  },
+  {
+    layoutId: 'deepmind-research-hub',
+    orgId: 'deepmind-lab',
+    name: 'Frontier AI Research Hub',
+    description: 'Specialized lab layout with high-isolation neural model review rooms.',
+    theme: 'office',
+    width: 2200,
+    height: 1300,
+    spawnPoint: { x: 1100, y: 720 },
+    createdBy: 'dvijjoshi',
+    isDefault: true,
+    createdAt: new Date(),
+  },
+];
+
+function loadCachedOrgsAndLayouts() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    // Load Orgs
+    if (fs.existsSync(ORGS_FILE)) {
+      const raw = fs.readFileSync(ORGS_FILE, 'utf8');
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) {
+        for (const o of list) if (o && o.orgId) memoryOrgs.set(o.orgId, o);
+      }
+    }
+    if (memoryOrgs.size === 0) {
+      for (const o of SEED_ORGS) memoryOrgs.set(o.orgId, o);
+      fs.writeFileSync(ORGS_FILE, JSON.stringify(SEED_ORGS, null, 2), 'utf8');
+    }
+
+    // Load Layouts
+    if (fs.existsSync(LAYOUTS_FILE)) {
+      const raw = fs.readFileSync(LAYOUTS_FILE, 'utf8');
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) {
+        for (const l of list) if (l && l.layoutId) memoryLayouts.set(l.layoutId, l);
+      }
+    }
+    if (memoryLayouts.size === 0) {
+      for (const l of SEED_LAYOUTS) memoryLayouts.set(l.layoutId, l);
+      fs.writeFileSync(LAYOUTS_FILE, JSON.stringify(SEED_LAYOUTS, null, 2), 'utf8');
+    }
+  } catch (err) {
+    console.warn('[Cache] Error loading orgs/layouts cache:', err.message);
+  }
+}
+
+function saveOrgsToDisk() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(ORGS_FILE, JSON.stringify(Array.from(memoryOrgs.values()), null, 2), 'utf8');
+  } catch (_e) {}
+}
+
+function saveLayoutsToDisk() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(LAYOUTS_FILE, JSON.stringify(Array.from(memoryLayouts.values()), null, 2), 'utf8');
+  } catch (_e) {}
+}
+
 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
@@ -827,6 +969,277 @@ app.get('/api/rooms/:roomId', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch room' });
+  }
+});
+
+
+// ─── Organization & Custom Office Layouts API (Pillar 2) ─────────────────────
+
+// GET /api/organizations - List organizations with office count
+app.get('/api/organizations', async (_req, res) => {
+  try {
+    let orgs = [];
+    if (isDbConnected()) {
+      try {
+        orgs = await Organization.find({}).sort({ createdAt: -1 }).lean();
+      } catch (_e) {}
+    }
+    if (!orgs || orgs.length === 0) {
+      orgs = Array.from(memoryOrgs.values());
+    }
+
+    // Attach office layout count to each org
+    const enriched = orgs.map((org) => {
+      const officeCount = Array.from(memoryLayouts.values()).filter((l) => l.orgId === org.orgId).length;
+      return {
+        ...org,
+        officeCount: Math.max(officeCount, 1),
+      };
+    });
+
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch organizations' });
+  }
+});
+
+// POST /api/organizations - Create a new organization
+app.post('/api/organizations', generalApiLimiter, async (req, res) => {
+  try {
+    const { name, description = '', owner = 'Anonymous', logoColor = '#2563eb' } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Organization name is required' });
+    }
+
+    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 30);
+    const orgId = `${slug}-${Math.random().toString(36).substring(2, 6)}`;
+
+    const newOrg = {
+      orgId,
+      name: name.trim(),
+      slug,
+      description: description.trim(),
+      logoColor,
+      owner,
+      members: [{ username: owner, role: 'owner', avatarColor: logoColor, joinedAt: new Date() }],
+      createdAt: new Date(),
+    };
+
+    memoryOrgs.set(orgId, newOrg);
+    saveOrgsToDisk();
+
+    // Create default office layout for this organization
+    const defaultLayout = {
+      layoutId: `${orgId}-hq`,
+      orgId,
+      name: `${name.trim()} Main Office`,
+      description: 'Default architectural layout with meeting suites and open desks.',
+      theme: 'office',
+      width: 2200,
+      height: 1300,
+      spawnPoint: { x: 1100, y: 720 },
+      createdBy: owner,
+      isDefault: true,
+      createdAt: new Date(),
+    };
+    memoryLayouts.set(defaultLayout.layoutId, defaultLayout);
+    saveLayoutsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        await Organization.create(newOrg);
+        await OfficeLayout.create(defaultLayout);
+      } catch (_e) {}
+    }
+
+    res.status(201).json({ ...newOrg, officeCount: 1 });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create organization' });
+  }
+});
+
+// GET /api/organizations/:orgId - Get single organization with members
+app.get('/api/organizations/:orgId', async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    let org = memoryOrgs.get(orgId);
+    if (!org && isDbConnected()) {
+      try {
+        org = await Organization.findOne({ orgId }).lean();
+      } catch (_e) {}
+    }
+    if (!org) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    const layouts = Array.from(memoryLayouts.values()).filter((l) => l.orgId === orgId);
+    res.json({ ...org, layouts });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch organization' });
+  }
+});
+
+// POST /api/organizations/:orgId/members - Add member to organization
+app.post('/api/organizations/:orgId/members', generalApiLimiter, async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const { username, role = 'member', avatarColor = '#3b82f6' } = req.body;
+    if (!username || !username.trim()) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    const org = memoryOrgs.get(orgId);
+    if (!org) return res.status(404).json({ error: 'Organization not found' });
+
+    const exists = (org.members || []).some((m) => m.username.toLowerCase() === username.trim().toLowerCase());
+    if (exists) {
+      return res.status(409).json({ error: 'Member is already part of this organization' });
+    }
+
+    const newMember = {
+      username: username.trim(),
+      role: ['owner', 'admin', 'member'].includes(role) ? role : 'member',
+      avatarColor,
+      joinedAt: new Date(),
+    };
+
+    org.members = [...(org.members || []), newMember];
+    memoryOrgs.set(orgId, org);
+    saveOrgsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        await Organization.updateOne({ orgId }, { $push: { members: newMember } });
+      } catch (_e) {}
+    }
+
+    res.status(201).json(org);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add member' });
+  }
+});
+
+// GET /api/organizations/:orgId/layouts - List all office layouts for an org
+app.get('/api/organizations/:orgId/layouts', async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    let layouts = [];
+    if (isDbConnected()) {
+      try {
+        layouts = await OfficeLayout.find({ orgId }).sort({ createdAt: -1 }).lean();
+      } catch (_e) {}
+    }
+    if (!layouts || layouts.length === 0) {
+      layouts = Array.from(memoryLayouts.values()).filter((l) => l.orgId === orgId);
+    }
+    res.json(layouts);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch office layouts' });
+  }
+});
+
+// POST /api/organizations/:orgId/layouts - Save / Create new custom office layout
+app.post('/api/organizations/:orgId/layouts', generalApiLimiter, async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const {
+      name,
+      description = '',
+      theme = 'custom',
+      width = 2200,
+      height = 1300,
+      spawnPoint = { x: 1100, y: 720 },
+      walls = [],
+      doors = [],
+      furniture = [],
+      soundZones = [],
+      createdBy = 'Anonymous',
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Office name is required' });
+    }
+
+    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 24);
+    const layoutId = `${orgId}-${slug}-${Math.random().toString(36).substring(2, 6)}`;
+
+    const newLayout = {
+      layoutId,
+      orgId,
+      name: name.trim(),
+      description: description.trim(),
+      theme,
+      width,
+      height,
+      spawnPoint,
+      walls,
+      doors,
+      furniture,
+      soundZones,
+      createdBy,
+      isDefault: false,
+      createdAt: new Date(),
+    };
+
+    memoryLayouts.set(layoutId, newLayout);
+    saveLayoutsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        await OfficeLayout.create(newLayout);
+      } catch (_e) {}
+    }
+
+    res.status(201).json(newLayout);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create office layout' });
+  }
+});
+
+// GET /api/layouts/:layoutId - Get a specific layout
+app.get('/api/layouts/:layoutId', async (req, res) => {
+  try {
+    const { layoutId } = req.params;
+    let layout = memoryLayouts.get(layoutId);
+    if (!layout && isDbConnected()) {
+      try {
+        layout = await OfficeLayout.findOne({ layoutId }).lean();
+      } catch (_e) {}
+    }
+    if (!layout) return res.status(404).json({ error: 'Office layout not found' });
+    res.json(layout);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch office layout' });
+  }
+});
+
+// PUT /api/layouts/:layoutId - Update an existing layout
+app.put('/api/layouts/:layoutId', generalApiLimiter, async (req, res) => {
+  try {
+    const { layoutId } = req.params;
+    const existing = memoryLayouts.get(layoutId);
+    if (!existing) return res.status(404).json({ error: 'Office layout not found' });
+
+    const updated = {
+      ...existing,
+      ...req.body,
+      layoutId,
+      orgId: existing.orgId,
+      updatedAt: new Date(),
+    };
+
+    memoryLayouts.set(layoutId, updated);
+    saveLayoutsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        await OfficeLayout.updateOne({ layoutId }, { $set: updated });
+      } catch (_e) {}
+    }
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update office layout' });
   }
 });
 

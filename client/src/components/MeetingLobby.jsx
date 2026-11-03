@@ -106,7 +106,16 @@ const THEME_OPTIONS = [
   },
 ];
 
-export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth, onOpenVoiceTest }) {
+export default function MeetingLobby({
+  user,
+  onJoinRoom,
+  onLogout,
+  onRequestAuth,
+  onOpenVoiceTest,
+  onOpenDesigner,
+  onOpenOrgHub,
+  activeOrg,
+}) {
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [joinCode, setJoinCode] = useState('');
@@ -351,6 +360,14 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#FF4B2B] animate-pulse" />
               Voice Test
+            </button>
+            <button
+              onClick={onOpenOrgHub}
+              className="font-label text-[11px] font-semibold text-[#2563eb] hover:text-white px-3 py-1 bg-[#2563eb]/10 hover:bg-[#2563eb] rounded-full transition-all cursor-pointer flex items-center gap-1.5 border border-[#2563eb]/20"
+              title="Organizations and Office Layouts"
+            >
+              <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
+              <span>{activeOrg ? activeOrg.name : 'Organizations'}</span>
             </button>
           </nav>
 
@@ -626,6 +643,16 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
                       </button>
                     ))}
                   </div>
+
+                  {/* Design Office Button */}
+                  <button
+                    onClick={onOpenDesigner}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#2563eb] text-white font-label text-label hover:bg-[#1d4ed8] transition-all shadow-sm cursor-pointer"
+                    title="Design a custom office layout with walls, soundproof doors, and furniture"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">draw</span>
+                    <span>Design Office</span>
+                  </button>
 
                   {/* Refresh Grid Button */}
                   <button

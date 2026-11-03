@@ -795,8 +795,57 @@ export default function WorldCanvas({
   const avatarColor = user?.avatarColor || propAvatarColor || '#3b82f6';
   const roomId = room?.roomId || propRoomId || 'main-office';
   const roomName = room?.name || propRoomName || 'Workspace';
+  const customLayout = room?.layout;
   const themeKey = (room?.theme && THEMES[room.theme]) ? room.theme : (propTheme && THEMES[propTheme] ? propTheme : 'office');
-  const activeTheme = THEMES[themeKey] || THEMES.office;
+  const activeTheme = customLayout
+    ? {
+        id: customLayout.layoutId || 'custom',
+        name: customLayout.name || roomName,
+        icon: 'apartment',
+        badgeColor: '#2563eb',
+        spawn: customLayout.spawnPoint || { x: 1100, y: 720 },
+        draw: (ctx) => {
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(18, 18, W - 36, H - 36);
+          // Architectural floor grid
+          ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+          ctx.lineWidth = 1;
+          for (let gx = 20; gx < W - 20; gx += 40) {
+            ctx.beginPath(); ctx.moveTo(gx, 20); ctx.lineTo(gx, H - 20); ctx.stroke();
+          }
+          for (let gy = 20; gy < H - 20; gy += 40) {
+            ctx.beginPath(); ctx.moveTo(20, gy); ctx.lineTo(W - 20, gy); ctx.stroke();
+          }
+          // Furniture
+          if (Array.isArray(customLayout.furniture)) {
+            for (const f of customLayout.furniture) {
+              if (f.type === 'rect') {
+                ctx.fillStyle = f.color || '#b5896a';
+                ctx.fillRect(f.x, f.y, f.w, f.h);
+                ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(f.x, f.y, f.w, f.h);
+              } else if (f.type === 'chair') {
+                ctx.beginPath(); ctx.arc(f.x, f.y, 10, 0, Math.PI * 2);
+                ctx.fillStyle = '#7c6050'; ctx.fill();
+                ctx.strokeStyle = '#5a4038'; ctx.lineWidth = 1.5; ctx.stroke();
+              } else if (f.type === 'plant') {
+                drawPlant(ctx, f.x, f.y, f.r || 15);
+              } else if (f.type === 'screen') {
+                drawScreen(ctx, f.x, f.y);
+              }
+            }
+          }
+          // Walls
+          ctx.fillStyle = '#2c3050';
+          if (Array.isArray(customLayout.walls)) {
+            for (const w of customLayout.walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+          }
+        },
+        walls: (customLayout.walls && customLayout.walls.length > 0) ? customLayout.walls : OFFICE_WALLS,
+        hasDoors: Boolean(customLayout.doors && customLayout.doors.length > 0),
+      }
+    : (THEMES[themeKey] || THEMES.office);
 
   const canvasRef   = useRef(null);
   const containerRef = useRef(null);
