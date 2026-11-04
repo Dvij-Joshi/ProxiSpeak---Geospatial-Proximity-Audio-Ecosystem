@@ -372,7 +372,16 @@ export default function MeetingLobby({
           </nav>
 
           {/* User Controls & Profile */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Header Org Hub Quick Button */}
+            <button
+              onClick={onOpenOrgHub}
+              className="inline-flex lg:hidden items-center gap-1 px-2.5 py-1 rounded-full bg-[#2563eb]/15 text-[#2563eb] text-[11px] font-semibold border border-[#2563eb]/20 cursor-pointer"
+              title="Organizations"
+            >
+              <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
+              <span>Orgs</span>
+            </button>
             {user ? (
               <>
                 <div className="hidden sm:flex items-center gap-2 pl-3 pr-4 py-1.5 bg-surface-container-highest/15 rounded-full">
@@ -453,6 +462,28 @@ export default function MeetingLobby({
                 <span className="w-1 h-6 rounded-full bg-on-surface/40 animate-[bounce_1.3s_infinite]" />
                 <span className="w-1 h-3 rounded-full bg-on-surface/20" />
                 <span className="font-label text-label text-on-surface ml-3 font-semibold">Ready</span>
+              </div>
+
+              {/* Organization Hub & Office Designer Hero Fast-Track */}
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3 z-10">
+                <button
+                  onClick={onOpenOrgHub}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                  title="Open Organization Headquarters & Team Workspace Switcher"
+                >
+                  <span className="material-symbols-outlined text-[18px]">corporate_fare</span>
+                  <span>{activeOrg ? `Organization: ${activeOrg.name}` : 'Organizations & Workspaces'}</span>
+                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </button>
+
+                <button
+                  onClick={() => onOpenDesigner && onOpenDesigner(activeOrg)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white hover:bg-soft-card text-[#1c1b1b] border border-[#D9D7D0] text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                  title="Design custom office layouts with walls, soundproof doors, and furniture"
+                >
+                  <span className="material-symbols-outlined text-[18px] text-[#2563eb]">draw</span>
+                  <span>Design Custom Office</span>
+                </button>
               </div>
             </section>
 

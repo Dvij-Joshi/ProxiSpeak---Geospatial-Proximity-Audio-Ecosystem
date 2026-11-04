@@ -29,6 +29,12 @@ export default function App() {
       if (params.get('voiceTest') === 'true' || params.has('voiceRoom') || window.location.pathname === '/voice-test') {
         setIsVoiceTesting(true);
       }
+      if (params.get('orgs') === 'true' || params.get('organizations') === 'true' || window.location.pathname === '/organizations') {
+        setShowOrgHub(true);
+      }
+      if (params.get('designer') === 'true' || window.location.pathname === '/designer') {
+        setIsDesigningOffice(true);
+      }
     } catch (_e) {}
   }, []);
 
