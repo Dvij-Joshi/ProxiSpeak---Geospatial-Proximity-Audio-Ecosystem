@@ -232,5 +232,6 @@ git checkout branch-dvij
 * **Production Branch:** `main` (Auto-deployed to Vercel Production & Render `proxispeak-server`)
 * **Staging / Testing Branch:** `dev` (Auto-deployed to Vercel Preview & Render `proxispeak-server-dev`)
 * **Feature Branches:** `branch-dvij`, `branch-kunj`, `branch-sumit`, `branch-Uma`
+* **Knowledge Graph:** Initialized via GSD Graphify (531 nodes, 698 edges, 30 communities at HEAD commit).
 * **Client Build:** Verified clean (0 errors, Vite bundle built in ~1.0s).
 * **Server Health:** Verified clean (0 syntax errors, Node 18+ ES modules).
