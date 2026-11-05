@@ -10,6 +10,28 @@ const H = 680;
 const SPEED = 2.8;
 const R = 14; // avatar radius
 const MOVE_THROTTLE_MS = 50; // emit move at most every 50ms
+const OFFICE_ROOM_LEGEND = [
+  { name: 'Meeting Room', color: '#ddedf7' },
+  { name: "Manager's Office", color: '#f7f0e0' },
+  { name: 'Tech / Server', color: '#e0f0e8' },
+  { name: 'Lounge & Break', color: '#fff4e0' },
+  { name: 'Print / Copy', color: '#f0e8f8' },
+  { name: 'Open Workspace', color: '#f0ede8' },
+];
+const MAP_ROOM_LEGENDS = {
+  office: OFFICE_ROOM_LEGEND,
+  conference: [
+    { name: 'Breakout Pods', color: '#1e2538' },
+    { name: 'Auditorium', color: '#181b2e' },
+    { name: 'Networking Foyer', color: '#1b2034' },
+  ],
+  lounge: [
+    { name: 'VIP Lounge', color: '#292524' },
+    { name: 'Central Bar', color: '#262220' },
+    { name: 'Games & Recreation', color: '#202624' },
+    { name: 'Sunset Terrace', color: '#1c2820' },
+  ],
+};
 
 // ─── Office Theme Layout ───────────────────────────────────────────────────────
 const OFFICE_FLOORS = [
@@ -301,7 +323,7 @@ function drawConference(ctx) {
   drawRoundRect(ctx, 350, 92, 54, 42, 4);
   ctx.fillStyle = '#4f46e5'; ctx.fill();
   ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '14px sans-serif'; ctx.fillText('🎙️', 377, 118);
+  ctx.font = '700 9px Inter, sans-serif'; ctx.fillStyle = '#e0e7ff'; ctx.textAlign = 'center'; ctx.fillText('MIC', 377, 117);
 
   // Auditorium Seating rows (left and right banks, center aisle)
   const rows = 4, cols = 5;
@@ -341,7 +363,7 @@ function drawConference(ctx) {
   drawRoundRect(ctx, 90, 560, 180, 44, 6);
   ctx.fillStyle = '#475569'; ctx.fill();
   ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#f8fafc'; ctx.fillText('☕ Refreshments Bar', 180, 586);
+  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#f8fafc'; ctx.fillText('Refreshments Bar', 180, 586);
 
   for (const hx of [420, 600, 780, 980]) {
     drawRoundTable(ctx, hx, 580, 20, 3, '#64748b');
@@ -410,7 +432,7 @@ function drawLounge(ctx) {
   drawRoundRect(ctx, 420, 32, 360, 24, 4);
   ctx.fillStyle = '#451a03'; ctx.fill();
   ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#fef3c7'; ctx.textAlign = 'center';
-  ctx.fillText('🍸 ROOFTOP ESPRESSO & COCKTAIL BAR 🍹', 600, 48);
+  ctx.fillText('ROOFTOP ESPRESSO & COCKTAIL BAR', 600, 48);
 
   // West VIP Booths
   drawRoundRect(ctx, 50, 90, 160, 45, 8);
@@ -670,9 +692,9 @@ function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = 
   ctx.font = '600 12px Inter, sans-serif';
   ctx.textAlign = 'center';
   const isActuallySpeaking = !isMuted && (isSpeaking || voiceIntensity > 0.04);
-  const micIcon = isMuted ? '🔇' : (isActuallySpeaking ? '🗣️' : '🎙️');
+  const micStatus = isMuted ? 'Muted' : (isActuallySpeaking ? 'Speaking' : 'Mic on');
   const label = isMe ? `${username} (you)` : username;
-  const fullTag = `${micIcon} ${label}`;
+  const fullTag = `${micStatus} · ${label}`;
   const tw = ctx.measureText(fullTag).width;
   const extraForEq = !isMuted ? 16 : 0;
   const px = 8, tagX = x - (tw + extraForEq) / 2 - px, tagY = y - R - 28;
@@ -809,6 +831,7 @@ export default function WorldCanvas({
   const [isMuted, setIsMuted] = useState(true);
   const [isDeafened, setIsDeafened] = useState(false);
   const [inEarshotCount, setInEarshotCount] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
   const [currentRoom, setCurrentRoom] = useState({ id: 'open-workspace', name: 'Open Workspace', isIsolated: false });
   const [copiedLink, setCopiedLink] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(() => spatialAudio.isAudioUnlocked());
@@ -819,6 +842,10 @@ export default function WorldCanvas({
 
   // Chat Sidebar State
   const [showChat, setShowChat] = useState(false);
+  const [showPeople, setShowPeople] = useState(false);
+  const [showMapKey, setShowMapKey] = useState(false);
+  const [showTouchPad, setShowTouchPad] = useState(false);
+  const [onlinePeople, setOnlinePeople] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef(null);
@@ -832,6 +859,48 @@ export default function WorldCanvas({
   const renderRef = useRef(null);
   const offscreenRef = useRef(null);
   const prevInEarshotRef = useRef(0);
+
+  // Presence data is sampled for React UI at a modest rate; canvas animation stays on its own RAF loop.
+  useEffect(() => {
+    const updatePeople = () => {
+      const me = stateRef.current;
+      const people = [];
+      if (isConnected) {
+        people.push({
+          id: 'self',
+          username,
+          avatarColor,
+          isMuted: isMutedRef.current,
+          isSpeaking: !isMutedRef.current && isSpeakingRef.current,
+          isLocal: true,
+          roomName: getRoomAt(me.x, me.y, themeKey)?.name || 'Open Workspace',
+          inVoiceRange: true,
+        });
+        for (const [id, peer] of Object.entries(peersRef.current)) {
+          const peerX = Number.isFinite(peer.x) ? peer.x : me.x;
+          const peerY = Number.isFinite(peer.y) ? peer.y : me.y;
+          const distance = Math.hypot(peerX - me.x, peerY - me.y);
+          const isMutedPeer = Boolean(peer.isMuted);
+          people.push({
+            id,
+            username: peer.username || 'Guest',
+            avatarColor: peer.avatarColor || '#64748b',
+            isMuted: isMutedPeer,
+            isSpeaking: !isMutedPeer && (peerIntensitiesRef.current[id] || 0) > 0.05,
+            isLocal: false,
+            roomName: getRoomAt(peerX, peerY, themeKey)?.name || 'Open Workspace',
+            inVoiceRange: distance <= MAX_DISTANCE,
+            distance,
+          });
+        }
+      }
+      people.sort((a, b) => Number(b.isLocal) - Number(a.isLocal) || Number(b.inVoiceRange) - Number(a.inVoiceRange) || (a.distance || 0) - (b.distance || 0));
+      setOnlinePeople(people);
+    };
+    updatePeople();
+    const timer = setInterval(updatePeople, 500);
+    return () => clearInterval(timer);
+  }, [username, avatarColor, themeKey, isConnected]);
 
   const refreshDiagnostics = useCallback(() => {
     const d = webrtc.getConnectionDiagnostics();
@@ -999,7 +1068,7 @@ export default function WorldCanvas({
     ctx.font = '500 11px Inter, sans-serif';
     ctx.fillStyle = '#5e5f5c';
     ctx.textAlign = 'left';
-    ctx.fillText('W A S D to move', 26, H - 25);
+    ctx.fillText('WASD / arrows to move', 26, H - 25);
 
     // 5. Connection indicator bottom-right
     const connected = socketRef.current?.connected;
@@ -1142,7 +1211,13 @@ export default function WorldCanvas({
     window.addEventListener('pointerdown', unlockAudio, { once: true });
 
     // Auto-recover audio & mic when returning from background (screen lock / app switch on mobile)
+    const clearMovementKeys = () => {
+      stateRef.current.keys = {};
+      stateRef.current.moving = false;
+    };
+    const handleWindowBlur = () => clearMovementKeys();
     const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') clearMovementKeys();
       if (document.visibilityState === 'visible') {
         console.log('[WorldCanvas] Page became visible, auto-resuming audio...');
         spatialAudio.resumeAll();
@@ -1157,9 +1232,11 @@ export default function WorldCanvas({
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
 
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
+      setIsConnected(true);
       socket.emit('join-room', { username, avatarColor, roomId, isMuted: isMutedRef.current });
     });
 
@@ -1262,7 +1339,7 @@ export default function WorldCanvas({
         showToast(`Waiting for occupants of ${dName} to welcome you...`, 'info');
       } else if (status === 'room-empty') {
         setMyKnockStatus(null);
-        showToast(`ℹ️ ${message}`, 'info');
+        showToast(message, 'info');
       }
     });
 
@@ -1343,21 +1420,25 @@ export default function WorldCanvas({
     });
 
     socket.on('disconnect', () => {
+      setIsConnected(false);
       console.log('[Socket] disconnected');
     });
 
     // Keyboard handlers (W, A, S, D and Arrow keys for movement)
     const onKeyDown = (e) => {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+      if (e.target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable)) {
         return;
       }
-      stateRef.current.keys[e.key] = true;
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'].includes(key)) {
+        stateRef.current.keys[key] = true;
+      }
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
 
       // Hotkey: M -> Toggle Microphone Mute (explicit key, separate from WASD movement)
-      if (e.key === 'm' || e.key === 'M') {
+      if (key === 'm') {
         handleToggleMic();
         return;
       }
@@ -1374,10 +1455,11 @@ export default function WorldCanvas({
     };
 
     const onKeyUp = (e) => {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      stateRef.current.keys[key] = false;
+      if (e.target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable)) {
         return;
       }
-      stateRef.current.keys[e.key] = false;
 
       // Release Spacebar -> Return to Muted
       if (e.key === ' ' && isPttActiveRef.current) {
@@ -1397,10 +1479,10 @@ export default function WorldCanvas({
       const s = stateRef.current;
       const k = s.keys;
       let dx = 0, dy = 0;
-      if (k['ArrowUp']    || k['w'] || k['W']) dy -= SPEED;
-      if (k['ArrowDown']  || k['s'] || k['S']) dy += SPEED;
-      if (k['ArrowLeft']  || k['a'] || k['A']) dx -= SPEED;
-      if (k['ArrowRight'] || k['d'] || k['D']) dx += SPEED;
+      if (k.ArrowUp || k.w) dy -= SPEED;
+      if (k.ArrowDown || k.s) dy += SPEED;
+      if (k.ArrowLeft || k.a) dx -= SPEED;
+      if (k.ArrowRight || k.d) dx += SPEED;
 
       if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
       s.moving = dx !== 0 || dy !== 0;
@@ -1426,6 +1508,7 @@ export default function WorldCanvas({
         spatialAudio.updatePositions(s, peersRef.current, doorsRef.current, themeKey);
       peerVolumesRef.current = peerVolumes;
       peerIntensitiesRef.current = peerIntensities || {};
+      peerAcousticsRef.current = peerAcoustics || {};
       if (prevInEarshotRef.current === 0 && currentInEarshot > 0) {
         playUiChime('peer-enter');
       }
@@ -1529,6 +1612,7 @@ export default function WorldCanvas({
       window.removeEventListener('keydown', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
       window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('blur', handleWindowBlur);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       cancelAnimationFrame(rafRef.current);
       clearInterval(keepAliveTimer);
@@ -1550,6 +1634,9 @@ export default function WorldCanvas({
 
   const isOutsideNearbyDoor = Boolean(nearbyDoor && nearbyDoor !== roomDoorKey);
   const isNearbyDoorOpen = nearbyDoor ? isDoorOpen(doors, nearbyDoor) : false;
+  const isSidePanelOpen = showChat || showPeople;
+  const themeRoomLegend = MAP_ROOM_LEGENDS[themeKey] || [];
+  const connectedParticipantCount = isConnected ? Object.keys(peersRef.current).length + 1 : 0;
 
   let nearbyDoorOccupants = 0;
   if (nearbyDoor) {
@@ -1617,10 +1704,11 @@ export default function WorldCanvas({
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 12px', background: '#FAF9F5', boxSizing: 'border-box' }}>
+    <div className="world-page-shell" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 12px', background: '#FAF9F5', boxSizing: 'border-box' }}>
       <div style={{ width: '100%', maxWidth: `${W}px`, display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {/* Top Header Console Bar */}
         <div
+          className="world-topbar"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1713,27 +1801,43 @@ export default function WorldCanvas({
           {/* Right: Controls & User */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             {/* Connected Participants Counter */}
-            <div
+            <button
+              onClick={() => {
+                setShowPeople((prev) => !prev);
+                setShowChat(false);
+                setShowMapKey(false);
+                setShowTouchPad(false);
+              }}
+              className="world-online-button"
+              aria-label={`Show ${connectedParticipantCount} connected people`}
+              aria-pressed={showPeople}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
                 padding: '5px 10px',
                 borderRadius: '8px',
-                background: '#F4F3EF',
-                border: '1px solid #D9D7D0',
+                background: showPeople ? '#1c1b1b' : '#F4F3EF',
+                border: '1px solid ' + (showPeople ? '#1c1b1b' : '#D9D7D0'),
                 fontSize: '11px',
-                color: '#5e5f5c',
+                color: showPeople ? '#ffffff' : '#5e5f5c',
                 fontWeight: 500,
+                cursor: 'pointer',
               }}
+              title="Show connected people"
             >
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />
-              <span>{Object.keys(peersRef.current).length + 1} online</span>
-            </div>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isConnected ? '#10b981' : '#b42318' }} />
+              <span>{connectedParticipantCount} online</span>
+            </button>
 
             {/* Chat Toggle Button in Header */}
             <button
-              onClick={() => setShowChat((prev) => !prev)}
+              onClick={() => {
+                setShowChat((prev) => !prev);
+                setShowPeople(false);
+                setShowMapKey(false);
+                setShowTouchPad(false);
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1835,10 +1939,13 @@ export default function WorldCanvas({
 
         {/* Canvas Frame Container with Dockable Chat Sidebar */}
         <div
+          className="world-canvas-frame"
           style={{
             position: 'relative',
-            width: `${W}px`,
-            height: `${H}px`,
+            width: '100%',
+            maxWidth: `${W}px`,
+            height: 'auto',
+            aspectRatio: `${W} / ${H}`,
             borderRadius: '16px',
             overflow: 'hidden',
             border: '1px solid #D9D7D0',
@@ -1983,6 +2090,7 @@ export default function WorldCanvas({
         {/* Browser Autoplay / Audio Unlock Banner */}
         {!audioUnlocked && (
           <div
+            className="world-audio-unlock-banner"
             onClick={() => {
               spatialAudio.resumeAll();
               setAudioUnlocked(true);
@@ -2017,6 +2125,8 @@ export default function WorldCanvas({
           tabIndex={0}
           style={{
             display:'block',
+            width: '100%',
+            height: 'auto',
             borderRadius:'16px',
             outline:'none',
             border:'1px solid #D9D7D0',
@@ -2027,21 +2137,113 @@ export default function WorldCanvas({
           }}
         />
 
+        {/* Map key: explains the existing room fills, doors, avatar, and audio range. */}
+        <div className="world-map-key-wrap">
+          <button
+            type="button"
+            className="world-map-key-button"
+            onClick={() => {
+              setShowMapKey((prev) => !prev);
+              setShowTouchPad(false);
+              setShowChat(false);
+              setShowPeople(false);
+            }}
+            aria-expanded={showMapKey}
+            aria-label="Toggle map key"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">map</span>
+            <span>Map key</span>
+          </button>
+          {showMapKey && (
+            <div className="world-map-key-popover" role="dialog" aria-label="Office map key">
+              <div className="world-map-key-heading">
+                <strong>Office map</strong>
+                <button type="button" onClick={() => setShowMapKey(false)} aria-label="Close map key">
+                  <span className="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+              </div>
+              <div className="world-map-key-rooms">
+                {themeRoomLegend.map((item) => (
+                  <div className="world-map-key-room" key={item.name}>
+                    <span className="world-map-key-swatch" style={{ backgroundColor: item.color }} />
+                    <span>{item.name}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="world-map-key-divider" />
+              <div className="world-map-key-symbol"><span className="world-map-key-avatar" /> Your avatar</div>
+              <div className="world-map-key-symbol"><span className="world-map-key-range" /> Voice range</div>
+              <div className="world-map-key-symbol"><span className="world-map-key-door" /> Doorway / room boundary</div>
+              <div className="world-map-key-controls">Controls: WASD / arrows move · M toggles mic · hold Space to talk</div>
+              <div className="world-map-key-room-state">
+                Current room: <strong>{currentRoom.name}</strong>
+                {roomDoorKey && <span>{isRoomDoorOpen ? 'Door open' : 'Door closed'}</span>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Touch movement controls are shown only on touch-oriented screens. */}
+        <button
+          type="button"
+          className="world-touch-toggle"
+          onClick={() => {
+            setShowTouchPad((prev) => !prev);
+            setShowMapKey(false);
+          }}
+          aria-expanded={showTouchPad}
+          aria-label={showTouchPad ? 'Hide touch movement controls' : 'Show touch movement controls'}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">{showTouchPad ? 'close' : 'control_camera'}</span>
+          <span>{showTouchPad ? 'Close' : 'Move'}</span>
+        </button>
+        {showTouchPad && (
+        <div className="world-touch-pad" aria-label="Touch movement controls">
+          {[
+            { key: 'ArrowUp', label: 'Move up', symbol: '↑', area: 'up' },
+            { key: 'ArrowLeft', label: 'Move left', symbol: '←', area: 'left' },
+            { key: 'ArrowDown', label: 'Move down', symbol: '↓', area: 'down' },
+            { key: 'ArrowRight', label: 'Move right', symbol: '→', area: 'right' },
+          ].map((control) => (
+            <button
+              key={control.key}
+              type="button"
+              className="world-touch-pad-button"
+              style={{ gridArea: control.area }}
+              aria-label={control.label}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                stateRef.current.keys[control.key] = true;
+              }}
+              onPointerUp={() => { stateRef.current.keys[control.key] = false; }}
+              onPointerCancel={() => { stateRef.current.keys[control.key] = false; }}
+              onLostPointerCapture={() => { stateRef.current.keys[control.key] = false; }}
+            >
+              {control.symbol}
+            </button>
+          ))}
+        </div>
+        )}
+
         {/* Chat Sidebar */}
         <div
+          className="world-side-panel"
+          aria-hidden={!isSidePanelOpen}
           style={{
             position: 'absolute',
             top: 0,
+            bottom: 0,
             right: 0,
             width: '320px',
-            height: '100%',
+            height: 'auto',
             background: 'rgba(255, 255, 255, 0.98)',
             backdropFilter: 'blur(20px)',
             borderLeft: '1px solid #D9D7D0',
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: showChat ? '-8px 0 28px rgba(0,0,0,0.10)' : 'none',
-            transform: showChat ? 'translateX(0)' : 'translateX(100%)',
+            boxShadow: isSidePanelOpen ? '-8px 0 28px rgba(0,0,0,0.10)' : 'none',
+            transform: isSidePanelOpen ? 'translateX(0)' : 'translateX(100%)',
             transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             overflow: 'hidden',
             zIndex: 25,
@@ -2057,8 +2259,8 @@ export default function WorldCanvas({
             flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#1c1b1b' }}>chat</span>
-              <span style={{ fontWeight: 700, fontSize: '14px', color: '#1c1b1b' }}>Room Chat</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#1c1b1b' }}>{showPeople ? 'group' : 'chat'}</span>
+              <span style={{ fontWeight: 700, fontSize: '14px', color: '#1c1b1b' }}>{showPeople ? 'People in this room' : 'Room Chat'}</span>
               <span style={{
                 fontSize: '11px',
                 fontWeight: 600,
@@ -2066,10 +2268,10 @@ export default function WorldCanvas({
                 borderRadius: '20px',
                 background: '#E9E8E4',
                 color: '#5e5f5c',
-              }}>{chatMessages.length}</span>
+              }}>{showPeople ? onlinePeople.length : chatMessages.length}</span>
             </div>
             <button
-              onClick={() => setShowChat(false)}
+              onClick={() => { setShowChat(false); setShowPeople(false); }}
               style={{
                 background: '#F4F3EF',
                 border: '1px solid #D9D7D0',
@@ -2089,6 +2291,54 @@ export default function WorldCanvas({
             </button>
           </div>
 
+          {showPeople ? (
+            <div className="world-people-panel-content">
+              <p className="world-people-panel-summary">
+                {isConnected
+                  ? 'Live participants connected to this room. Voice range updates from your avatar position.'
+                  : 'The live room service is unreachable, so connected participants cannot be loaded right now.'}
+              </p>
+              <div className="world-people-panel-list">
+                {onlinePeople.map((person) => (
+                  <div className="world-person-row" key={person.id}>
+                    <span className="world-person-avatar" style={{ backgroundColor: person.avatarColor }} aria-hidden="true">
+                      {person.username.slice(0, 1).toUpperCase()}
+                    </span>
+                    <div className="world-person-copy">
+                      <div className="world-person-name-line">
+                        <strong>{person.username}{person.isLocal ? ' (you)' : ''}</strong>
+                        <span className={`world-person-mic ${person.isMuted ? 'is-muted' : person.isSpeaking ? 'is-speaking' : ''}`}>
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            {person.isMuted ? 'mic_off' : person.isSpeaking ? 'graphic_eq' : 'mic'}
+                          </span>
+                          {person.isMuted ? 'Muted' : person.isSpeaking ? 'Speaking' : 'Mic on'}
+                        </span>
+                      </div>
+                      <span className="world-person-room">{person.roomName}</span>
+                      <span className={`world-person-range ${person.inVoiceRange ? 'is-nearby' : ''}`}>
+                        <span className="world-person-range-dot" />
+                        {person.isLocal ? 'Your position' : person.inVoiceRange ? 'In voice range' : 'Outside voice range'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {!isConnected ? (
+                  <div className="world-people-empty">
+                    <span className="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+                    <strong>Room connection unavailable</strong>
+                    <span>People will appear here when the room reconnects.</span>
+                  </div>
+                ) : onlinePeople.length === 1 && (
+                  <div className="world-people-empty">
+                    <span className="material-symbols-outlined" aria-hidden="true">group</span>
+                    <strong>You are the only person here</strong>
+                    <span>Share the room invite to meet your team.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Messages Area */}
           <div style={{
             flex: 1,
@@ -2216,6 +2466,8 @@ export default function WorldCanvas({
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>send</span>
             </button>
           </div>
+          </>
+          )}
         </div>
 
         {/* Connection Diagnostics Modal Overlay */}
@@ -2258,7 +2510,7 @@ export default function WorldCanvas({
                   justifyContent: 'center',
                 }}
               >
-                ✕
+                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>close</span>
               </button>
             </div>
 
@@ -2326,8 +2578,8 @@ export default function WorldCanvas({
                         </div>
                         {pinfo.stats && (
                           <div style={{ display: 'flex', justifyContent: 'space-between', color: '#93c5fd', fontSize: '10px', marginTop: '3px', borderTop: '1px solid rgba(51, 65, 85, 0.4)', paddingTop: '3px' }}>
-                            <span>🌐 {pinfo.stats.modeLabel} ({pinfo.stats.protocol})</span>
-                            <span>{pinfo.stats.rtt != null ? `⚡ ${pinfo.stats.rtt}ms RTT` : '⚡ Active'}</span>
+                            <span><span className="material-symbols-outlined" style={{ fontSize: '11px', verticalAlign: 'middle' }}>public</span> {pinfo.stats.modeLabel} ({pinfo.stats.protocol})</span>
+                            <span>{pinfo.stats.rtt != null ? `${pinfo.stats.rtt}ms RTT` : 'Active'}</span>
                           </div>
                         )}
                       </div>
@@ -2340,7 +2592,7 @@ export default function WorldCanvas({
               {micDevices.length > 0 && (
                 <div style={{ marginTop: '10px' }}>
                   <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px', fontWeight: 600 }}>
-                    🎙️ Microphone Device:
+                    Microphone Device:
                   </label>
                   <select
                     value={selectedMicId}
@@ -2397,7 +2649,7 @@ export default function WorldCanvas({
                     cursor: 'pointer',
                   }}
                 >
-                  🔊 Resume / Unlock Audio
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px', verticalAlign: 'middle' }}>volume_up</span> Resume / Unlock Audio
                 </button>
                 <button
                   onClick={async () => {
@@ -2424,7 +2676,7 @@ export default function WorldCanvas({
                     cursor: 'pointer',
                   }}
                 >
-                  🎙️ Re-acquire Microphone
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px', verticalAlign: 'middle' }}>mic</span> Re-acquire Microphone
                 </button>
                 <button
                   onClick={() => {
@@ -2444,7 +2696,7 @@ export default function WorldCanvas({
                     cursor: 'pointer',
                   }}
                 >
-                  ⚡ Force Reconnect All Peers
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px', verticalAlign: 'middle' }}>sync</span> Force Reconnect All Peers
                 </button>
               </div>
             </div>
@@ -2453,6 +2705,7 @@ export default function WorldCanvas({
 
         {/* Floating Audio Controls HUD */}
         <div
+          className="world-floating-controls"
           style={{
             position: 'absolute',
             bottom: '16px',
@@ -2474,6 +2727,8 @@ export default function WorldCanvas({
         >
           {/* Microphone Toggle Button */}
           <button
+            className="world-toolbar-icon-button"
+            aria-label={!micActive ? 'Enable microphone' : isMuted ? 'Unmute microphone' : 'Mute microphone'}
             onClick={(e) => {
               e.currentTarget.blur();
               canvasRef.current?.focus();
@@ -2513,6 +2768,7 @@ export default function WorldCanvas({
           {/* Push-to-Talk Active Badge */}
           {isPttActive && (
             <div
+              className="world-ptt-badge"
               style={{
                 height: '32px',
                 display: 'inline-flex',
@@ -2538,6 +2794,7 @@ export default function WorldCanvas({
           {/* Live Mic Voice Intensity Meter */}
           {micActive && !isMuted && (
             <div
+              className="world-mic-level"
               style={{
                 height: '32px',
                 display: 'inline-flex',
@@ -2569,10 +2826,12 @@ export default function WorldCanvas({
           )}
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
+          <div className="world-toolbar-divider" style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
 
           {/* Deafen Toggle Button */}
           <button
+            className="world-toolbar-icon-button"
+            aria-label={isDeafened ? 'Turn incoming audio back on' : 'Mute incoming audio'}
             onClick={(e) => {
               e.currentTarget.blur();
               canvasRef.current?.focus();
@@ -2604,6 +2863,8 @@ export default function WorldCanvas({
           {/* Room Door Control for Members Present Inside Room */}
           {activeTheme.hasDoors && roomDoorKey && (
             <button
+              className="world-toolbar-icon-button"
+              aria-label={isRoomDoorOpen ? 'Close current room door' : 'Open current room door'}
               onClick={() => handleToggleDoor(roomDoorKey)}
               style={{
                 height: '32px',
@@ -2825,10 +3086,11 @@ export default function WorldCanvas({
           )}
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
+          <div className="world-toolbar-divider" style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
 
           {/* In-Earshot Proximity Counter */}
           <div
+            className="world-nearby-counter"
             style={{
               height: '32px',
               display: 'inline-flex',
@@ -2860,6 +3122,8 @@ export default function WorldCanvas({
 
           {/* Connection Diagnostics Toggle */}
           <button
+            className="world-toolbar-icon-button"
+            aria-label="Toggle audio diagnostics"
             onClick={() => {
               refreshDiagnostics();
               setShowDiagnostics((prev) => !prev);
@@ -2888,11 +3152,18 @@ export default function WorldCanvas({
           </button>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
+          <div className="world-toolbar-divider" style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
 
           {/* Chat Toggle Button */}
           <button
-            onClick={() => setShowChat((prev) => !prev)}
+            className="world-toolbar-icon-button"
+            aria-label={showChat ? 'Close room chat' : 'Open room chat'}
+            onClick={() => {
+              setShowChat((prev) => !prev);
+              setShowPeople(false);
+              setShowMapKey(false);
+              setShowTouchPad(false);
+            }}
             style={{
               height: '32px',
               display: 'inline-flex',
@@ -2929,10 +3200,12 @@ export default function WorldCanvas({
           </button>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
+          <div className="world-toolbar-divider" style={{ width: '1px', height: '18px', background: '#D9D7D0', margin: '0 1px', flexShrink: 0 }} />
 
           {/* End Call / Leave Room Button */}
           <button
+            className="world-toolbar-icon-button world-end-call-button"
+            aria-label="End call and leave room"
             onClick={handleLeaveCall}
             style={{
               height: '32px',

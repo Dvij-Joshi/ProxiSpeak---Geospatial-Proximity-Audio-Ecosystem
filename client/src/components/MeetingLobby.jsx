@@ -86,21 +86,21 @@ const THEME_OPTIONS = [
   {
     id: 'office',
     name: 'Corporate Office',
-    icon: '🏢',
+    icon: 'apartment',
     desc: 'Executive suites, conference room, lounge, and open desks.',
     image: '/images/office.jpg',
   },
   {
     id: 'conference',
     name: 'Conference & Auditorium',
-    icon: '🏛️',
+    icon: 'account_balance',
     desc: 'Keynote stage, presentation hall, and breakout pods.',
     image: '/images/auditorium.jpg',
   },
   {
     id: 'lounge',
     name: 'Rooftop Social Lounge',
-    icon: '☕',
+    icon: 'local_cafe',
     desc: 'Casual coffee bar, sofa booths, and open air terrace.',
     image: '/images/lounge.jpg',
   },
@@ -109,6 +109,7 @@ const THEME_OPTIONS = [
 export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth, onOpenVoiceTest }) {
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
+  const [roomsUnavailable, setRoomsUnavailable] = useState(null);
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
   const [isRotating, setIsRotating] = useState(false);
@@ -125,6 +126,7 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
   const [activeModal, setActiveModal] = useState(null); // 'spatial-audio' | 'hardware' | 'docs'
 
   const inputRef = useRef(null);
+  const roomFetchWarningShownRef = useRef(false);
 
   // Keyboard shortcut ⌘K / Ctrl+K to focus join input
   useEffect(() => {
@@ -144,12 +146,18 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
     setLoadingRooms(true);
     try {
       const res = await fetch(`${SERVER_URL}/api/rooms`);
-      if (res.ok) {
-        const data = await res.json();
-        setRooms(Array.isArray(data) ? data : []);
-      }
+      if (!res.ok) throw new Error(`Rooms endpoint responded with ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error('Rooms endpoint returned an invalid response');
+      setRooms(data);
+      setRoomsUnavailable(false);
+      roomFetchWarningShownRef.current = false;
     } catch (err) {
-      console.warn('[Lobby] Failed to fetch dynamic rooms:', err.message);
+      setRoomsUnavailable(true);
+      if (!roomFetchWarningShownRef.current) {
+        console.warn('[Lobby] Failed to fetch dynamic rooms:', err.message);
+        roomFetchWarningShownRef.current = true;
+      }
     } finally {
       setLoadingRooms(false);
       setTimeout(() => setIsRotating(false), 600);
@@ -163,7 +171,18 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
   }, []);
 
   // Combine official workspaces with any user-created rooms
-  const allWorkspaces = [...OFFICIAL_WORKSPACES];
+  const canShowLiveCounts = roomsUnavailable === false;
+  const liveRoomsById = new Map(rooms.map((room) => [room.roomId, room]));
+  const allWorkspaces = OFFICIAL_WORKSPACES.map((workspace) => {
+    const liveRoom = liveRoomsById.get(workspace.roomId);
+    return {
+      ...workspace,
+      onlineCount:
+        canShowLiveCounts && Number.isFinite(liveRoom?.activeUsers)
+          ? liveRoom.activeUsers
+          : null,
+    };
+  });
   if (Array.isArray(rooms)) {
     rooms.forEach((apiRoom) => {
       const exists = allWorkspaces.some((w) => w.roomId === apiRoom.roomId);
@@ -180,7 +199,10 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
               : apiRoom.theme === 'lounge'
               ? '/images/lounge.jpg'
               : '/images/office.jpg',
-          onlineCount: apiRoom.occupants?.length || 1,
+          onlineCount:
+            canShowLiveCounts && Number.isFinite(apiRoom.activeUsers)
+              ? apiRoom.activeUsers
+              : null,
           avatars: [
             { initials: (apiRoom.createdBy || 'US').slice(0, 2).toUpperCase(), bg: 'bg-primary', text: 'text-on-primary' },
           ],
@@ -292,7 +314,9 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
     }
   };
 
-  const totalPeers = filteredWorkspaces.reduce((acc, w) => acc + (w.onlineCount || 0), 0) + 15;
+  const totalPeers = canShowLiveCounts
+    ? rooms.reduce((total, room) => total + (Number.isFinite(room.activeUsers) ? room.activeUsers : 0), 0)
+    : null;
 
   return (
     <div className="min-h-screen bg-page-bg font-body-md text-on-surface antialiased selection:bg-accent-orange selection:text-white relative overflow-x-hidden">
@@ -568,9 +592,9 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
             <section className="w-full mb-space-lg" id="spatial-audio">
               <div className="rounded-DEFAULT bg-soft-card/60 backdrop-blur-xl px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm border border-line/30">
                 <div className="flex items-center gap-3">
-                  <div className="w-2.5 h-2.5 rounded-full bg-accent-orange animate-ping" />
+                  <div className={`w-2.5 h-2.5 rounded-full ${roomsUnavailable === false ? 'bg-accent-orange animate-ping' : 'bg-muted'}`} />
                   <span className="font-label-caps text-label-caps uppercase tracking-wider text-on-surface font-bold">
-                    Node SF-01 Online
+                    Workspace Service {roomsUnavailable === false ? 'Connected' : roomsUnavailable === true ? 'Unavailable' : 'Checking'}
                   </span>
                   <span className="text-line text-sm">•</span>
                   <span className="font-label text-label text-on-surface-variant">48kHz Spatial Ingestion Grid</span>
@@ -579,7 +603,7 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-muted text-[18px]">speed</span>
                     <span className="font-label text-label text-muted">Peer Latency:</span>
-                    <span className="font-label text-label text-on-surface font-semibold">12ms</span>
+                    <span className="font-label text-label text-on-surface font-semibold">Not measured</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-muted text-[18px]">headphones</span>
@@ -589,7 +613,9 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-muted text-[18px]">group</span>
                     <span className="font-label text-label text-muted">Global Peers:</span>
-                    <span className="font-label text-label text-on-surface font-semibold">{totalPeers} Connected</span>
+                    <span className="font-label text-label text-on-surface font-semibold">
+                      {totalPeers === null ? 'Unavailable' : `${totalPeers} Connected`}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -608,6 +634,15 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
                   <p className="font-body-md text-body-md text-on-surface-variant mt-1">
                     Jump directly into persistent company canvases with live spatial acoustics.
                   </p>
+                  {roomsUnavailable && (
+                    <div className="room-service-status" role="status">
+                      <span className="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+                      <span>Live rooms are unavailable. Showing featured workspaces.</span>
+                      <button type="button" onClick={fetchRooms} disabled={loadingRooms}>
+                        {loadingRooms ? 'Retrying…' : 'Retry'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   {/* Theme Filter Pills */}
@@ -667,7 +702,7 @@ export default function MeetingLobby({ user, onJoinRoom, onLogout, onRequestAuth
                               ws.onlineCount > 0 ? 'bg-accent-orange animate-pulse' : 'bg-muted'
                             }`}
                           />
-                          <span>{ws.onlineCount} online</span>
+                          <span>{ws.onlineCount === null ? 'Featured' : `${ws.onlineCount} online`}</span>
                         </span>
                       </div>
                       <div className="absolute bottom-3 left-4 text-on-primary font-mono text-xs opacity-90">
