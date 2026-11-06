@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { spatialAudio, MAX_DISTANCE, DOORS, isDoorOpen, getRoomAt, playKnockSound, playUiChime } from './services/spatialAudio';
 import { webrtc } from './services/webrtc';
@@ -795,57 +795,130 @@ export default function WorldCanvas({
   const avatarColor = user?.avatarColor || propAvatarColor || '#3b82f6';
   const roomId = room?.roomId || propRoomId || 'main-office';
   const roomName = room?.name || propRoomName || 'Workspace';
-  const customLayout = room?.layout;
-  const themeKey = (room?.theme && THEMES[room.theme]) ? room.theme : (propTheme && THEMES[propTheme] ? propTheme : 'office');
-  const activeTheme = customLayout
-    ? {
-        id: customLayout.layoutId || 'custom',
-        name: customLayout.name || roomName,
-        icon: 'apartment',
-        badgeColor: '#2563eb',
-        spawn: customLayout.spawnPoint || { x: 1100, y: 720 },
-        draw: (ctx) => {
-          ctx.fillStyle = '#0f172a';
-          ctx.fillRect(0, 0, W, H);
-          ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(18, 18, W - 36, H - 36);
-          // Architectural floor grid
-          ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-          ctx.lineWidth = 1;
-          for (let gx = 20; gx < W - 20; gx += 40) {
-            ctx.beginPath(); ctx.moveTo(gx, 20); ctx.lineTo(gx, H - 20); ctx.stroke();
-          }
-          for (let gy = 20; gy < H - 20; gy += 40) {
-            ctx.beginPath(); ctx.moveTo(20, gy); ctx.lineTo(W - 20, gy); ctx.stroke();
-          }
-          // Furniture
-          if (Array.isArray(customLayout.furniture)) {
-            for (const f of customLayout.furniture) {
-              if (f.type === 'rect') {
-                ctx.fillStyle = f.color || '#b5896a';
-                ctx.fillRect(f.x, f.y, f.w, f.h);
-                ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(f.x, f.y, f.w, f.h);
-              } else if (f.type === 'chair') {
-                ctx.beginPath(); ctx.arc(f.x, f.y, 10, 0, Math.PI * 2);
-                ctx.fillStyle = '#7c6050'; ctx.fill();
-                ctx.strokeStyle = '#5a4038'; ctx.lineWidth = 1.5; ctx.stroke();
-              } else if (f.type === 'plant') {
-                drawPlant(ctx, f.x, f.y, f.r || 15);
-              } else if (f.type === 'screen') {
-                drawScreen(ctx, f.x, f.y);
+  const [loadedLayout, setLoadedLayout] = useState(room?.layout || null);
+  useEffect(() => {
+    if (room?.layout) {
+      setLoadedLayout(room.layout);
+    } else if (roomId) {
+      fetch(`${SERVER_URL}/api/layouts/${encodeURIComponent(roomId)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && data.layoutId) setLoadedLayout(data);
+        })
+        .catch(() => {});
+    }
+  }, [roomId, room?.layout]);
+
+  const customLayout = loadedLayout || room?.layout;
+  const themeKey = (room?.theme && THEMES[room.theme])
+    ? room.theme
+    : (customLayout?.theme && THEMES[customLayout.theme])
+      ? customLayout.theme
+      : (propTheme && THEMES[propTheme] ? propTheme : 'office');
+
+  const isCustomFloorPlan = Boolean(
+    customLayout &&
+    Array.isArray(customLayout.walls) &&
+    customLayout.walls.length > 0
+  );
+
+  const activeTheme = useMemo(() => {
+    const base = THEMES[themeKey] || THEMES.office;
+    if (!isCustomFloorPlan) {
+      return {
+        ...base,
+        name: customLayout?.name || roomName || base.name,
+        isCustom: false,
+      };
+    }
+
+    return {
+      id: customLayout.layoutId || 'custom',
+      name: customLayout.name || roomName,
+      icon: 'apartment',
+      badgeColor: '#2563eb',
+      spawn: customLayout.spawnPoint || { x: 1100, y: 720 },
+      isCustom: true,
+      draw: (ctx) => {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(18, 18, W - 36, H - 36);
+        // Architectural floor grid
+        ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+        ctx.lineWidth = 1;
+        for (let gx = 20; gx < W - 20; gx += 40) {
+          ctx.beginPath(); ctx.moveTo(gx, 20); ctx.lineTo(gx, H - 20); ctx.stroke();
+        }
+        for (let gy = 20; gy < H - 20; gy += 40) {
+          ctx.beginPath(); ctx.moveTo(20, gy); ctx.lineTo(W - 20, gy); ctx.stroke();
+        }
+        // Custom sound zones / rooms carpets
+        if (Array.isArray(customLayout.soundZones)) {
+          for (const z of customLayout.soundZones) {
+            if (z.bounds) {
+              const zw = z.bounds.x2 - z.bounds.x1;
+              const zh = z.bounds.y2 - z.bounds.y1;
+              ctx.fillStyle = z.isIsolated ? 'rgba(241, 245, 249, 0.95)' : 'rgba(238, 242, 255, 0.65)';
+              ctx.fillRect(z.bounds.x1, z.bounds.y1, zw, zh);
+              ctx.strokeStyle = z.isIsolated ? 'rgba(100, 116, 139, 0.35)' : 'rgba(99, 102, 241, 0.25)';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(z.bounds.x1, z.bounds.y1, zw, zh);
+              if (z.name) {
+                ctx.font = '600 11px Inter, sans-serif';
+                ctx.fillStyle = '#64748b';
+                ctx.textAlign = 'center';
+                ctx.fillText(z.name.toUpperCase(), z.bounds.x1 + zw / 2, z.bounds.y1 + 22);
               }
             }
           }
-          // Walls
-          ctx.fillStyle = '#2c3050';
-          if (Array.isArray(customLayout.walls)) {
-            for (const w of customLayout.walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+        }
+        // Furniture
+        if (Array.isArray(customLayout.furniture)) {
+          for (const f of customLayout.furniture) {
+            if (f.type === 'rect') {
+              ctx.fillStyle = f.color || '#b5896a';
+              if (f.rx) {
+                drawRoundRect(ctx, f.x, f.y, f.w, f.h, f.rx);
+                ctx.fill();
+              } else {
+                ctx.fillRect(f.x, f.y, f.w, f.h);
+              }
+              ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(f.x, f.y, f.w, f.h);
+            } else if (f.type === 'chair') {
+              ctx.beginPath(); ctx.arc(f.x, f.y, 10, 0, Math.PI * 2);
+              ctx.fillStyle = '#7c6050'; ctx.fill();
+              ctx.strokeStyle = '#5a4038'; ctx.lineWidth = 1.5; ctx.stroke();
+            } else if (f.type === 'plant') {
+              drawPlant(ctx, f.x, f.y, f.r || 15);
+            } else if (f.type === 'screen') {
+              drawScreen(ctx, f.x, f.y);
+            }
           }
-        },
-        walls: (customLayout.walls && customLayout.walls.length > 0) ? customLayout.walls : OFFICE_WALLS,
-        hasDoors: Boolean(customLayout.doors && customLayout.doors.length > 0),
-      }
-    : (THEMES[themeKey] || THEMES.office);
+        }
+        // Walls
+        ctx.fillStyle = '#2c3050';
+        if (Array.isArray(customLayout.walls)) {
+          for (const w of customLayout.walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+        }
+      },
+      walls: customLayout.walls,
+      hasDoors: Boolean(customLayout.doors && customLayout.doors.length > 0),
+      doors: customLayout.doors || [],
+      soundZones: customLayout.soundZones || [],
+    };
+  }, [
+    isCustomFloorPlan,
+    customLayout?.layoutId,
+    customLayout?.updatedAt,
+    customLayout?.name,
+    customLayout?.walls,
+    customLayout?.furniture,
+    customLayout?.doors,
+    customLayout?.soundZones,
+    themeKey,
+    roomName,
+  ]);
 
   const canvasRef   = useRef(null);
   const containerRef = useRef(null);
@@ -1023,9 +1096,26 @@ export default function WorldCanvas({
     mctx.clearRect(0, 0, mw, mh);
 
     // Mini floors
-    for (const f of OFFICE_FLOORS) {
-      mctx.fillStyle = f.color === '#f8fafc' ? '#1e293b' : f.color;
-      mctx.fillRect(f.x * sx, f.y * sy, f.w * sx, f.h * sy);
+    if (activeTheme.isCustom) {
+      if (Array.isArray(customLayout?.soundZones)) {
+        for (const z of customLayout.soundZones) {
+          if (z.bounds) {
+            mctx.fillStyle = z.isIsolated ? '#1e293b' : 'rgba(59, 130, 246, 0.2)';
+            mctx.fillRect(z.bounds.x1 * sx, z.bounds.y1 * sy, (z.bounds.x2 - z.bounds.x1) * sx, (z.bounds.y2 - z.bounds.y1) * sy);
+          }
+        }
+      }
+    } else if (themeKey === 'office') {
+      for (const f of OFFICE_FLOORS) {
+        mctx.fillStyle = f.color === '#f8fafc' ? '#1e293b' : f.color;
+        mctx.fillRect(f.x * sx, f.y * sy, f.w * sx, f.h * sy);
+      }
+    } else if (themeKey === 'conference') {
+      mctx.fillStyle = '#1e293b';
+      mctx.fillRect(500 * sx, 320 * sy, 1200 * sx, 640 * sy);
+    } else if (themeKey === 'lounge') {
+      mctx.fillStyle = '#1e293b';
+      mctx.fillRect(550 * sx, 20 * sy, 1100 * sx, 890 * sy);
     }
 
     // Mini walls
@@ -1036,11 +1126,19 @@ export default function WorldCanvas({
 
     // Mini doors
     if (activeTheme.hasDoors) {
-      for (const [key, d] of Object.entries(DOORS)) {
-        if (d.wall) {
-          const isOpen = isDoorOpen(doorsRef.current, key);
+      if (activeTheme.isCustom && Array.isArray(customLayout?.doors) && customLayout.doors.length > 0) {
+        for (const d of customLayout.doors) {
+          const isOpen = isDoorOpen(doorsRef.current, d.key);
           mctx.fillStyle = isOpen ? '#22c55e' : '#ef4444';
-          mctx.fillRect(d.wall.x * sx, d.wall.y * sy, Math.max(2, d.wall.w * sx), Math.max(2, d.wall.h * sy));
+          mctx.fillRect(d.x * sx, d.y * sy, Math.max(2, d.w * sx), Math.max(2, d.h * sy));
+        }
+      } else {
+        for (const [key, d] of Object.entries(DOORS)) {
+          if (d.wall) {
+            const isOpen = isDoorOpen(doorsRef.current, key);
+            mctx.fillStyle = isOpen ? '#22c55e' : '#ef4444';
+            mctx.fillRect(d.wall.x * sx, d.wall.y * sy, Math.max(2, d.wall.w * sx), Math.max(2, d.wall.h * sy));
+          }
         }
       }
     }
@@ -1134,7 +1232,20 @@ export default function WorldCanvas({
 
     // 1b. Dynamic Doors layer (active in office layout)
     if (activeTheme.hasDoors) {
-      drawDoors(ctx, doorsRef.current);
+      if (activeTheme.isCustom && Array.isArray(customLayout?.doors) && customLayout.doors.length > 0) {
+        for (const d of customLayout.doors) {
+          const isOpen = isDoorOpen(doorsRef.current, d.key);
+          ctx.save();
+          ctx.fillStyle = isOpen ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.3)';
+          ctx.fillRect(d.x, d.y, d.w, d.h);
+          ctx.strokeStyle = isOpen ? '#22c55e' : '#ef4444';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(d.x, d.y, d.w, d.h);
+          ctx.restore();
+        }
+      } else {
+        drawDoors(ctx, doorsRef.current);
+      }
     }
 
     // 2. Draw remote peers — 60fps smooth interpolation & walking dynamics

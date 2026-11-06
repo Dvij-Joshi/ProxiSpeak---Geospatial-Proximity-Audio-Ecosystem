@@ -959,6 +959,23 @@ app.get('/api/rooms/:roomId', async (req, res) => {
       } catch (_e) {}
     }
 
+    // Check if it is an office layout
+    let layout = memoryLayouts.get(roomId);
+    if (!layout && isDbConnected()) {
+      try {
+        layout = await OfficeLayout.findOne({ layoutId: roomId }).lean();
+      } catch (_e) {}
+    }
+    if (layout) {
+      return res.json({
+        roomId: layout.layoutId,
+        name: layout.name,
+        theme: layout.theme || 'office',
+        layout,
+        activeUsers: getRoomUsers(roomId).size,
+      });
+    }
+
     // Fallback room object for ad-hoc custom shared links
     res.json({
       roomId,

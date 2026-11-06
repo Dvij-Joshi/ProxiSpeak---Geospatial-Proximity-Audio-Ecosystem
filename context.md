@@ -232,6 +232,11 @@ git checkout branch-dvij
 * **Production Branch:** `main` (Auto-deployed to Vercel Production & Render `proxispeak-server`)
 * **Staging / Testing Branch:** `dev` (Auto-deployed to Vercel Preview & Render `proxispeak-server-dev`)
 * **Feature Branches:** `branch-dvij`, `branch-kunj`, `branch-sumit`, `branch-Uma`
+* **Bug Fixes (Organization Hub, Radar Sync & Socket Stability):**
+  * Fixed rapid Socket connect/disconnect infinite loop (and flashing Online/Offline status) by wrapping ctiveTheme in useMemo with stable layout identity dependencies, preventing the main socket useEffect from tearing down and reconnecting on every render frame.
+  * Fixed empty/blank canvas when entering newly created organization offices by defaulting uncustomized layouts to the complete base theme (THEMES.office), rendering all 5 suites, desks, plants, and soundproof doors.
+  * Synchronized the Minimap Radar (HQ RADAR) with the main map: renders matching acoustic sound zones, custom walls, and doors for custom layouts, and themed floors/doors for base themes.
+  * Added layout lookup in server/index.js GET /api/rooms/:roomId and layout fetch fallback in WorldCanvas.jsx so joining or reloading direct organization URLs (/?room=org-slug-hq) loads the full layout data without 404s.
 * **Documentation:** Added ProxiSpeak-Progress-Checklist.md mapping week-wise project deliverables with portable repository-relative links.
 * **Knowledge Graph:** Initialized via GSD Graphify (531 nodes, 698 edges, 30 communities at HEAD commit).
 * **Client Build:** Verified clean (0 errors, Vite bundle built in ~1.0s).
