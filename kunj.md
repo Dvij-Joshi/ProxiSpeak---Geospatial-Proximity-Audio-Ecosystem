@@ -9,6 +9,12 @@ Hi, I'm **Kunj Kachhiya**, a developer contributing to the ProxiSpeak project. P
 - **Mesh Network Stability** — Optimized the peer connection lifecycle with targeted ICE restarts (`pc.restartIce()`) instead of destructive resets, and implemented automated stale socket cleanup on the backend.
 - **Spatial Audio & Proximity Architecture** — Integrated Web Audio API gain curve attenuation, room boundary raycasting with doorway acoustic filtering, and MongoDB `$near` geospatial proximity endpoints.
 
+## Testing & Quality Assurance Rigor
+
+- **Automated Multi-Peer Test Harness** — Authored `tests/test_multi_peer_dedup.mjs` to simulate active meeting lifecycles: 4 concurrent peers connecting, participant page reloads under new socket IDs, 5th participant join handling, and clean peer disconnections.
+- **Zero-Glitch Verification** — Verified bidirectional WebRTC audio handshake reliability under impolite/polite peer collisions and guaranteed that exactly one avatar per unique participant is rendered at 60fps.
+- **Audio Pipeline Diagnostics** — Validated track attachment states, browser autoplay policy unlock mechanisms, and audio context resume flows across mobile and desktop clients.
+
 ## Technical Skills & Stack
 
 | Layer     | Technologies                                      |
