@@ -163,28 +163,48 @@ ProxiSpeak strictly separates the **Control Plane** from the **Media Plane**:
 
 ---
 
-## 7. Git Workflow & Deployment Commands
+## 7. Git Workflow & Staging (`dev`) Deployment Commands
 
-All work must follow this strict branch and deployment protocol:
+To ensure production (`main`) is never broken by untested commits, all work follows the **Staging / Dev Flow**:
+
+```
+Feature / Contributor Branch (`branch-dvij`, `branch-kunj`)
+                       │
+                       ▼
+             Staging Branch (`dev`)  <── Vercel Preview Deployment & Team Integration Testing
+                       │
+                       ▼ (After thorough verification)
+            Production Branch (`main`) <── Live Production (Vercel + Render)
+```
+
+### Daily Development & Testing Commands:
 
 ```bash
-# 1. Always work and commit on branch-dvij
+# Step 1: Work and commit on your personal / feature branch
 git checkout branch-dvij
-git add <files>
+git add <modified-files>
 git commit -m "feat/fix: descriptive message"
 git push origin branch-dvij
 
-# 2. Merge to main and push with bypass
-git checkout main
+# Step 2: Merge into dev for integration & preview testing
+git checkout dev
+git pull origin dev
 git merge branch-dvij --no-edit
+git push origin dev
+
+# Step 3: Test on Vercel Preview URL
+# Vercel automatically creates a preview deployment for `dev` (e.g., https://proxispeak-git-dev-....vercel.app)
+# Open the preview link, test multi-peer movement, WebRTC voice, and console errors.
+
+# Step 4: Promote to Production (main) ONLY after dev tests pass
+git checkout main
+git pull origin main
+git merge dev --no-edit
 git push -o bypass origin main
 
-# 3. Return to branch-dvij for subsequent work
+# Step 5: Switch back to your working branch
 git checkout branch-dvij
 ```
-
-* **Vercel Frontend:** Automatically builds and deploys from `main` (build command: `npm --prefix client run build`).
-* **Render Backend:** Automatically builds and deploys from `main` (start command: `node server/index.js`).
 
 ---
 
@@ -202,6 +222,22 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Current Commit on `main` and `branch-dvij`:** `89b443c` (`docs: update architecture, API, roadmap, and development plan to reflect 1.0.0 production state`)
-* **Client Build:** Verified clean (0 errors, Vite bundle ~360 kB, build duration ~1.2s).
+* **Latest Milestone:** Pillar 2 Complete — Multi-Tenant Organization Engine & In-App Office Designer
+  * Created backend models `server/models/Organization.js` and `server/models/OfficeLayout.js` with dual-layer storage (MongoDB + disk cache fallback).
+  * Built full REST API for Organizations (`GET/POST /api/organizations`, `/members`) and Custom Office Layouts (`GET/POST /api/organizations/:orgId/layouts`, `PUT/DELETE /api/layouts/:layoutId`).
+  * Built interactive in-app visual layout builder `client/src/components/OfficeDesigner.jsx` with real-time tool palette (walls, knock-to-enter doors, furniture, sound zones, spawn marker), 20px grid snapping, preset loading, and one-click deployment.
+  * Built Organization & Office Hub modal `client/src/components/OrganizationHub.jsx` for organization switching, membership management, and office launching.
+  * Added custom layout rendering in `client/src/WorldCanvas.jsx` and workspace controls in `MeetingLobby.jsx` and `App.jsx`.
+* **Prior Milestone:** Pillar 1 Complete — World & Canvas Viewport Modernization (V2 Engine) (2200x1300 canvas, follow camera, zoom, minimap radar).
+* **Production Branch:** `main` (Auto-deployed to Vercel Production & Render `proxispeak-server`)
+* **Staging / Testing Branch:** `dev` (Auto-deployed to Vercel Preview & Render `proxispeak-server-dev`)
+* **Feature Branches:** `branch-dvij`, `branch-kunj`, `branch-sumit`, `branch-Uma`
+* **Bug Fixes (Organization Hub, Radar Sync & Socket Stability):**
+  * Fixed rapid Socket connect/disconnect infinite loop (and flashing Online/Offline status) by wrapping ctiveTheme in useMemo with stable layout identity dependencies, preventing the main socket useEffect from tearing down and reconnecting on every render frame.
+  * Fixed empty/blank canvas when entering newly created organization offices by defaulting uncustomized layouts to the complete base theme (THEMES.office), rendering all 5 suites, desks, plants, and soundproof doors.
+  * Synchronized the Minimap Radar (HQ RADAR) with the main map: renders matching acoustic sound zones, custom walls, and doors for custom layouts, and themed floors/doors for base themes.
+  * Added layout lookup in server/index.js GET /api/rooms/:roomId and layout fetch fallback in WorldCanvas.jsx so joining or reloading direct organization URLs (/?room=org-slug-hq) loads the full layout data without 404s.
+* **Documentation:** Added ProxiSpeak-Progress-Checklist.md mapping week-wise project deliverables with portable repository-relative links.
+* **Knowledge Graph:** Initialized via GSD Graphify (531 nodes, 698 edges, 30 communities at HEAD commit).
+* **Client Build:** Verified clean (0 errors, Vite bundle built in ~1.0s).
 * **Server Health:** Verified clean (0 syntax errors, Node 18+ ES modules).
