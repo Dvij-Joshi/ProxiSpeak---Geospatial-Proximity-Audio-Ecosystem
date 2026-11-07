@@ -23,6 +23,30 @@ export function getRotatedBoxCorners(cx, cy, w, h, rotationDeg = 0) {
 }
 
 /**
+ * Calculates the 4 corner points of an architectural wall segment.
+ * Walls are axis-aligned rectangles whose width and height already represent their true dimensions.
+ */
+export function getWallBoxCorners(wall) {
+  const x1 = wall.x;
+  const y1 = wall.y;
+  const x2 = wall.x + (wall.w || 10);
+  const y2 = wall.y + (wall.h || 120);
+
+  // If orthogonal, use exact axis-aligned corners without rotation distortions
+  if (!wall.rotation || wall.rotation === 0 || wall.rotation === 90 || wall.rotation === 180 || wall.rotation === 270) {
+    return [
+      { x: x1, y: y1 },
+      { x: x2, y: y1 },
+      { x: x2, y: y2 },
+      { x: x1, y: y2 },
+    ];
+  }
+  const cx = x1 + (wall.w || 10) / 2;
+  const cy = y1 + (wall.h || 120) / 2;
+  return getRotatedBoxCorners(cx, cy, wall.w || 10, wall.h || 120, wall.rotation);
+}
+
+/**
  * Separating Axis Theorem (SAT) collision test between two convex polygons.
  * Margin provides tolerance so adjacent touching edges (e.g. wall corners, T-junctions)
  * do not falsely register as overlapping collisions, while actual penetration is caught.
@@ -140,6 +164,8 @@ export function checkPlacementCollision(candidate, worldState, options = {}) {
       y: candidate.y,
       r: candidate.r || (cType === 'spawn' ? 22 : 18),
     };
+  } else if (cType === 'wall') {
+    candPoly = getWallBoxCorners(candidate);
   } else {
     const cx = candidate.x + (candidate.w || 100) / 2;
     const cy = candidate.y + (candidate.h || 80) / 2;
@@ -154,9 +180,7 @@ export function checkPlacementCollision(candidate, worldState, options = {}) {
     for (let i = 0; i < walls.length; i++) {
       if (ignoreType === 'wall' && ignoreIndex === i) continue;
       const w = walls[i];
-      const wcx = w.x + w.w / 2;
-      const wcy = w.y + w.h / 2;
-      const wPoly = getRotatedBoxCorners(wcx, wcy, w.w, w.h, w.rotation || 0);
+      const wPoly = getWallBoxCorners(w);
 
       if (cType === 'wall') {
         // Duplicate wall check: same position
@@ -387,7 +411,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         y: y2,
         w: thickness,
         h: length,
-        rotation: 90,
+        rotation: 0,
         variation: selectedWall.variation || 'concrete_stud',
         color: selectedWall.color || '#2c3050',
         thickness,
@@ -410,7 +434,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         y: y1 - length,
         w: thickness,
         h: length,
-        rotation: 90,
+        rotation: 0,
         variation: selectedWall.variation || 'concrete_stud',
         color: selectedWall.color || '#2c3050',
         thickness,
@@ -459,7 +483,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         y: y2,
         w: thickness,
         h: length,
-        rotation: 90,
+        rotation: 0,
         variation: selectedWall.variation || 'concrete_stud',
         color: selectedWall.color || '#2c3050',
         thickness,
@@ -482,7 +506,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         y: y1 - length,
         w: thickness,
         h: length,
-        rotation: 90,
+        rotation: 0,
         variation: selectedWall.variation || 'concrete_stud',
         color: selectedWall.color || '#2c3050',
         thickness,
@@ -527,7 +551,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         y: y2,
         w: w,
         h: h,
-        rotation: 90,
+        rotation: 0,
         variation: selectedWall.variation || 'concrete_stud',
         color: selectedWall.color || '#2c3050',
         thickness,
@@ -599,7 +623,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         y: y1 - h,
         w: w,
         h: h,
-        rotation: 90,
+        rotation: 0,
         variation: selectedWall.variation || 'concrete_stud',
         color: selectedWall.color || '#2c3050',
         thickness,

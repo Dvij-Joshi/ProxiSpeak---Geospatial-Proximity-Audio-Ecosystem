@@ -691,10 +691,12 @@ export default function OfficeDesigner({
   const [selectedItem, setSelectedItem] = useState(null); // { type: 'wall'|'door'|'furniture'|'zone'|'spawn', index: number }
 
   const isDraggingRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const dragStartRef = useRef({ x: 0, y: 0 });
 
   const isPanningRef = useRef(false);
+  const [isPanning, setIsPanning] = useState(false);
 
   const panStartRef = useRef({ x: 0, y: 0 });
 
@@ -1104,7 +1106,7 @@ export default function OfficeDesigner({
         const isVertical = rotationAngle === 90 || rotationAngle === 270;
         const gw = isVertical ? wCust.thickness : wCust.length;
         const gh = isVertical ? wCust.length : wCust.thickness;
-        ghostCandidate = { type: 'wall', x: gcx - gw / 2, y: gcy - gh / 2, w: gw, h: gh, rotation: rotationAngle };
+        ghostCandidate = { type: 'wall', x: gcx - gw / 2, y: gcy - gh / 2, w: gw, h: gh, rotation: 0 };
       } else if (activeTool === 'door') {
         const dCust = toolCustomization.door;
         const isVertical = rotationAngle === 90 || rotationAngle === 270;
@@ -1528,6 +1530,7 @@ export default function OfficeDesigner({
     if (e.button === 1 || e.shiftKey) {
 
       isPanningRef.current = true;
+      setIsPanning(true);
 
       panStartRef.current = { x: e.clientX, y: e.clientY };
 
@@ -1721,7 +1724,7 @@ export default function OfficeDesigner({
 
         h: gh,
 
-        rotation: rotationAngle,
+        rotation: 0,
 
         variation: wCust.variation,
 
@@ -2258,18 +2261,23 @@ export default function OfficeDesigner({
   const handlePointerUp = () => {
 
     isDraggingRef.current = false;
+    setIsDragging(false);
 
     isPanningRef.current = false;
+    setIsPanning(false);
 
   };
 
   const handlePointerLeave = () => {
 
     isDraggingRef.current = false;
+    setIsDragging(false);
 
     isPanningRef.current = false;
+    setIsPanning(false);
 
     setCursorPos((prev) => ({ ...prev, isOver: false }));
+    setHoveredExpansionArrow(null);
 
   };
 
@@ -3090,6 +3098,16 @@ export default function OfficeDesigner({
     return getWallExpansionArrows(w, walls, WORLD_W, WORLD_H);
   }, [selectedItem, walls, activeTool]);
 
+  // Dynamic Canvas Cursor (pointing hand for walls, grab/grabbing for models/objects)
+  const canvasCursor = useMemo(() => {
+    if (isDragging || isPanning) return 'cursor-grabbing';
+    if (hoveredExpansionArrow) return 'cursor-pointer';
+    if (activeTool === 'wall') return 'cursor-pointer';
+    if (activeTool !== 'select') return 'cursor-crosshair';
+    if (selectedItem) return 'cursor-grab';
+    return 'cursor-default';
+  }, [isDragging, isPanning, hoveredExpansionArrow, activeTool, selectedItem]);
+
   // Armed Tool Details (for when no object is selected)
 
   const armedToolDetails = useMemo(() => {
@@ -3106,7 +3124,7 @@ export default function OfficeDesigner({
 
       {/* Top Studio Control Header */}
 
-      <header className="h-12 border-b border-[#182030] bg-[#0b101c] px-3.5 flex items-center justify-between z-30 shrink-0">
+      <header onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }} className="h-12 border-b border-[#182030] bg-[#0b101c] px-3.5 flex items-center justify-between z-30 shrink-0">
 
         <div className="flex items-center gap-2.5">
 
@@ -3272,7 +3290,7 @@ export default function OfficeDesigner({
 
         {/* Left Fixed Rail Bar (56px width, always clickable) */}
 
-        <aside className="w-14 h-full bg-[#0a0e17] border-r border-[#171f2e] flex flex-col items-center py-2 shrink-0 z-20 select-none justify-between">
+        <aside onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }} className="w-14 h-full bg-[#0a0e17] border-r border-[#171f2e] flex flex-col items-center py-2 shrink-0 z-20 select-none justify-between">
 
           {/* Top Rail Section: Toggle Drawer + Mode Switchers */}
 
@@ -3526,6 +3544,8 @@ export default function OfficeDesigner({
         {/* Sliding Flyout Drawer (Natural Flex width transition) */}
 
         <div
+
+          onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }}
 
           className={`h-full bg-[#0d131f] border-r border-[#1a2333] transition-[width,opacity] duration-300 ease-in-out shrink-0 overflow-hidden z-10 flex flex-col ${
 
@@ -5109,7 +5129,7 @@ export default function OfficeDesigner({
 
             onWheel={handleWheel}
 
-            className="w-full h-full cursor-crosshair block"
+            className={`w-full h-full block ${canvasCursor}`}
 
           />
 
