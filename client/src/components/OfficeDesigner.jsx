@@ -1036,7 +1036,7 @@ export default function OfficeDesigner({
     }
 
     // 5b. Wall Expansion Arrows (Clash of Clans-style interactive building)
-    if (selectedItem?.type === 'wall' && activeTool === 'select') {
+    if (selectedItem?.type === 'wall' && (activeTool === 'select' || activeTool === 'wall')) {
       const selWall = walls[selectedItem.index];
       if (selWall) {
         const arrows = getWallExpansionArrows(selWall, walls, WORLD_W, WORLD_H);
@@ -1541,29 +1541,29 @@ export default function OfficeDesigner({
 
     const snY = snap(wy);
 
-    if (activeTool === 'select') {
-
-      // 1. Check Clash of Clans-style directional wall expansion arrow clicks
-      if (selectedItem?.type === 'wall' && expansionArrows.length > 0) {
-        for (let aIdx = 0; aIdx < expansionArrows.length; aIdx++) {
-          const arrow = expansionArrows[aIdx];
-          const dist = Math.hypot(wx - arrow.x, wy - arrow.y);
-          if (dist <= 22) {
-            const col = checkPlacementCollision(arrow.targetWall, { walls, doors, furniture, spawnPoint });
-            if (!col.isCollision) {
-              setWalls((prev) => {
-                const next = [...prev, arrow.targetWall];
-                setSelectedItem({ type: 'wall', index: next.length - 1 });
-                return next;
-              });
-            } else {
-              setCollisionAlert({ message: `Cannot expand wall: ${col.reason}` });
-              setTimeout(() => setCollisionAlert(null), 2500);
-            }
-            return;
+    // 1. Check Clash of Clans-style directional wall expansion arrow clicks first (in select or wall mode)
+    if (selectedItem?.type === 'wall' && (activeTool === 'select' || activeTool === 'wall') && expansionArrows.length > 0) {
+      for (let aIdx = 0; aIdx < expansionArrows.length; aIdx++) {
+        const arrow = expansionArrows[aIdx];
+        const dist = Math.hypot(wx - arrow.x, wy - arrow.y);
+        if (dist <= 22) {
+          const col = checkPlacementCollision(arrow.targetWall, { walls, doors, furniture, spawnPoint });
+          if (!col.isCollision) {
+            setWalls((prev) => {
+              const next = [...prev, arrow.targetWall];
+              setSelectedItem({ type: 'wall', index: next.length - 1 });
+              return next;
+            });
+          } else {
+            setCollisionAlert({ message: `Cannot expand wall: ${col.reason}` });
+            setTimeout(() => setCollisionAlert(null), 2500);
           }
+          return;
         }
       }
+    }
+
+    if (activeTool === 'select') {
 
       // Check spawn point
 
@@ -1748,8 +1748,6 @@ export default function OfficeDesigner({
 
       });
 
-      setActiveTool('select');
-
     } else if (activeTool === 'door') {
 
       const dCust = toolCustomization.door;
@@ -1815,8 +1813,6 @@ export default function OfficeDesigner({
 
       });
 
-      setActiveTool('select');
-
     } else if (activeTool === 'zone') {
 
       const zCust = toolCustomization.zone;
@@ -1856,8 +1852,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'desk') {
 
@@ -1905,8 +1899,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'conf_table') {
 
@@ -1957,8 +1949,6 @@ export default function OfficeDesigner({
 
       });
 
-      setActiveTool('select');
-
     } else if (activeTool === 'sofa') {
 
       const sCust = toolCustomization.sofa;
@@ -2005,8 +1995,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'server_rack') {
 
@@ -2055,8 +2043,6 @@ export default function OfficeDesigner({
 
       });
 
-      setActiveTool('select');
-
     } else if (activeTool === 'plant') {
 
       const plCust = toolCustomization.plant;
@@ -2100,8 +2086,6 @@ export default function OfficeDesigner({
 
       });
 
-      setActiveTool('select');
-
     } else if (activeTool === 'spawn') {
 
       const spawnCol = checkPlacementCollision({ type: 'spawn', x: snX, y: snY, r: 22 }, { walls, doors, furniture });
@@ -2131,7 +2115,7 @@ export default function OfficeDesigner({
     setCursorPos({ wx, wy, snX, snY, isOver: true });
 
     // Expansion arrow hover tracking (Clash of Clans wall building)
-    if (selectedItem?.type === 'wall' && activeTool === 'select' && expansionArrows.length > 0) {
+    if (selectedItem?.type === 'wall' && (activeTool === 'select' || activeTool === 'wall') && expansionArrows.length > 0) {
       let foundHover = null;
       for (let aIdx = 0; aIdx < expansionArrows.length; aIdx++) {
         const arrow = expansionArrows[aIdx];
@@ -2655,14 +2639,13 @@ export default function OfficeDesigner({
 
       }
 
-      // Escape to deselect
-
+      // Escape to deselect / exit active placement mode
       if (e.key === 'Escape') {
-
+        if (activeTool !== 'select') {
+          setActiveTool('select');
+        }
         setSelectedItem(null);
-
         return;
-
       }
 
       // Quick Tool Hotkeys
@@ -3101,7 +3084,7 @@ export default function OfficeDesigner({
 
   // Wall Expansion Arrows (Clash of Clans directional handles)
   const expansionArrows = useMemo(() => {
-    if (selectedItem?.type !== 'wall' || activeTool !== 'select') return [];
+    if (selectedItem?.type !== 'wall' || (activeTool !== 'select' && activeTool !== 'wall')) return [];
     const w = walls[selectedItem.index];
     if (!w) return [];
     return getWallExpansionArrows(w, walls, WORLD_W, WORLD_H);

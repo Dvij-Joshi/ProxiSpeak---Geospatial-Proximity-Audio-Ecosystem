@@ -284,6 +284,21 @@ export function checkPlacementCollision(candidate, worldState, options = {}) {
  * - Supports 90° corner turns (both clockwise and counter-clockwise)
  * - Automatically snaps loop closures
  */
+/**
+ * Calculates distance from a 2D point (px, py) to an axis-aligned wall bounding box.
+ */
+function isPointNearWallBox(px, py, wall, tolerance = 10) {
+  const minX = wall.x;
+  const maxX = wall.x + wall.w;
+  const minY = wall.y;
+  const maxY = wall.y + wall.h;
+
+  const dx = px < minX ? minX - px : px > maxX ? px - maxX : 0;
+  const dy = py < minY ? minY - py : py > maxY ? py - maxY : 0;
+
+  return Math.hypot(dx, dy) <= tolerance;
+}
+
 export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 2200, worldH = 1300) {
   if (!selectedWall) return [];
 
@@ -311,9 +326,17 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
     return x >= 18 && x + segW <= worldW - 18 && y >= 18 && y + segH <= worldH - 18;
   };
 
-  // Check which ends are already connected
-  // Horizontal wall has West (Left) and East (Right)
-  // Vertical wall has North (Top) and South (Bottom)
+  // Helper to validate candidate target wall
+  const isValidTarget = (target) => {
+    if (!isWithinWorld(target.x, target.y, target.w, target.h)) return false;
+    if (isWallDuplicate(target)) return false;
+    // Check placement collision against all walls except selectedWall which it touches
+    const otherWalls = allWalls.filter((o) => o !== selectedWall);
+    const col = checkPlacementCollision(target, { walls: otherWalls });
+    if (col.isCollision) return false;
+    return true;
+  };
+
   if (isHoriz) {
     const x1 = selectedWall.x;
     const x2 = selectedWall.x + w;
@@ -321,18 +344,16 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
     const y2 = selectedWall.y + h;
     const midY = y1 + h / 2;
 
-    // Check if East (Right) end is connected
+    // East (Right) end connection check (must be near East endpoint in BOTH X and Y)
     const isEastConnected = allWalls.some((other) => {
       if (other === selectedWall) return false;
-      // Other wall touching around x2
-      return Math.abs(other.x - x2) < 8 || Math.abs(other.x + other.w - x2) < 8;
+      return isPointNearWallBox(x2, midY, other, 10);
     });
 
-    // Check if West (Left) end is connected
+    // West (Left) end connection check (must be near West endpoint in BOTH X and Y)
     const isWestConnected = allWalls.some((other) => {
       if (other === selectedWall) return false;
-      // Other wall touching around x1
-      return Math.abs(other.x + other.w - x1) < 8 || Math.abs(other.x - x1) < 8;
+      return isPointNearWallBox(x1, midY, other, 10);
     });
 
     // 1. East (Right) End Expansion Controls
@@ -348,7 +369,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetRight.x, targetRight.y, targetRight.w, targetRight.h) && !isWallDuplicate(targetRight)) {
+      if (isValidTarget(targetRight)) {
         arrows.push({
           id: 'east-extend',
           x: x2 + 22,
@@ -371,7 +392,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetDown.x, targetDown.y, targetDown.w, targetDown.h) && !isWallDuplicate(targetDown)) {
+      if (isValidTarget(targetDown)) {
         arrows.push({
           id: 'east-turn-down',
           x: x2 + 4,
@@ -394,7 +415,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetUp.x, targetUp.y, targetUp.w, targetUp.h) && !isWallDuplicate(targetUp)) {
+      if (isValidTarget(targetUp)) {
         arrows.push({
           id: 'east-turn-up',
           x: x2 + 4,
@@ -420,7 +441,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetLeft.x, targetLeft.y, targetLeft.w, targetLeft.h) && !isWallDuplicate(targetLeft)) {
+      if (isValidTarget(targetLeft)) {
         arrows.push({
           id: 'west-extend',
           x: x1 - 22,
@@ -443,7 +464,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetWestDown.x, targetWestDown.y, targetWestDown.w, targetWestDown.h) && !isWallDuplicate(targetWestDown)) {
+      if (isValidTarget(targetWestDown)) {
         arrows.push({
           id: 'west-turn-down',
           x: x1 - 4,
@@ -466,7 +487,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetWestUp.x, targetWestUp.y, targetWestUp.w, targetWestUp.h) && !isWallDuplicate(targetWestUp)) {
+      if (isValidTarget(targetWestUp)) {
         arrows.push({
           id: 'west-turn-up',
           x: x1 - 4,
@@ -486,16 +507,16 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
     const y2 = selectedWall.y + h;
     const midX = x1 + w / 2;
 
-    // Check if South (Bottom) end is connected
+    // South (Bottom) end connection check (must be near South endpoint in BOTH X and Y)
     const isSouthConnected = allWalls.some((other) => {
       if (other === selectedWall) return false;
-      return Math.abs(other.y - y2) < 8 || Math.abs(other.y + other.h - y2) < 8;
+      return isPointNearWallBox(midX, y2, other, 10);
     });
 
-    // Check if North (Top) end is connected
+    // North (Top) end connection check (must be near North endpoint in BOTH X and Y)
     const isNorthConnected = allWalls.some((other) => {
       if (other === selectedWall) return false;
-      return Math.abs(other.y + other.h - y1) < 8 || Math.abs(other.y - y1) < 8;
+      return isPointNearWallBox(midX, y1, other, 10);
     });
 
     // 1. South (Bottom) End Expansion Controls
@@ -511,7 +532,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetDown.x, targetDown.y, targetDown.w, targetDown.h) && !isWallDuplicate(targetDown)) {
+      if (isValidTarget(targetDown)) {
         arrows.push({
           id: 'south-extend',
           x: midX,
@@ -534,7 +555,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetRight.x, targetRight.y, targetRight.w, targetRight.h) && !isWallDuplicate(targetRight)) {
+      if (isValidTarget(targetRight)) {
         arrows.push({
           id: 'south-turn-right',
           x: x2 + 22,
@@ -557,7 +578,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetLeft.x, targetLeft.y, targetLeft.w, targetLeft.h) && !isWallDuplicate(targetLeft)) {
+      if (isValidTarget(targetLeft)) {
         arrows.push({
           id: 'south-turn-left',
           x: x1 - 22,
@@ -583,7 +604,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetUp.x, targetUp.y, targetUp.w, targetUp.h) && !isWallDuplicate(targetUp)) {
+      if (isValidTarget(targetUp)) {
         arrows.push({
           id: 'north-extend',
           x: midX,
@@ -606,7 +627,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetNorthRight.x, targetNorthRight.y, targetNorthRight.w, targetNorthRight.h) && !isWallDuplicate(targetNorthRight)) {
+      if (isValidTarget(targetNorthRight)) {
         arrows.push({
           id: 'north-turn-right',
           x: x2 + 22,
@@ -629,7 +650,7 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
         color: selectedWall.color || '#2c3050',
         thickness,
       };
-      if (isWithinWorld(targetNorthLeft.x, targetNorthLeft.y, targetNorthLeft.w, targetNorthLeft.h) && !isWallDuplicate(targetNorthLeft)) {
+      if (isValidTarget(targetNorthLeft)) {
         arrows.push({
           id: 'north-turn-left',
           x: x1 - 22,
@@ -646,9 +667,6 @@ export function getWallExpansionArrows(selectedWall, allWalls = [], worldW = 220
   return arrows;
 }
 
-/**
- * Draws a stylish, Clash of Clans-inspired directional wall expansion arrow button on canvas.
- */
 export function drawExpansionArrow(ctx, arrow, isHovered = false, zoom = 1) {
   const radius = Math.max(12, Math.min(20, 15 / Math.sqrt(zoom)));
 

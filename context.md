@@ -240,6 +240,8 @@ git checkout branch-dvij
       * Sound isolation zones: Non-physical, never collide or block placement.
     * Real-time cursor HUD feedback: Displays crimson warning pill (`⊘ BLOCKED: [Type]`) with dimmed ghost preview when hovering obstructed regions.
     * Placement protection: Blocks invalid placement attempts in `handlePointerDown` and flashes an animated floating collision banner.
+    * **Wall Expansion Direction Fix:** Upgraded 2D endpoint connection detection in `client/src/components/designerGeometry.js` to use rigorous 2D point-to-box distance (`isPointNearWallBox`). Fixed false positive connection suppression where distant walls sharing a 1D coordinate falsely blocked directional arrows. Added `isValidTarget` collision check against other walls.
+    * **Continuous Tool Placement & Armed Tool Persistence:** Enabled continuous multi-item plotting across all tools (walls, workstation pods, conference tables, sofas, server racks, plants, doors, sound zones) by maintaining `activeTool` state across canvas clicks instead of auto-resetting to `select`. Wall expansion handles are active and clickable during both `wall` and `select` modes. Added `Esc` key shortcut to return to select mode.
 * **Prior Milestone:** Pillar 2 & Organization Engine Refinement — Robust Admin & Member Dashboards, Meeting Center & Architectural Templates
   * Created server/models/Meeting.js schema supporting instant and scheduled meetings with template routing (office, conference, 
 ooftop, custom), duration tracking, and meeting histories.
