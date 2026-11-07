@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 const MemberSchema = new mongoose.Schema(
   {
     username: { type: String, required: true },
+    displayName: { type: String, default: '' },
+    email: { type: String, required: true, lowercase: true },
     role: { type: String, enum: ['owner', 'admin', 'member'], default: 'member' },
     avatarColor: { type: String, default: '#3b82f6' },
     joinedAt: { type: Date, default: Date.now },
@@ -23,6 +25,14 @@ const OrganizationSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
+  },
+  nameLower: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    index: true,
   },
   slug: {
     type: String,
@@ -47,6 +57,12 @@ const OrganizationSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+});
+
+OrganizationSchema.pre('validate', function () {
+  if (this.name) {
+    this.nameLower = this.name.trim().toLowerCase();
+  }
 });
 
 export default mongoose.model('Organization', OrganizationSchema);
