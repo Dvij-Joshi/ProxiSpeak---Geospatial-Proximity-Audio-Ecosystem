@@ -222,7 +222,21 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Latest Milestone:** Studio Components Enhancement — 2D Meeting Room Architectural Design System & Studio-Grade Collapsible Subpanel
+* **Latest Milestone:** Pillar 2 & Organization Engine Refinement — Robust Admin & Member Dashboards, Meeting Center & Architectural Templates
+  * Created server/models/Meeting.js schema supporting instant and scheduled meetings with template routing (office, conference, 
+ooftop, custom), duration tracking, and meeting histories.
+  * Enhanced server/models/Organization.js with case-insensitive uniqueness (
+ameLower index & pre-save hook) and expanded member schema.
+  * Implemented Admin Management Dashboard & Member Organization Dashboard in client/src/components/OrganizationHub.jsx matching the high-end luxury ivory/carbon frontend aesthetic with zero emojis in UI buttons.
+  * Implemented Admin User Management with auto-generated @<org-slug>.com emails (e.g. 
+amesh.kumar@google.com), admin-designated passwords, and real automatic Account provisioning in MongoDB and disk cache.
+  * Built complete Meeting Center with instant meeting launcher (template selector modal), meeting scheduler (date/time/template), countdown timers, and past meeting history log table.
+  * Seeded 3 default architectural templates for all organizations: Corporate Headquarters (office), Townhall Auditorium (conference), and Sky Rooftop Lounge (
+ooftop), with custom templates created via the in-app Office Designer.
+  * Decoupled Socket.IO connection lifecycle from theme and layout rendering in client/src/WorldCanvas.jsx, eliminating connection thrashing, 400+ reconnect loops, and flashing Online/Offline status.
+  * Upgraded Minimap Radar to directly render the exact pre-rendered world canvas floor plan (offscreenRef.current), guaranteeing 100% pixel-perfect architectural synchronization between minimap and main office view.
+  * Added dynamic template fallback to GET /api/layouts/:layoutId and increased socket concurrency limit to 35 to prevent 404s and connection rejections.
+* **Prior Milestone:** Studio Components Enhancement — 2D Meeting Room Architectural Design System & Studio-Grade Collapsible Subpanel
   * **2D Vector CAD Architectural Models (`client/src/components/architecturalComponents.js`):**
     * Replaced basic generic rectangular and circular placeholders with detailed, realistic 2D floor-plan models conforming to architectural CAD standards across all component categories.
     * **Boardroom Conference Tables (5 models):** Executive Mahogany with recessed cable raceway & 10 executive armchairs, Racetrack Oval capsule, U-Shape AV presentation layout, Roundtable democratic hub, Boat-Shape tapered executive boardroom. All tables render realistic radially positioned ergonomic chairs internally.

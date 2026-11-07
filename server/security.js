@@ -136,7 +136,7 @@ export function securityHeadersMiddleware(_req, res, next) {
 
 // Track active socket connections per IP address to prevent connection exhaustion
 const activeIpSockets = new Map(); // ip -> Set<socketId>
-const MAX_SOCKETS_PER_IP = 10;
+const MAX_SOCKETS_PER_IP = 35; // Accommodate multi-tab testing, peer mesh, and polling upgrade
 
 export function getSocketIp(socket) {
   const forwarded = socket.handshake.headers['x-forwarded-for'];
