@@ -30,6 +30,13 @@ import {
 
 } from './architecturalComponents';
 
+import {
+  checkPlacementCollision,
+  getWallExpansionArrows,
+  drawExpansionArrow,
+  drawExpansionPreview,
+} from './designerGeometry';
+
 const WORLD_W = 2200;
 
 const WORLD_H = 1300;
@@ -566,6 +573,8 @@ export default function OfficeDesigner({
 
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [isCustomizerExpanded, setIsCustomizerExpanded] = useState(true);
+  const [hoveredExpansionArrow, setHoveredExpansionArrow] = useState(null);
+  const [collisionAlert, setCollisionAlert] = useState(null);
 
   const [panelTab, setPanelTab] = useState('catalog'); // 'catalog' | 'inspector' | 'presets'
 
@@ -1026,6 +1035,22 @@ export default function OfficeDesigner({
 
     }
 
+    // 5b. Wall Expansion Arrows (Clash of Clans-style interactive building)
+    if (selectedItem?.type === 'wall' && activeTool === 'select') {
+      const selWall = walls[selectedItem.index];
+      if (selWall) {
+        const arrows = getWallExpansionArrows(selWall, walls, WORLD_W, WORLD_H);
+        for (let aIdx = 0; aIdx < arrows.length; aIdx++) {
+          const arrow = arrows[aIdx];
+          const isHov = hoveredExpansionArrow?.id === arrow.id;
+          if (isHov) {
+            drawExpansionPreview(ctx, arrow);
+          }
+          drawExpansionArrow(ctx, arrow, isHov, zoom);
+        }
+      }
+    }
+
     // 6. Spawn Point Marker
 
     const isSpawnSel = selectedItem?.type === 'spawn';
@@ -1071,6 +1096,41 @@ export default function OfficeDesigner({
       const gcx = cursorPos.snX;
 
       const gcy = cursorPos.snY;
+
+      // Construct candidate object to test SAT placement collision in real time
+      let ghostCandidate = null;
+      if (activeTool === 'wall') {
+        const wCust = toolCustomization.wall;
+        const isVertical = rotationAngle === 90 || rotationAngle === 270;
+        const gw = isVertical ? wCust.thickness : wCust.length;
+        const gh = isVertical ? wCust.length : wCust.thickness;
+        ghostCandidate = { type: 'wall', x: gcx - gw / 2, y: gcy - gh / 2, w: gw, h: gh, rotation: rotationAngle };
+      } else if (activeTool === 'door') {
+        const dCust = toolCustomization.door;
+        const isVertical = rotationAngle === 90 || rotationAngle === 270;
+        const dw = isVertical ? 8 : dCust.width;
+        const dh = isVertical ? dCust.width : 8;
+        ghostCandidate = { type: 'door', x: gcx - dw / 2, y: gcy - dh / 2, w: dw, h: dh, rotation: rotationAngle };
+      } else if (activeTool === 'desk') {
+        const dkCust = toolCustomization.desk;
+        ghostCandidate = { type: 'furniture', furnitureType: 'desk', x: gcx - dkCust.w / 2, y: gcy - dkCust.h / 2, w: dkCust.w, h: dkCust.h, rotation: rotationAngle };
+      } else if (activeTool === 'conf_table') {
+        const tCust = toolCustomization.conf_table;
+        ghostCandidate = { type: 'furniture', furnitureType: 'conf_table', x: gcx - tCust.w / 2, y: gcy - tCust.h / 2, w: tCust.w, h: tCust.h, rotation: rotationAngle };
+      } else if (activeTool === 'sofa') {
+        const sCust = toolCustomization.sofa;
+        ghostCandidate = { type: 'furniture', furnitureType: 'sofa', x: gcx - sCust.w / 2, y: gcy - sCust.h / 2, w: sCust.w, h: sCust.h, rotation: rotationAngle };
+      } else if (activeTool === 'server_rack') {
+        const rCust = toolCustomization.server_rack;
+        ghostCandidate = { type: 'furniture', furnitureType: 'server_rack', x: gcx - rCust.w / 2, y: gcy - rCust.h / 2, w: rCust.w, h: rCust.h, rotation: rotationAngle };
+      } else if (activeTool === 'plant') {
+        const plCust = toolCustomization.plant;
+        ghostCandidate = { type: 'plant', furnitureType: 'plant', x: gcx, y: gcy, r: plCust.r || 22 };
+      } else if (activeTool === 'spawn') {
+        ghostCandidate = { type: 'spawn', x: gcx, y: gcy, r: 22 };
+      }
+
+      const ghostCollision = ghostCandidate ? checkPlacementCollision(ghostCandidate, { walls, doors, furniture, spawnPoint }) : { isCollision: false };
 
       // Draw subtle grid snap crosshair
 
@@ -1418,41 +1478,38 @@ export default function OfficeDesigner({
 
       ctx.restore();
 
-      // Floating Live HUD Angle Pill (Fixed upright next to cursor)
-
+      // Floating Live HUD Angle Pill & Placement Collision Status
       ctx.save();
 
       const pillX = gcx + 24;
-
       const pillY = gcy - 28;
+      const isBlocked = ghostCollision.isCollision;
+      const pillW = isBlocked ? 130 : 86;
 
-      ctx.fillStyle = 'rgba(11, 16, 28, 0.9)';
-
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
-
-      ctx.lineWidth = 1;
+      ctx.fillStyle = isBlocked ? 'rgba(30, 8, 12, 0.95)' : 'rgba(11, 16, 28, 0.92)';
+      ctx.strokeStyle = isBlocked ? 'rgba(239, 68, 68, 0.85)' : 'rgba(56, 189, 248, 0.55)';
+      ctx.lineWidth = 1.2;
 
       ctx.beginPath();
-
-      ctx.roundRect(pillX, pillY - 14, 82, 22, 6);
-
+      ctx.roundRect(pillX, pillY - 14, pillW, 22, 6);
       ctx.fill();
-
       ctx.stroke();
 
-      ctx.font = '700 10px Inter, sans-serif';
+      if (isBlocked) {
+        ctx.font = '700 9px Inter, sans-serif';
+        ctx.fillStyle = '#f87171';
+        ctx.textAlign = 'left';
+        ctx.fillText(`⊘ BLOCKED: ${ghostCollision.collidingType || 'Collision'}`, pillX + 8, pillY + 1);
+      } else {
+        ctx.font = '700 10px Inter, sans-serif';
+        ctx.fillStyle = '#38bdf8';
+        ctx.textAlign = 'left';
+        ctx.fillText(`⟳ ${rotationAngle}°`, pillX + 8, pillY + 1);
 
-      ctx.fillStyle = '#38bdf8';
-
-      ctx.textAlign = 'left';
-
-      ctx.fillText(`⟳ ${rotationAngle}°`, pillX + 8, pillY + 1);
-
-      ctx.font = '500 8.5px Inter, sans-serif';
-
-      ctx.fillStyle = '#94a3b8';
-
-      ctx.fillText(`Scroll / [R]`, pillX + 44, pillY + 1);
+        ctx.font = '500 8.5px Inter, sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText(`Scroll / [R]`, pillX + 44, pillY + 1);
+      }
 
       ctx.restore();
 
@@ -1460,7 +1517,7 @@ export default function OfficeDesigner({
 
     ctx.restore();
 
-  }, [walls, doors, furniture, soundZones, spawnPoint, selectedItem, camera, zoom, canvasSize, cursorPos, activeTool, rotationAngle]);
+  }, [walls, doors, furniture, soundZones, spawnPoint, selectedItem, camera, zoom, canvasSize, cursorPos, activeTool, rotationAngle, hoveredExpansionArrow]);
 
   // Pointer interaction
 
@@ -1485,6 +1542,28 @@ export default function OfficeDesigner({
     const snY = snap(wy);
 
     if (activeTool === 'select') {
+
+      // 1. Check Clash of Clans-style directional wall expansion arrow clicks
+      if (selectedItem?.type === 'wall' && expansionArrows.length > 0) {
+        for (let aIdx = 0; aIdx < expansionArrows.length; aIdx++) {
+          const arrow = expansionArrows[aIdx];
+          const dist = Math.hypot(wx - arrow.x, wy - arrow.y);
+          if (dist <= 22) {
+            const col = checkPlacementCollision(arrow.targetWall, { walls, doors, furniture, spawnPoint });
+            if (!col.isCollision) {
+              setWalls((prev) => {
+                const next = [...prev, arrow.targetWall];
+                setSelectedItem({ type: 'wall', index: next.length - 1 });
+                return next;
+              });
+            } else {
+              setCollisionAlert({ message: `Cannot expand wall: ${col.reason}` });
+              setTimeout(() => setCollisionAlert(null), 2500);
+            }
+            return;
+          }
+        }
+      }
 
       // Check spawn point
 
@@ -1652,6 +1731,13 @@ export default function OfficeDesigner({
 
       };
 
+      const wallCol = checkPlacementCollision(newW, { walls, doors, furniture, spawnPoint });
+      if (wallCol.isCollision) {
+        setCollisionAlert({ message: wallCol.reason || `Wall intersects ${wallCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setWalls((prev) => {
 
         const next = [...prev, newW];
@@ -1711,6 +1797,13 @@ export default function OfficeDesigner({
         arc,
 
       };
+
+      const doorCol = checkPlacementCollision(newD, { walls, doors, furniture, spawnPoint });
+      if (doorCol.isCollision) {
+        setCollisionAlert({ message: doorCol.reason || `Door placement blocked by ${doorCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
 
       setDoors((prev) => {
 
@@ -1794,6 +1887,13 @@ export default function OfficeDesigner({
 
       };
 
+      const deskCol = checkPlacementCollision(newDesk, { walls, doors, furniture, spawnPoint });
+      if (deskCol.isCollision) {
+        setCollisionAlert({ message: deskCol.reason || `Desk blocked by ${deskCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1838,6 +1938,13 @@ export default function OfficeDesigner({
 
       };
 
+      const tableCol = checkPlacementCollision(newTable, { walls, doors, furniture, spawnPoint });
+      if (tableCol.isCollision) {
+        setCollisionAlert({ message: tableCol.reason || `Boardroom table blocked by ${tableCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1879,6 +1986,13 @@ export default function OfficeDesigner({
         rotation: rotationAngle,
 
       };
+
+      const sofaCol = checkPlacementCollision(newSofa, { walls, doors, furniture, spawnPoint });
+      if (sofaCol.isCollision) {
+        setCollisionAlert({ message: sofaCol.reason || `Sofa blocked by ${sofaCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
 
       setFurniture((prev) => {
 
@@ -1922,6 +2036,13 @@ export default function OfficeDesigner({
 
       };
 
+      const rackCol = checkPlacementCollision(newRack, { walls, doors, furniture, spawnPoint });
+      if (rackCol.isCollision) {
+        setCollisionAlert({ message: rackCol.reason || `Server rack blocked by ${rackCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1960,6 +2081,13 @@ export default function OfficeDesigner({
 
       };
 
+      const plantCol = checkPlacementCollision(newPlant, { walls, doors, furniture, spawnPoint });
+      if (plantCol.isCollision) {
+        setCollisionAlert({ message: plantCol.reason || `Plant decor blocked by ${plantCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1975,6 +2103,13 @@ export default function OfficeDesigner({
       setActiveTool('select');
 
     } else if (activeTool === 'spawn') {
+
+      const spawnCol = checkPlacementCollision({ type: 'spawn', x: snX, y: snY, r: 22 }, { walls, doors, furniture });
+      if (spawnCol.isCollision) {
+        setCollisionAlert({ message: spawnCol.reason || `Spawn arrival marker blocked by ${spawnCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
 
       setSpawnPoint({ x: snX, y: snY });
 
@@ -1993,8 +2128,22 @@ export default function OfficeDesigner({
     const snY = snap(wy);
 
     // Update live cursor coordinates for preview
-
     setCursorPos({ wx, wy, snX, snY, isOver: true });
+
+    // Expansion arrow hover tracking (Clash of Clans wall building)
+    if (selectedItem?.type === 'wall' && activeTool === 'select' && expansionArrows.length > 0) {
+      let foundHover = null;
+      for (let aIdx = 0; aIdx < expansionArrows.length; aIdx++) {
+        const arrow = expansionArrows[aIdx];
+        if (Math.hypot(wx - arrow.x, wy - arrow.y) <= 22) {
+          foundHover = arrow;
+          break;
+        }
+      }
+      setHoveredExpansionArrow((prev) => (prev?.id === foundHover?.id ? prev : foundHover));
+    } else if (hoveredExpansionArrow) {
+      setHoveredExpansionArrow(null);
+    }
 
     if (isPanningRef.current) {
 
@@ -2949,6 +3098,14 @@ export default function OfficeDesigner({
     return null;
 
   }, [selectedItem, walls, doors, furniture, soundZones, spawnPoint]);
+
+  // Wall Expansion Arrows (Clash of Clans directional handles)
+  const expansionArrows = useMemo(() => {
+    if (selectedItem?.type !== 'wall' || activeTool !== 'select') return [];
+    const w = walls[selectedItem.index];
+    if (!w) return [];
+    return getWallExpansionArrows(w, walls, WORLD_W, WORLD_H);
+  }, [selectedItem, walls, activeTool]);
 
   // Armed Tool Details (for when no object is selected)
 
@@ -4939,6 +5096,14 @@ export default function OfficeDesigner({
 
             </div>
 
+          )}
+
+          {/* Live Collision Warning Alert */}
+          {collisionAlert && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3.5 py-2 rounded-lg bg-red-950/92 border border-red-500/60 text-red-200 text-xs font-semibold shadow-2xl backdrop-blur pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+              <span>{collisionAlert.message}</span>
+            </div>
           )}
 
           {/* Canvas Tag: sized reactively with pointer and wheel listeners */}
