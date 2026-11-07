@@ -627,8 +627,18 @@ const THEMES = {
   },
   lounge: {
     id: 'lounge',
-    name: 'Rooftop Social Lounge',
+    name: 'Executive Sky Rooftop',
     icon: 'local_cafe',
+    badgeColor: '#10b981',
+    spawn: { x: 1100, y: 650 },
+    draw: drawLounge,
+    walls: LOUNGE_WALLS,
+    hasDoors: false,
+  },
+  rooftop: {
+    id: 'rooftop',
+    name: 'Executive Sky Rooftop',
+    icon: 'deck',
     badgeColor: '#10b981',
     spawn: { x: 1100, y: 650 },
     draw: drawLounge,
@@ -876,7 +886,7 @@ export default function WorldCanvas({
         for (let gy = 20; gy < H - 20; gy += 40) {
           ctx.beginPath(); ctx.moveTo(20, gy); ctx.lineTo(W - 20, gy); ctx.stroke();
         }
-        // Custom architectural sound zones
+        // Custom sound zones / rooms carpets
         if (Array.isArray(customLayout.soundZones)) {
           for (const z of customLayout.soundZones) {
             if (z.bounds) {
@@ -884,13 +894,13 @@ export default function WorldCanvas({
             }
           }
         }
-        // Architectural Furniture & Decor
+        // Furniture & Workstations (Architectural Vector CAD Engine)
         if (Array.isArray(customLayout.furniture)) {
           for (const f of customLayout.furniture) {
             drawArchitecturalFurniture(ctx, f, false, false);
           }
         }
-        // Architectural Walls with design variations
+        // Walls (Architectural Profile Engine)
         if (Array.isArray(customLayout.walls)) {
           for (const w of customLayout.walls) {
             drawArchitecturalWall(ctx, w, false, false);
@@ -963,6 +973,8 @@ export default function WorldCanvas({
       setDoorToast(null);
     }, 4500);
   }, []);
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
 
   // Audio & Mic States
   const [micActive, setMicActive] = useState(false);
@@ -1136,33 +1148,12 @@ export default function WorldCanvas({
 
     mctx.clearRect(0, 0, mw, mh);
 
-    // Mini floors
-    if (activeTheme.isCustom) {
-      if (Array.isArray(customLayout?.soundZones)) {
-        for (const z of customLayout.soundZones) {
-          if (z.bounds) {
-            mctx.fillStyle = z.isIsolated ? '#1e293b' : 'rgba(59, 130, 246, 0.2)';
-            mctx.fillRect(z.bounds.x1 * sx, z.bounds.y1 * sy, (z.bounds.x2 - z.bounds.x1) * sx, (z.bounds.y2 - z.bounds.y1) * sy);
-          }
-        }
-      }
-    } else if (themeKey === 'office') {
-      for (const f of OFFICE_FLOORS) {
-        mctx.fillStyle = f.color === '#f8fafc' ? '#1e293b' : f.color;
-        mctx.fillRect(f.x * sx, f.y * sy, f.w * sx, f.h * sy);
-      }
-    } else if (themeKey === 'conference') {
-      mctx.fillStyle = '#1e293b';
-      mctx.fillRect(500 * sx, 320 * sy, 1200 * sx, 640 * sy);
-    } else if (themeKey === 'lounge') {
-      mctx.fillStyle = '#1e293b';
-      mctx.fillRect(550 * sx, 20 * sy, 1100 * sx, 890 * sy);
-    }
-
-    // Mini walls
-    mctx.fillStyle = '#475569';
-    for (const w of activeTheme.walls) {
-      mctx.fillRect(w.x * sx, w.y * sy, Math.max(1, w.w * sx), Math.max(1, w.h * sy));
+    // 1. Draw exact architectural floor plan from pre-rendered world canvas (100% fidelity)
+    if (offscreenRef.current) {
+      mctx.drawImage(offscreenRef.current, 0, 0, mw, mh);
+    } else {
+      mctx.fillStyle = '#0b0f19';
+      mctx.fillRect(0, 0, mw, mh);
     }
 
     // Mini doors
@@ -1446,15 +1437,18 @@ export default function WorldCanvas({
     return () => clearInterval(timer);
   }, []);
 
+  // Pre-render static themed background whenever activeTheme changes (independent of socket lifecycle)
+  useEffect(() => {
+    const offscreen = document.createElement('canvas');
+    offscreen.width = W;
+    offscreen.height = H;
+    activeTheme.draw(offscreen.getContext('2d'));
+    offscreenRef.current = offscreen;
+  }, [activeTheme]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) canvas.focus();
-
-    // Pre-render static themed background
-    const offscreen = document.createElement('canvas');
-    offscreen.width = W; offscreen.height = H;
-    activeTheme.draw(offscreen.getContext('2d'));
-    offscreenRef.current = offscreen;
 
     // Reset position to theme spawn
     stateRef.current.x = activeTheme.spawn.x;
@@ -1488,7 +1482,7 @@ export default function WorldCanvas({
         setMicActive(false);
         isMutedRef.current = true;
         setIsMuted(true);
-        showToast(`${reason || 'Microphone disconnected.'} Click 'Enable Mic' to reconnect.`, 'alert');
+        showToastRef.current?.(`${reason || 'Microphone disconnected.'} Click 'Enable Mic' to reconnect.`, 'alert');
       },
     });
 
@@ -1603,7 +1597,7 @@ export default function WorldCanvas({
         return next;
       });
       const dName = DOORS[key]?.name || key;
-      showToast(`${changedBy || 'Member'} ${isOpen ? 'opened' : 'closed'} the ${dName} door`, isOpen ? 'success' : 'warn');
+      showToastRef.current?.(`${changedBy || 'Member'} ${isOpen ? 'opened' : 'closed'} the ${dName} door`, isOpen ? 'success' : 'warn');
     });
 
     // Audio chime broadcast when someone knocks on any door
@@ -1622,7 +1616,7 @@ export default function WorldCanvas({
       if (amIInside) {
         playKnockSound();
         setPendingKnockRequests(pendingKnocks || []);
-        showToast(`${visitorName} is knocking at the ${targetRoomName} door.`, 'alert');
+        showToastRef.current?.(`${visitorName} is knocking at the ${targetRoomName} door.`, 'alert');
       }
     });
 
@@ -1639,10 +1633,10 @@ export default function WorldCanvas({
       const dName = DOORS[doorKey]?.name || doorKey;
       if (status === 'waiting') {
         setMyKnockStatus({ doorKey, status: 'waiting', message });
-        showToast(`Waiting for occupants of ${dName} to welcome you...`, 'info');
+        showToastRef.current?.(`Waiting for occupants of ${dName} to welcome you...`, 'info');
       } else if (status === 'room-empty') {
         setMyKnockStatus(null);
-        showToast(message, 'info');
+        showToastRef.current?.(message, 'info');
       }
     });
 
@@ -1650,7 +1644,7 @@ export default function WorldCanvas({
     socket.on('visitor-welcomed', ({ doorKey, roomName: targetRoomName, welcomedBy }) => {
       setWelcomedDoors((prev) => ({ ...prev, [doorKey]: true }));
       setMyKnockStatus({ doorKey, status: 'welcomed' });
-      showToast(`${welcomedBy} welcomed you into ${targetRoomName}. Step inside.`, 'success');
+      showToastRef.current?.(`${welcomedBy} welcomed you into ${targetRoomName}. Step inside.`, 'success');
     });
 
     // Received by visitor when an occupant declines entry
@@ -1929,7 +1923,7 @@ export default function WorldCanvas({
       webrtc.closeAll();
       spatialAudio.destroy();
     };
-  }, [username, avatarColor, roomId, activeTheme, showToast]);
+  }, [username, avatarColor, roomId]);
 
   // Door Interaction Calculations
   const currentRoomId = currentRoom?.id || localRoomRef.current?.id;

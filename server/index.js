@@ -21,6 +21,7 @@ import Account from './models/Account.js';
 import Room from './models/Room.js';
 import Organization from './models/Organization.js';
 import OfficeLayout from './models/OfficeLayout.js';
+import Meeting from './models/Meeting.js';
 import {
   generalApiLimiter,
   authLimiter,
@@ -115,11 +116,13 @@ const memoryAccounts = new Map(); // cleanUsernameLower -> account object
 const memoryRooms = new Map();    // roomId -> room object
 const memoryOrgs = new Map();     // orgId -> organization object
 const memoryLayouts = new Map();  // layoutId -> office layout object
+const memoryMeetings = new Map(); // meetingId -> meeting object
 
 const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
 const ORGS_FILE = path.join(DATA_DIR, 'organizations.json');
 const LAYOUTS_FILE = path.join(DATA_DIR, 'layouts.json');
+const MEETINGS_FILE = path.join(DATA_DIR, 'meetings.json');
 
 // Initialize persistent cache from disk
 function loadCachedAccounts() {
@@ -234,6 +237,41 @@ const SEED_ORGS = [
   },
 ];
 
+const SEED_MEETINGS = [
+  {
+    meetingId: 'mtg-acme-standup',
+    orgId: 'acme-corp',
+    title: 'Daily Architecture Standup',
+    description: 'Sync on spatial audio WebRTC mesh and canvas LERP optimizations.',
+    template: 'office',
+    layoutId: 'acme-corp-office',
+    scheduledAt: new Date(Date.now() + 3600 * 1000 * 3),
+    status: 'scheduled',
+    host: 'dvijjoshi',
+    participants: ['dvijjoshi', 'kunj'],
+    durationMinutes: 30,
+    roomId: 'acme-corp-office',
+    createdAt: new Date(),
+  },
+  {
+    meetingId: 'mtg-acme-townhall',
+    orgId: 'acme-corp',
+    title: 'All-Hands Engineering Townhall',
+    description: 'Quarterly milestone review and live spatial audio acoustic demonstration.',
+    template: 'conference',
+    layoutId: 'acme-corp-conference',
+    scheduledAt: new Date(Date.now() - 86400 * 1000 * 2),
+    status: 'completed',
+    host: 'dvijjoshi',
+    participants: ['dvijjoshi', 'kunj', 'sumit', 'uma'],
+    startedAt: new Date(Date.now() - 86400 * 1000 * 2),
+    endedAt: new Date(Date.now() - 86400 * 1000 * 2 + 45 * 60 * 1000),
+    durationMinutes: 45,
+    roomId: 'acme-corp-conference',
+    createdAt: new Date(Date.now() - 86400 * 1000 * 3),
+  },
+];
+
 const SEED_LAYOUTS = [
   {
     layoutId: 'acme-main-hq',
@@ -319,8 +357,21 @@ function loadCachedOrgsAndLayouts() {
       for (const l of SEED_LAYOUTS) memoryLayouts.set(l.layoutId, l);
       fs.writeFileSync(LAYOUTS_FILE, JSON.stringify(SEED_LAYOUTS, null, 2), 'utf8');
     }
+
+    // Load Meetings
+    if (fs.existsSync(MEETINGS_FILE)) {
+      const raw = fs.readFileSync(MEETINGS_FILE, 'utf8');
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) {
+        for (const m of list) if (m && m.meetingId) memoryMeetings.set(m.meetingId, m);
+      }
+    }
+    if (memoryMeetings.size === 0) {
+      for (const m of SEED_MEETINGS) memoryMeetings.set(m.meetingId, m);
+      fs.writeFileSync(MEETINGS_FILE, JSON.stringify(SEED_MEETINGS, null, 2), 'utf8');
+    }
   } catch (err) {
-    console.warn('[Cache] Error loading orgs/layouts cache:', err.message);
+    console.warn('[Cache] Error loading orgs/layouts/meetings cache:', err.message);
   }
 }
 
@@ -335,6 +386,13 @@ function saveLayoutsToDisk() {
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(LAYOUTS_FILE, JSON.stringify(Array.from(memoryLayouts.values()), null, 2), 'utf8');
+  } catch (_e) {}
+}
+
+function saveMeetingsToDisk() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(MEETINGS_FILE, JSON.stringify(Array.from(memoryMeetings.values()), null, 2), 'utf8');
   } catch (_e) {}
 }
 
@@ -1020,7 +1078,7 @@ app.get('/api/organizations', async (_req, res) => {
   }
 });
 
-// POST /api/organizations - Create a new organization
+// POST /api/organizations - Create a new organization with unique name enforcement
 app.post('/api/organizations', generalApiLimiter, async (req, res) => {
   try {
     const { name, description = '', owner = 'Anonymous', logoColor = '#2563eb' } = req.body;
@@ -1028,54 +1086,124 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Organization name is required' });
     }
 
-    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 30);
+    const cleanName = name.trim();
+    const nameLower = cleanName.toLowerCase();
+
+    // Enforce case-insensitive uniqueness in memory cache
+    for (const o of memoryOrgs.values()) {
+      if (o.name && o.name.toLowerCase() === nameLower) {
+        return res.status(409).json({ error: `An organization with the name "${cleanName}" already exists. Please choose a unique name.` });
+      }
+    }
+
+    // Enforce case-insensitive uniqueness in MongoDB
+    if (isDbConnected()) {
+      try {
+        const existing = await Organization.findOne({
+          $or: [
+            { nameLower },
+            { name: { $regex: new RegExp(`^${nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+          ]
+        });
+        if (existing) {
+          return res.status(409).json({ error: `An organization with the name "${cleanName}" already exists. Please choose a unique name.` });
+        }
+      } catch (_e) {}
+    }
+
+    const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'org';
     const orgId = `${slug}-${Math.random().toString(36).substring(2, 6)}`;
+    const ownerHandle = owner.toLowerCase().trim().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '') || 'admin';
+    const ownerEmail = `${ownerHandle}@${slug}.com`;
 
     const newOrg = {
       orgId,
-      name: name.trim(),
+      name: cleanName,
+      nameLower,
       slug,
       description: description.trim(),
       logoColor,
       owner,
-      members: [{ username: owner, role: 'owner', avatarColor: logoColor, joinedAt: new Date() }],
+      members: [
+        {
+          username: owner,
+          displayName: owner,
+          email: ownerEmail,
+          role: 'owner',
+          avatarColor: logoColor,
+          joinedAt: new Date()
+        }
+      ],
       createdAt: new Date(),
     };
 
     memoryOrgs.set(orgId, newOrg);
     saveOrgsToDisk();
 
-    // Create default office layout for this organization
-    const defaultLayout = {
-      layoutId: `${orgId}-hq`,
-      orgId,
-      name: `${name.trim()} Main Office`,
-      description: 'Default architectural layout with meeting suites and open desks.',
-      theme: 'office',
-      width: 2200,
-      height: 1300,
-      spawnPoint: { x: 1100, y: 720 },
-      createdBy: owner,
-      isDefault: true,
-      createdAt: new Date(),
-    };
-    memoryLayouts.set(defaultLayout.layoutId, defaultLayout);
+    // Seed the 3 default architectural templates for this organization
+    const defaultTemplates = [
+      {
+        layoutId: `${orgId}-office`,
+        orgId,
+        name: `${cleanName} Corporate Headquarters`,
+        description: 'Executive suites, private soundproof meeting rooms, and team desk pods.',
+        theme: 'office',
+        width: 2200,
+        height: 1300,
+        spawnPoint: { x: 1100, y: 720 },
+        createdBy: owner,
+        isDefault: true,
+        createdAt: new Date(),
+      },
+      {
+        layoutId: `${orgId}-conference`,
+        orgId,
+        name: `${cleanName} Townhall Auditorium`,
+        description: 'Keynote stage, presentation hall, speaker podium, and acoustic wings.',
+        theme: 'conference',
+        width: 2200,
+        height: 1300,
+        spawnPoint: { x: 1100, y: 1050 },
+        createdBy: owner,
+        isDefault: false,
+        createdAt: new Date(),
+      },
+      {
+        layoutId: `${orgId}-rooftop`,
+        orgId,
+        name: `${cleanName} Sky Rooftop Lounge`,
+        description: 'Ambient terrace, fireside booths, open-air cocktail bar, and VIP lounges.',
+        theme: 'rooftop',
+        width: 2200,
+        height: 1300,
+        spawnPoint: { x: 1100, y: 650 },
+        createdBy: owner,
+        isDefault: false,
+        createdAt: new Date(),
+      },
+    ];
+
+    for (const tmpl of defaultTemplates) {
+      memoryLayouts.set(tmpl.layoutId, tmpl);
+    }
     saveLayoutsToDisk();
 
     if (isDbConnected()) {
       try {
         await Organization.create(newOrg);
-        await OfficeLayout.create(defaultLayout);
+        for (const tmpl of defaultTemplates) {
+          await OfficeLayout.create(tmpl);
+        }
       } catch (_e) {}
     }
 
-    res.status(201).json({ ...newOrg, officeCount: 1 });
+    res.status(201).json({ ...newOrg, officeCount: defaultTemplates.length });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create organization' });
   }
 });
 
-// GET /api/organizations/:orgId - Get single organization with members
+// GET /api/organizations/:orgId - Get single organization with members & layouts
 app.get('/api/organizations/:orgId', async (req, res) => {
   try {
     const { orgId } = req.params;
@@ -1096,25 +1224,78 @@ app.get('/api/organizations/:orgId', async (req, res) => {
   }
 });
 
-// POST /api/organizations/:orgId/members - Add member to organization
+// POST /api/organizations/:orgId/members - Add user with generated @org.com email & password
 app.post('/api/organizations/:orgId/members', generalApiLimiter, async (req, res) => {
   try {
     const { orgId } = req.params;
-    const { username, role = 'member', avatarColor = '#3b82f6' } = req.body;
-    if (!username || !username.trim()) {
-      return res.status(400).json({ error: 'Username is required' });
+    const { fullName, username, password, role = 'member', avatarColor = '#3b82f6' } = req.body;
+    const rawName = (fullName || username || '').trim();
+    if (!rawName) {
+      return res.status(400).json({ error: 'User name is required' });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
     }
 
-    const org = memoryOrgs.get(orgId);
+    let org = memoryOrgs.get(orgId);
+    if (!org && isDbConnected()) {
+      try {
+        org = await Organization.findOne({ orgId });
+      } catch (_e) {}
+    }
     if (!org) return res.status(404).json({ error: 'Organization not found' });
 
-    const exists = (org.members || []).some((m) => m.username.toLowerCase() === username.trim().toLowerCase());
-    if (exists) {
-      return res.status(409).json({ error: 'Member is already part of this organization' });
+    // Derive username handle: 'Ramesh Kumar' -> 'ramesh.kumar'
+    let handle = rawName.toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+    if (!handle || handle.length < 2) {
+      handle = `user.${Math.random().toString(36).substring(2, 6)}`;
+    }
+
+    // Auto-generate official company email: ramesh.kumar@google.com
+    const orgDomain = org.slug || 'workspace';
+    const generatedEmail = `${handle}@${orgDomain}.com`;
+
+    // Check if member handle or email already exists in this org
+    const alreadyMember = (org.members || []).some(
+      (m) => m.username?.toLowerCase() === handle.toLowerCase() || m.email?.toLowerCase() === generatedEmail.toLowerCase()
+    );
+    if (alreadyMember) {
+      return res.status(409).json({ error: `A member with handle "${handle}" or email "${generatedEmail}" is already in this organization.` });
+    }
+
+    // Hash password & create / update ProxiSpeak Account for direct sign-in
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const accountData = {
+      username: handle,
+      usernameLower: handle.toLowerCase(),
+      email: generatedEmail,
+      passwordHash,
+      avatarColor,
+      createdAt: new Date(),
+    };
+    memoryAccounts.set(handle.toLowerCase(), accountData);
+    saveAccountsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        const existingAcc = await Account.findByCredentials(handle) || await Account.findByCredentials(generatedEmail);
+        if (existingAcc) {
+          existingAcc.passwordHash = passwordHash;
+          await existingAcc.save();
+        } else {
+          await Account.create(accountData);
+        }
+      } catch (accErr) {
+        console.warn('[AddMember] Account DB save notice:', accErr.message);
+      }
     }
 
     const newMember = {
-      username: username.trim(),
+      username: handle,
+      displayName: rawName,
+      email: generatedEmail,
       role: ['owner', 'admin', 'member'].includes(role) ? role : 'member',
       avatarColor,
       joinedAt: new Date(),
@@ -1130,9 +1311,252 @@ app.post('/api/organizations/:orgId/members', generalApiLimiter, async (req, res
       } catch (_e) {}
     }
 
-    res.status(201).json(org);
+    res.status(201).json({
+      organization: org,
+      member: newMember,
+      credentials: {
+        fullName: rawName,
+        username: handle,
+        email: generatedEmail,
+        initialPassword: password,
+      },
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to add member' });
+    res.status(500).json({ error: 'Failed to add member: ' + err.message });
+  }
+});
+
+// PUT /api/organizations/:orgId/members/:username - Edit user role or display details
+app.put('/api/organizations/:orgId/members/:username', generalApiLimiter, async (req, res) => {
+  try {
+    const { orgId, username } = req.params;
+    const { displayName, role, password, avatarColor } = req.body;
+
+    let org = memoryOrgs.get(orgId);
+    if (!org && isDbConnected()) {
+      try { org = await Organization.findOne({ orgId }); } catch (_e) {}
+    }
+    if (!org) return res.status(404).json({ error: 'Organization not found' });
+
+    const memberIdx = (org.members || []).findIndex(
+      (m) => m.username?.toLowerCase() === username.toLowerCase()
+    );
+    if (memberIdx === -1) {
+      return res.status(404).json({ error: 'Member not found in organization' });
+    }
+
+    const member = org.members[memberIdx];
+
+    // Protect owner from being demoted
+    if (member.role === 'owner' && role && role !== 'owner') {
+      return res.status(400).json({ error: 'Cannot demote the organization owner' });
+    }
+
+    if (displayName) member.displayName = displayName.trim();
+    if (role && ['admin', 'member'].includes(role) && member.role !== 'owner') {
+      member.role = role;
+    }
+    if (avatarColor) member.avatarColor = avatarColor;
+
+    // If new password provided, update user Account
+    if (password && password.length >= 6) {
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+      const acc = memoryAccounts.get(username.toLowerCase());
+      if (acc) {
+        acc.passwordHash = passwordHash;
+        saveAccountsToDisk();
+      }
+      if (isDbConnected()) {
+        try {
+          const dbAcc = await Account.findByCredentials(username);
+          if (dbAcc) {
+            dbAcc.passwordHash = passwordHash;
+            await dbAcc.save();
+          }
+        } catch (_e) {}
+      }
+    }
+
+    org.members[memberIdx] = member;
+    memoryOrgs.set(orgId, org);
+    saveOrgsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        await Organization.updateOne({ orgId }, { $set: { members: org.members } });
+      } catch (_e) {}
+    }
+
+    res.json({ organization: org, member });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update member' });
+  }
+});
+
+// DELETE /api/organizations/:orgId/members/:username - Remove user from organization
+app.delete('/api/organizations/:orgId/members/:username', generalApiLimiter, async (req, res) => {
+  try {
+    const { orgId, username } = req.params;
+
+    let org = memoryOrgs.get(orgId);
+    if (!org && isDbConnected()) {
+      try { org = await Organization.findOne({ orgId }); } catch (_e) {}
+    }
+    if (!org) return res.status(404).json({ error: 'Organization not found' });
+
+    // Protect owner from being removed
+    if (org.owner?.toLowerCase() === username.toLowerCase()) {
+      return res.status(400).json({ error: 'Cannot remove the organization owner' });
+    }
+
+    const filtered = (org.members || []).filter(
+      (m) => m.username?.toLowerCase() !== username.toLowerCase()
+    );
+    org.members = filtered;
+    memoryOrgs.set(orgId, org);
+    saveOrgsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        await Organization.updateOne({ orgId }, { $set: { members: filtered } });
+      } catch (_e) {}
+    }
+
+    res.json({ success: true, organization: org });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// GET /api/organizations/:orgId/meetings - List upcoming, active, and past meetings
+app.get('/api/organizations/:orgId/meetings', async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    let meetings = [];
+    if (isDbConnected()) {
+      try {
+        meetings = await Meeting.find({ orgId }).sort({ scheduledAt: -1, createdAt: -1 }).lean();
+      } catch (_e) {}
+    }
+    if (!meetings || meetings.length === 0) {
+      meetings = Array.from(memoryMeetings.values()).filter((m) => m.orgId === orgId);
+    }
+
+    const now = Date.now();
+    const active = meetings.filter((m) => m.status === 'active');
+    const upcoming = meetings.filter((m) => m.status === 'scheduled');
+    const history = meetings.filter((m) => m.status === 'completed' || m.status === 'cancelled');
+
+    res.json({ all: meetings, active, upcoming, history });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch meetings' });
+  }
+});
+
+// POST /api/organizations/:orgId/meetings - Schedule or instant-start an organization meeting
+app.post('/api/organizations/:orgId/meetings', generalApiLimiter, async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const {
+      title,
+      description = '',
+      template = 'office',
+      layoutId = '',
+      scheduledAt = null,
+      isInstant = false,
+      host = 'Anonymous',
+    } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Meeting title is required' });
+    }
+
+    let org = memoryOrgs.get(orgId);
+    if (!org && isDbConnected()) {
+      try { org = await Organization.findOne({ orgId }); } catch (_e) {}
+    }
+    if (!org) return res.status(404).json({ error: 'Organization not found' });
+
+    const meetingId = `mtg-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const slugTmpl = template === 'custom' ? (layoutId || 'custom') : template;
+    const roomId = isInstant
+      ? `${orgId}-${slugTmpl}-${Math.random().toString(36).substring(2, 6)}`
+      : `${orgId}-${meetingId}`;
+
+    const newMeeting = {
+      meetingId,
+      orgId,
+      title: title.trim(),
+      description: description.trim(),
+      template: ['office', 'conference', 'rooftop', 'custom'].includes(template) ? template : 'office',
+      layoutId: layoutId || (template === 'custom' ? '' : `${orgId}-${template}`),
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : (isInstant ? new Date() : null),
+      status: isInstant ? 'active' : 'scheduled',
+      host,
+      participants: [host],
+      startedAt: isInstant ? new Date() : null,
+      endedAt: null,
+      durationMinutes: 0,
+      roomId,
+      createdAt: new Date(),
+    };
+
+    memoryMeetings.set(meetingId, newMeeting);
+    saveMeetingsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        await Meeting.create(newMeeting);
+      } catch (_e) {}
+    }
+
+    res.status(201).json(newMeeting);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create meeting: ' + err.message });
+  }
+});
+
+// PUT /api/organizations/:orgId/meetings/:meetingId/status - Update meeting status (end / cancel)
+app.put('/api/organizations/:orgId/meetings/:meetingId/status', generalApiLimiter, async (req, res) => {
+  try {
+    const { orgId, meetingId } = req.params;
+    const { status } = req.body;
+
+    let meeting = memoryMeetings.get(meetingId);
+    if (!meeting && isDbConnected()) {
+      try { meeting = await Meeting.findOne({ meetingId, orgId }); } catch (_e) {}
+    }
+    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+
+    if (!['scheduled', 'active', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid meeting status' });
+    }
+
+    meeting.status = status;
+    if (status === 'completed') {
+      meeting.endedAt = new Date();
+      if (meeting.startedAt) {
+        meeting.durationMinutes = Math.max(1, Math.round((meeting.endedAt - new Date(meeting.startedAt)) / 60000));
+      } else {
+        meeting.durationMinutes = 15;
+      }
+    } else if (status === 'active' && !meeting.startedAt) {
+      meeting.startedAt = new Date();
+    }
+
+    memoryMeetings.set(meetingId, meeting);
+    saveMeetingsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        await Meeting.updateOne({ meetingId }, { $set: meeting });
+      } catch (_e) {}
+    }
+
+    res.json(meeting);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update meeting status' });
   }
 });
 
@@ -1223,7 +1647,23 @@ app.get('/api/layouts/:layoutId', async (req, res) => {
         layout = await OfficeLayout.findOne({ layoutId }).lean();
       } catch (_e) {}
     }
-    if (!layout) return res.status(404).json({ error: 'Office layout not found' });
+    if (!layout) {
+      // Dynamic architectural template fallback for valid meeting rooms & direct organization links
+      const isConference = layoutId.includes('conference') || layoutId.includes('auditorium');
+      const isRooftop = layoutId.includes('rooftop') || layoutId.includes('lounge');
+      const theme = isConference ? 'conference' : isRooftop ? 'rooftop' : 'office';
+      const cleanName = layoutId.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+
+      return res.json({
+        layoutId,
+        name: cleanName,
+        theme,
+        width: 2200,
+        height: 1300,
+        spawnPoint: theme === 'conference' ? { x: 1100, y: 1050 } : theme === 'rooftop' ? { x: 1100, y: 650 } : { x: 1100, y: 720 },
+        isDefault: true,
+      });
+    }
     res.json(layout);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch office layout' });
