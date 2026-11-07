@@ -222,7 +222,39 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Latest Milestone:** Pillar 2 Complete — Multi-Tenant Organization Engine & In-App Office Designer
+* **Latest Milestone:** Studio Components Enhancement — 2D Meeting Room Architectural Design System & Studio-Grade Collapsible Subpanel
+  * **2D Vector CAD Architectural Models (`client/src/components/architecturalComponents.js`):**
+    * Replaced basic generic rectangular and circular placeholders with detailed, realistic 2D floor-plan models conforming to architectural CAD standards across all component categories.
+    * **Boardroom Conference Tables (5 models):** Executive Mahogany with recessed cable raceway & 10 executive armchairs, Racetrack Oval capsule, U-Shape AV presentation layout, Roundtable democratic hub, Boat-Shape tapered executive boardroom. All tables render realistic radially positioned ergonomic chairs internally.
+    * **Workstation Pods & Desks (4 models):** Dual Bench workstations, Facing Pods with acoustic privacy dividers, Executive L-Desk with side credenza, Single Focus Pod with ergonomic swivel seating and dual ultra-wide displays.
+    * **Lounge Breakout Seating (4 models):** Linear Cushioned sofa, Curved Arc Breakout sofa, Corner L-Sectional, Executive Club Armchair.
+    * **IT Server Infrastructure (3 models):** Enterprise 42U rack with LED activity grid, Telecom Cable Hub, Blade Modular Bay.
+    * **Biophilic Greenery & Acoustic Decor (3 models):** Monstera Deliciosa, Acoustic Palm, Planter Acoustic Divider Box.
+    * **Spawn Teleport Markers (2 models):** Executive Teleport Ring with compass arrows, Modern Grid Target with directional reticle.
+    * **Acoustic Walls & Doors:** 3 wall models (Concrete Stud, Slatted Timber, Double-Glazed Glass) with live thickness profiles (Slim, Std, Heavy); 5 door variations (Single Swing, Double Glass, Sliding Pocket, Acoustic Heavy, Executive Pivot) with 90° swing arcs and brass hinge pivots.
+    * **Live Workspace Sync (`client/src/WorldCanvas.jsx`):** Synchronized `drawArchitecturalFurniture` dispatcher renders custom architectural furniture models identically in the deployed multi-user spatial audio workspace.
+    * **Schema Extension (`server/models/OfficeLayout.js`):** Added `furnitureType`, `variation`, and `seats` subfields to furniture schema with backward-compatible defaults.
+  * **Studio-Grade Collapsible Subpanel & Variant Picker UI/UX (`client/src/components/OfficeDesigner.jsx`):**
+    * **Dual-State Collapsible Spec Bar:** Resolved the intrusive, screen-dominating subpanel by introducing `isCustomizerExpanded`. When expanded, renders a compact, high-density 2-column or 3-column model variant grid (reduced from 450px to ~175px). When collapsed, compresses to an ultra-clean 32px summary bar with tool icon, model name, live dimension tag, color dot, and 1-click `[Specs]` expansion toggle.
+    * **Intuitive Opening & Closing Logic:** Clicking any tool in the catalog opens its specs; clicking an already active tool toggles the specs open/closed. Added minimize (`keyboard_arrow_up`) and deselect (`close`) controls in the subpanel header. Catalog tool items now display active toggle indicators (`▲ SPECS` / `▼ SPECS`).
+    * **High-Density Architectural Model Grid:** Replaced bulky, single-column vertical cards with sleek, responsive 2-column/3-column CAD picker tiles featuring crisp vector icons, bold short names, and monospace technical badges.
+    * **Universal Component Dimensions & Presets:** Integrated tailored size/scale presets across all 9 components (wall length/core thickness, door width, zone dimensions, table seat sizes, desk configurations, sofa lengths, rack bays, plant radii).
+    * **Authentic Material Color Palettes:** Dynamic palette mapping for every model with active ring highlight (warm woods, anodized slate, frosted cyan, obsidian, biophilic greens).
+    * **Updated Presets & Inspector:** Updated `Startup Loft` and `Executive Suite` layout presets to instantly deploy architectural workstations, boardroom tables, and breakout sofas. Placed furniture in Object Inspector now loads authentic model-specific color palettes.
+* **Prior Milestone:** Custom Office Designer — Live Cursor Preview & Component Rotation Control
+  * **Live Cursor Ghost Preview:** 20px grid-snapped translucent ghost geometry directly attached to the mouse cursor across all 10 tools (walls, doors, workstation pods, boardroom tables, breakout sofas, server racks, plants, acoustic zones, spawn points).
+  * **Interactive Component Rotation Control:** Mouse scroll wheel and [R] hotkey rotate components in 45° increments with real-time HUD angle pill feedback; scrolling with an object selected rotates that placed entity.
+  * **Wall & Door Architectural Guidance:** Walls render 120x8 dimension markers and acoustic barrier tags; doors render golden brass hinge pivots and 90° translucent swing clearance wedges.
+  * **Placement Auto-Deselect:** Clicking on the canvas places the entity at the exact previewed coordinates and angle, auto-selects the placed item in the synchronized Object Inspector, and switches to select mode so the preview cleanly disappears.
+  * **Runtime & Schema Synchronization:** Added rotation schema in server/models/OfficeLayout.js and updated client/src/WorldCanvas.jsx to render rotated furniture, walls, and dynamic doors with swing arcs.
+* **Prior Milestone:** Custom Office Designer Tool Section Alignment & Synchronized Inspector Engine
+  * Re-architected `client/src/components/OfficeDesigner.jsx` tool catalog and object inspector:
+    * **Section-Organized Architectural Tools:** Grouped components into dedicated categories (`Navigation & Controls`, `Acoustic Structures & Privacy`, `Workspaces & Furniture`, `Biophilic & Decor`) with clean section dividers, standardized 32x32px centered icon tiles, consistent uppercase hotkey badges (`V`, `W`, `D`, `P`, `T`, `L`, `R`, `F`, `Z`, `S`), and streamlined border alignments eliminating awkward pill overflows.
+    * **Fully Synchronized Dual-State Inspector:** Resolved selection desynchronization where placing elements or switching armed tools retained outdated data. Placed entities across all 10 tools are immediately selected and focused in the Inspector. When no object is selected, displays the Armed Drawing Tool Placement Guide alongside live blueprint stats (walls, doors, furniture, zones counts).
+    * **Duplicate Hotkey & Quick Actions:** Added `Ctrl+D` object duplication with +20px offset, instant entity deletion (`Del`/`Backspace`), and clean deselect (`Esc`).
+    * **Zero-Collision Flex Viewport:** Retained 56px fixed rail and animated `w-80` to `w-0` drawer width with `ResizeObserver` maintaining 100% responsive canvas re-centering.
+  * Preserved full backwards compatibility with MongoDB schemas, REST endpoints, and `WorldCanvas.jsx` layout loading.
+* **Prior Milestone:** Pillar 2 Complete — Multi-Tenant Organization Engine & In-App Office Designer
   * Created backend models `server/models/Organization.js` and `server/models/OfficeLayout.js` with dual-layer storage (MongoDB + disk cache fallback).
   * Built full REST API for Organizations (`GET/POST /api/organizations`, `/members`) and Custom Office Layouts (`GET/POST /api/organizations/:orgId/layouts`, `PUT/DELETE /api/layouts/:layoutId`).
   * Built interactive in-app visual layout builder `client/src/components/OfficeDesigner.jsx` with real-time tool palette (walls, knock-to-enter doors, furniture, sound zones, spawn marker), 20px grid snapping, preset loading, and one-click deployment.

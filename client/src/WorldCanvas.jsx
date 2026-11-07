@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { spatialAudio, MAX_DISTANCE, DOORS, isDoorOpen, getRoomAt, playKnockSound, playUiChime } from './services/spatialAudio';
 import { webrtc } from './services/webrtc';
 import { SERVER_URL } from './config';
+import { drawArchitecturalWall, drawArchitecturalDoor, drawArchitecturalZone, drawArchitecturalFurniture, drawArchitecturalSpawn } from './components/architecturalComponents';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const W = 2200;
@@ -875,53 +876,25 @@ export default function WorldCanvas({
         for (let gy = 20; gy < H - 20; gy += 40) {
           ctx.beginPath(); ctx.moveTo(20, gy); ctx.lineTo(W - 20, gy); ctx.stroke();
         }
-        // Custom sound zones / rooms carpets
+        // Custom architectural sound zones
         if (Array.isArray(customLayout.soundZones)) {
           for (const z of customLayout.soundZones) {
             if (z.bounds) {
-              const zw = z.bounds.x2 - z.bounds.x1;
-              const zh = z.bounds.y2 - z.bounds.y1;
-              ctx.fillStyle = z.isIsolated ? 'rgba(241, 245, 249, 0.95)' : 'rgba(238, 242, 255, 0.65)';
-              ctx.fillRect(z.bounds.x1, z.bounds.y1, zw, zh);
-              ctx.strokeStyle = z.isIsolated ? 'rgba(100, 116, 139, 0.35)' : 'rgba(99, 102, 241, 0.25)';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(z.bounds.x1, z.bounds.y1, zw, zh);
-              if (z.name) {
-                ctx.font = '600 11px Inter, sans-serif';
-                ctx.fillStyle = '#64748b';
-                ctx.textAlign = 'center';
-                ctx.fillText(z.name.toUpperCase(), z.bounds.x1 + zw / 2, z.bounds.y1 + 22);
-              }
+              drawArchitecturalZone(ctx, z, false, false);
             }
           }
         }
-        // Furniture
+        // Architectural Furniture & Decor
         if (Array.isArray(customLayout.furniture)) {
           for (const f of customLayout.furniture) {
-            if (f.type === 'rect') {
-              ctx.fillStyle = f.color || '#b5896a';
-              if (f.rx) {
-                drawRoundRect(ctx, f.x, f.y, f.w, f.h, f.rx);
-                ctx.fill();
-              } else {
-                ctx.fillRect(f.x, f.y, f.w, f.h);
-              }
-              ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(f.x, f.y, f.w, f.h);
-            } else if (f.type === 'chair') {
-              ctx.beginPath(); ctx.arc(f.x, f.y, 10, 0, Math.PI * 2);
-              ctx.fillStyle = '#7c6050'; ctx.fill();
-              ctx.strokeStyle = '#5a4038'; ctx.lineWidth = 1.5; ctx.stroke();
-            } else if (f.type === 'plant') {
-              drawPlant(ctx, f.x, f.y, f.r || 15);
-            } else if (f.type === 'screen') {
-              drawScreen(ctx, f.x, f.y);
-            }
+            drawArchitecturalFurniture(ctx, f, false, false);
           }
         }
-        // Walls
-        ctx.fillStyle = '#2c3050';
+        // Architectural Walls with design variations
         if (Array.isArray(customLayout.walls)) {
-          for (const w of customLayout.walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+          for (const w of customLayout.walls) {
+            drawArchitecturalWall(ctx, w, false, false);
+          }
         }
       },
       walls: customLayout.walls,
@@ -1303,13 +1276,7 @@ export default function WorldCanvas({
       if (activeTheme.isCustom && Array.isArray(customLayout?.doors) && customLayout.doors.length > 0) {
         for (const d of customLayout.doors) {
           const isOpen = isDoorOpen(doorsRef.current, d.key);
-          ctx.save();
-          ctx.fillStyle = isOpen ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.3)';
-          ctx.fillRect(d.x, d.y, d.w, d.h);
-          ctx.strokeStyle = isOpen ? '#22c55e' : '#ef4444';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(d.x, d.y, d.w, d.h);
-          ctx.restore();
+          drawArchitecturalDoor(ctx, d, false, false, isOpen);
         }
       } else {
         drawDoors(ctx, doorsRef.current);
