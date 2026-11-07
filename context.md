@@ -222,7 +222,25 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Latest Milestone:** Studio Components Enhancement — 2D Meeting Room Architectural Design System & Studio-Grade Collapsible Subpanel
+* **Latest Milestone:** Custom Office Designer – Interactive Wall Expansion & SAT Component Collision Detection Engine
+  * **Interactive Directional Wall Expansion (Clash of Clans-Style Mechanics):**
+    * Selecting any placed architectural wall segment on the canvas generates interactive directional expansion arrow buttons:
+      * Horizontal walls provide straight East/West extensions plus 90° North/South corner turn controls.
+      * Vertical walls provide straight North/South extensions plus 90° East/West corner turn controls.
+    * Clicking any expansion arrow automatically instantiates a connected wall segment inheriting the exact dimensions, thickness, material variation, and color of the source wall with zero visible gap.
+    * Continuous building workflow: newly created segments immediately display their own directional handles, enabling rapid boundary construction of entire conference rooms and offices through sequential clicks.
+    * Hovering over any directional handle displays a translucent dashed guide preview with `+ CONNECT` indicator.
+    * Built-in duplicate prevention and canvas perimeter boundary checks (2200x1300).
+  * **SAT (Separating Axis Theorem) 2D Collision Detection Engine (`client/src/components/designerGeometry.js`):**
+    * Mathematical 2D collision validator supporting oriented bounding boxes rotated at arbitrary angles and circle-polygon collision for biophilic plants and spawn arrival zones.
+    * Configurable margin tolerance (2px) ensuring architectural edge-to-edge contacts (corner joints, touching walls) are recognized as valid connections while physical penetrations and overlaps are caught.
+    * Architectural domain rules:
+      * Doors on walls: Allowed (doors puncture partitions).
+      * Furniture on furniture / walls / doors: Blocked.
+      * Sound isolation zones: Non-physical, never collide or block placement.
+    * Real-time cursor HUD feedback: Displays crimson warning pill (`⊘ BLOCKED: [Type]`) with dimmed ghost preview when hovering obstructed regions.
+    * Placement protection: Blocks invalid placement attempts in `handlePointerDown` and flashes an animated floating collision banner.
+* **Prior Milestone:** Studio Components Enhancement — 2D Meeting Room Architectural Design System & Studio-Grade Collapsible Subpanel
   * **2D Vector CAD Architectural Models (`client/src/components/architecturalComponents.js`):**
     * Replaced basic generic rectangular and circular placeholders with detailed, realistic 2D floor-plan models conforming to architectural CAD standards across all component categories.
     * **Boardroom Conference Tables (5 models):** Executive Mahogany with recessed cable raceway & 10 executive armchairs, Racetrack Oval capsule, U-Shape AV presentation layout, Roundtable democratic hub, Boat-Shape tapered executive boardroom. All tables render realistic radially positioned ergonomic chairs internally.
