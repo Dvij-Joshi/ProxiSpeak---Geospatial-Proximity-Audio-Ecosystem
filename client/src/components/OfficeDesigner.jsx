@@ -1580,6 +1580,8 @@ export default function OfficeDesigner({
 
         isDraggingRef.current = true;
 
+
+        setIsDragging(true);
         dragStartRef.current = { x: snX - spawnPoint.x, y: snY - spawnPoint.y };
 
         return;
@@ -1598,6 +1600,8 @@ export default function OfficeDesigner({
 
           isDraggingRef.current = true;
 
+
+          setIsDragging(true);
           dragStartRef.current = { x: snX - w.x, y: snY - w.y };
 
           return;
@@ -1618,6 +1622,8 @@ export default function OfficeDesigner({
 
           isDraggingRef.current = true;
 
+
+          setIsDragging(true);
           dragStartRef.current = { x: snX - d.x, y: snY - d.y };
 
           return;
@@ -1638,6 +1644,8 @@ export default function OfficeDesigner({
 
           isDraggingRef.current = true;
 
+
+          setIsDragging(true);
           dragStartRef.current = { x: snX - f.x, y: snY - f.y };
 
           return;
@@ -1654,6 +1662,8 @@ export default function OfficeDesigner({
 
             isDraggingRef.current = true;
 
+
+            setIsDragging(true);
             dragStartRef.current = { x: snX - f.x, y: snY - f.y };
 
             return;
@@ -1672,6 +1682,8 @@ export default function OfficeDesigner({
 
             isDraggingRef.current = true;
 
+
+            setIsDragging(true);
             dragStartRef.current = { x: snX - f.x, y: snY - f.y };
 
             return;
@@ -1694,6 +1706,8 @@ export default function OfficeDesigner({
 
           isDraggingRef.current = true;
 
+
+          setIsDragging(true);
           dragStartRef.current = { x: snX - z.bounds.x1, y: snY - z.bounds.y1 };
 
           return;
@@ -3103,7 +3117,10 @@ export default function OfficeDesigner({
     if (isDragging || isPanning) return 'cursor-grabbing';
     if (hoveredExpansionArrow) return 'cursor-pointer';
     if (activeTool === 'wall') return 'cursor-pointer';
-    if (activeTool !== 'select') return 'cursor-crosshair';
+    if (['desk', 'conf_table', 'sofa', 'server_rack', 'plant', 'chair', 'door', 'spawn'].includes(activeTool)) {
+      return 'cursor-grab';
+    }
+    if (activeTool === 'zone') return 'cursor-crosshair';
     if (selectedItem) return 'cursor-grab';
     return 'cursor-default';
   }, [isDragging, isPanning, hoveredExpansionArrow, activeTool, selectedItem]);
