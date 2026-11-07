@@ -62,6 +62,7 @@ dump.rdb
 .agents/
 skills-lock.json
 .planning/
+graphify-out/
 
 
 server/data/

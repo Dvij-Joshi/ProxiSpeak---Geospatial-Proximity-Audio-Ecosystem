@@ -222,9 +222,22 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Latest Commit Hash:** `2449d0a` (`security: remove exposed MongoDB Atlas credentials from render.yaml, server/db.js, and .env.example`)
+* **Latest Milestone:** Pillar 2 Complete — Multi-Tenant Organization Engine & In-App Office Designer
+  * Created backend models `server/models/Organization.js` and `server/models/OfficeLayout.js` with dual-layer storage (MongoDB + disk cache fallback).
+  * Built full REST API for Organizations (`GET/POST /api/organizations`, `/members`) and Custom Office Layouts (`GET/POST /api/organizations/:orgId/layouts`, `PUT/DELETE /api/layouts/:layoutId`).
+  * Built interactive in-app visual layout builder `client/src/components/OfficeDesigner.jsx` with real-time tool palette (walls, knock-to-enter doors, furniture, sound zones, spawn marker), 20px grid snapping, preset loading, and one-click deployment.
+  * Built Organization & Office Hub modal `client/src/components/OrganizationHub.jsx` for organization switching, membership management, and office launching.
+  * Added custom layout rendering in `client/src/WorldCanvas.jsx` and workspace controls in `MeetingLobby.jsx` and `App.jsx`.
+* **Prior Milestone:** Pillar 1 Complete — World & Canvas Viewport Modernization (V2 Engine) (2200x1300 canvas, follow camera, zoom, minimap radar).
 * **Production Branch:** `main` (Auto-deployed to Vercel Production & Render `proxispeak-server`)
 * **Staging / Testing Branch:** `dev` (Auto-deployed to Vercel Preview & Render `proxispeak-server-dev`)
 * **Feature Branches:** `branch-dvij`, `branch-kunj`, `branch-sumit`, `branch-Uma`
-* **Client Build:** Verified clean (0 errors, Vite bundle ~360 kB, build duration ~1.2s).
+* **Bug Fixes (Organization Hub, Radar Sync & Socket Stability):**
+  * Fixed rapid Socket connect/disconnect infinite loop (and flashing Online/Offline status) by wrapping ctiveTheme in useMemo with stable layout identity dependencies, preventing the main socket useEffect from tearing down and reconnecting on every render frame.
+  * Fixed empty/blank canvas when entering newly created organization offices by defaulting uncustomized layouts to the complete base theme (THEMES.office), rendering all 5 suites, desks, plants, and soundproof doors.
+  * Synchronized the Minimap Radar (HQ RADAR) with the main map: renders matching acoustic sound zones, custom walls, and doors for custom layouts, and themed floors/doors for base themes.
+  * Added layout lookup in server/index.js GET /api/rooms/:roomId and layout fetch fallback in WorldCanvas.jsx so joining or reloading direct organization URLs (/?room=org-slug-hq) loads the full layout data without 404s.
+* **Documentation:** Added ProxiSpeak-Progress-Checklist.md mapping week-wise project deliverables with portable repository-relative links.
+* **Knowledge Graph:** Initialized via GSD Graphify (531 nodes, 698 edges, 30 communities at HEAD commit).
+* **Client Build:** Verified clean (0 errors, Vite bundle built in ~1.0s).
 * **Server Health:** Verified clean (0 syntax errors, Node 18+ ES modules).

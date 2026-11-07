@@ -12,62 +12,61 @@
 export const MIN_DISTANCE = 25;
 export const MAX_DISTANCE = 100; // 100px hearing range
 
-const W = 1200;
-const H = 680;
+export const W = 2200;
+export const H = 1300;
 
 export const WALLS = [
-  { x: 10,     y: 10,     w: W - 20, h: 8      },
-  { x: 10,     y: 10,     w: 8,      h: H - 20 },
-  { x: W - 18, y: 10,     w: 8,      h: H - 20 },
-  { x: 10,     y: H - 18, w: W - 20, h: 8      },
-  { x: 313,    y: 18,     w: 8,      h: 188    },
-  { x: 18,     y: 261,    w: 258,    h: 8      },
-  { x: 353,    y: 18,     w: 8,      h: 215    },
-  { x: 583,    y: 18,     w: 8,      h: 215    },
-  { x: 361,    y: 228,    w: 182,    h: 8      },
-  { x: 863,    y: 18,     w: 8,      h: 137    },
-  { x: 871,    y: 238,    w: 311,    h: 8      },
-  { x: 18,     y: 487,    w: 222,    h: 8      },
-  { x: 291,    y: 487,    w: 8,      h: H - 505 },
-  { x: 937,    y: 490,    w: 8,      h: 80     },
-  { x: 945,    y: 485,    w: 237,    h: 8      },
-  { x: 863,    y: 155,    w: 8,      h: 8      },
+  { x: 10, y: 10, w: W - 20, h: 8 },
+  { x: 10, y: 10, w: 8, h: H - 20 },
+  { x: W - 18, y: 10, w: 8, h: H - 20 },
+  { x: 10, y: H - 18, w: W - 20, h: 8 },
+  { x: 598, y: 18, w: 8, h: 480 },
+  { x: 18, y: 498, w: 490, h: 8 },
+  { x: 670, y: 18, w: 8, h: 420 },
+  { x: 1128, y: 18, w: 8, h: 420 },
+  { x: 678, y: 438, w: 350, h: 8 },
+  { x: 1612, y: 18, w: 8, h: 320 },
+  { x: 1620, y: 458, w: 562, h: 8 },
+  { x: 18, y: 912, w: 460, h: 8 },
+  { x: 578, y: 920, w: 8, h: 362 },
+  { x: 1720, y: 912, w: 462, h: 8 },
+  { x: 1712, y: 920, w: 8, h: 250 },
 ];
 
 export const DOORS = {
   'meeting-room': {
     roomKey: 'meeting-room',
     name: 'Meeting Room',
-    wall: { x: 276, y: 261, w: 42, h: 8 },
-    arc: [276, 261, 40, -Math.PI / 2, 0],
+    wall: { x: 508, y: 498, w: 90, h: 8 },
+    arc: [508, 498, 90, -Math.PI / 2, 0],
     isIsolated: true,
   },
   'manager-office': {
     roomKey: 'manager-office',
     name: "Manager's Office",
-    wall: { x: 543, y: 228, w: 43, h: 8 },
-    arc: [543, 228, 43, -Math.PI / 2, 0],
+    wall: { x: 1028, y: 438, w: 100, h: 8 },
+    arc: [1028, 438, 90, -Math.PI / 2, 0],
     isIsolated: true,
   },
   'lounge-break': {
     roomKey: 'lounge-break',
     name: 'Lounge & Break',
-    wall: { x: 240, y: 487, w: 56, h: 8 },
-    arc: [240, 487, 56, Math.PI, Math.PI * 1.5],
+    wall: { x: 478, y: 912, w: 100, h: 8 },
+    arc: [478, 912, 100, Math.PI, Math.PI * 1.5],
     isIsolated: false,
   },
   'tech-server': {
     roomKey: 'tech-server',
     name: 'Tech / Server',
-    wall: { x: 863, y: 155, w: 8, h: 70 },
-    arc: [863, 155, 70, 0, Math.PI / 2],
+    wall: { x: 1612, y: 338, w: 8, h: 120 },
+    arc: [1612, 338, 110, 0, Math.PI / 2],
     isIsolated: false,
   },
   'print-copy': {
     roomKey: 'print-copy',
     name: 'Print / Copy',
-    wall: { x: 937, y: 570, w: 8, h: 65 },
-    arc: [937, 570, 65, 0, Math.PI / 2],
+    wall: { x: 1712, y: 1170, w: 8, h: 112 },
+    arc: [1712, 1170, 100, 0, Math.PI / 2],
     isIsolated: false,
   },
 };
@@ -76,35 +75,35 @@ export const ROOMS = [
   {
     id: 'meeting-room',
     name: 'Meeting Room',
-    bounds: { x1: 18, y1: 18, x2: 320, y2: 268 },
+    bounds: { x1: 18, y1: 18, x2: 606, y2: 506 },
     isIsolated: true,
     maxDistance: 100,
   },
   {
     id: 'manager-office',
     name: "Manager's Office",
-    bounds: { x1: 350, y1: 18, x2: 590, y2: 235 },
+    bounds: { x1: 670, y1: 18, x2: 1136, y2: 446 },
     isIsolated: true,
     maxDistance: 100,
   },
   {
     id: 'tech-server',
     name: 'Tech / Server',
-    bounds: { x1: 860, y1: 18, x2: 1182, y2: 245 },
+    bounds: { x1: 1612, y1: 18, x2: 2182, y2: 466 },
     isIsolated: false,
     maxDistance: 100,
   },
   {
     id: 'lounge-break',
     name: 'Lounge & Break',
-    bounds: { x1: 18, y1: 485, x2: 300, y2: 670 },
+    bounds: { x1: 18, y1: 912, x2: 586, y2: 1282 },
     isIsolated: false,
     maxDistance: 100,
   },
   {
     id: 'print-copy',
     name: 'Print / Copy',
-    bounds: { x1: 935, y1: 480, x2: 1182, y2: 670 },
+    bounds: { x1: 1712, y1: 912, x2: 2182, y2: 1282 },
     isIsolated: false,
     maxDistance: 100,
   },
@@ -112,32 +111,32 @@ export const ROOMS = [
 
 export function getRoomAt(x, y, theme = 'office') {
   if (theme === 'conference') {
-    if (x >= 280 && x <= 920 && y <= 170) {
-      return { id: 'keynote-stage', name: 'Keynote Stage (PA Broadcast)', isIsolated: false, isStage: true, maxDistance: 900 };
+    if (x >= 500 && x <= 1700 && y <= 300) {
+      return { id: 'keynote-stage', name: 'Keynote Stage (PA Broadcast)', isIsolated: false, isStage: true, maxDistance: 1600 };
     }
-    if (x >= 280 && x <= 920 && y > 170 && y <= 495) {
-      return { id: 'auditorium-hall', name: 'Auditorium Hall', isIsolated: false, maxDistance: 450 };
+    if (x >= 500 && x <= 1700 && y > 300 && y <= 950) {
+      return { id: 'auditorium-hall', name: 'Auditorium Hall', isIsolated: false, maxDistance: 700 };
     }
-    if (x < 280 && y <= 495) {
-      return { id: 'breakout-a', name: 'Breakout Pod A', isIsolated: true, maxDistance: 320 };
+    if (x < 500 && y <= 950) {
+      return { id: 'breakout-a', name: 'Breakout Pod A', isIsolated: true, maxDistance: 450 };
     }
-    if (x > 915 && y <= 495) {
-      return { id: 'breakout-b', name: 'Breakout Pod B', isIsolated: true, maxDistance: 320 };
+    if (x > 1700 && y <= 950) {
+      return { id: 'breakout-b', name: 'Breakout Pod B', isIsolated: true, maxDistance: 450 };
     }
-    return { id: 'conf-foyer', name: 'Networking Foyer', isIsolated: false, maxDistance: 350 };
+    return { id: 'conf-foyer', name: 'Networking Foyer', isIsolated: false, maxDistance: 500 };
   }
 
   if (theme === 'lounge') {
-    if (x < 295 && y <= 475) {
-      return { id: 'vip-booths', name: 'VIP Fireside Booths', isIsolated: true, maxDistance: 320 };
+    if (x < 550 && y <= 900) {
+      return { id: 'vip-booths', name: 'VIP Fireside Booths', isIsolated: true, maxDistance: 450 };
     }
-    if (x > 895 && y <= 475) {
-      return { id: 'games-rec', name: 'Games & Rec Room', isIsolated: true, maxDistance: 320 };
+    if (x > 1650 && y <= 900) {
+      return { id: 'games-rec', name: 'Games & Rec Room', isIsolated: true, maxDistance: 450 };
     }
-    if (y > 475) {
-      return { id: 'sunset-terrace', name: 'Sunset Open-Air Terrace', isIsolated: false, maxDistance: 380 };
+    if (y > 900) {
+      return { id: 'sunset-terrace', name: 'Sunset Open-Air Terrace', isIsolated: false, maxDistance: 550 };
     }
-    return { id: 'cocktail-bar', name: 'Central Espresso Bar', isIsolated: false, maxDistance: 380 };
+    return { id: 'cocktail-bar', name: 'Central Espresso Bar', isIsolated: false, maxDistance: 550 };
   }
 
   // Office default
