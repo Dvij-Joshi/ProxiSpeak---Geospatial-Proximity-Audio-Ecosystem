@@ -260,7 +260,28 @@ ooftop), with custom templates created via the in-app Office Designer.
   * Decoupled Socket.IO connection lifecycle from theme and layout rendering in client/src/WorldCanvas.jsx, eliminating connection thrashing, 400+ reconnect loops, and flashing Online/Offline status.
   * Upgraded Minimap Radar to directly render the exact pre-rendered world canvas floor plan (offscreenRef.current), guaranteeing 100% pixel-perfect architectural synchronization between minimap and main office view.
   * Added dynamic template fallback to GET /api/layouts/:layoutId and increased socket concurrency limit to 35 to prevent 404s and connection rejections.
-* **Current Active Milestone:** Organization Multi-Tenant Privacy, Admin Account Provisioning and Role Enforcement
+* **Current Active Milestone:** Application-Wide Studio Redesign of All Dialog Popups & Modals (`OrganizationHub.jsx`, `MeetingLobby.jsx`, `WorldCanvas.jsx`)
+  * **Design System Alignment:** Eliminated generic "AI-sloppy" UI artifacts (harsh borders, clumsy `rounded-full` inputs, stark uppercase labels, and emojis) and unified all floating dialogs into the warm porcelain studio aesthetic (`#FAF9F5`, hairline borders `#E5E4DE`, soft ambient elevation `shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)]`, dark obsidian action CTAs `bg-[#141413]`, tactile `rounded-xl` inputs, and technical monospace metadata badges).
+  * **Organization Hub Modals (`client/src/components/OrganizationHub.jsx`):**
+    * **Top Navigation & Window Shell:** Upgraded main workspace shell to `rounded-[28px] border border-[#E5E4DE] shadow-[0_32px_80px_-16px_rgba(20,20,19,0.22)]` with studio top bar, framed close button, and obsidian "Start Instant Call" CTA.
+    * **Modal 1 (Create Organization & Provision Admin):** Studio header with `add_business` badge, technical micro-kicker, `rounded-xl` ergonomic inputs, live monospace admin preview card with green status indicator, circular brand swatches, and dark obsidian submit button.
+    * **Modal 1.5 (Admin Credentials Generated):** Studio dialog with `admin_panel_settings` badge, monospace credentials card with 1-click copy buttons, and "Sign In as Admin Now" direct login button.
+    * **Modal 2 (Add Colleague to Organization):** `person_add` studio header, `TEAM ENROLLMENT` kicker, real-time company email preview, password generator, segmented role selector (`Team Member` vs `Administrator`), and dark obsidian action button.
+    * **Modal 2.5 (Colleague Credentials Generated):** Elevated card with 1-click credentials copy and "Add Another" button.
+    * **Modal 3 (Edit Member):** Studio header with `manage_accounts` badge, refined inputs and dropdowns, obsidian save button.
+    * **Modal 4 (Remove Member):** Access revocation modal with red rose badge, warning copy, and styled danger action button.
+    * **Modal 5 (Instant Spatial Call):** Architectural soundstage picker featuring 3 luxury template cards (Corporate Headquarters, Townhall Auditorium, Sky Rooftop Lounge) with active obsidian rings and launch CTA.
+    * **Modal 6 (Schedule Meeting):** Studio calendar header, refined date/time inputs, template select dropdown, and obsidian CTA.
+  * **Meeting Lobby Modals (`client/src/components/MeetingLobby.jsx`):**
+    * **Host Workspace Modal:** Studio header with `add_circle` badge, `rounded-xl` inputs, architectural acoustic template cards with checkmark indicators, and obsidian CTA.
+    * **Technical Info Modals (Spatial Audio, Hardware, Docs):** Studio headers with Material Symbol icons, porcelain specification cards, and monospace keybinding pills.
+  * **World Canvas Dialogs (`client/src/WorldCanvas.jsx`):**
+    * **Knock-to-Enter Door Approval Modal:** Transformed into floating porcelain studio card (`rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] shadow-2xl`), refined visitor badge, obsidian "Welcome" button, and framed "Decline" button.
+    * **Audio Diagnostics Modal Overlay:** Elevated to floating studio card with Material Symbol close button, real-time monospace telemetry rows, status indicator badges, Material Symbol network icons, and clean recovery action buttons.
+  * **Compliance & Verification:**
+    * Zero emojis across all UI dialogs, buttons, and canvas layout text (strict repository rule enforced).
+    * Production Vite build verified clean (0 errors, 1.25s).
+* **Prior Milestone:** Organization Multi-Tenant Privacy, Admin Account Provisioning and Role Enforcement
   * **Bug 1 and 2 Resolved — Admin Account Auto-Provisioning and Auto-Logout:**
     * When creating an organization (`POST /api/organizations`), the server requires admin name and auto-generates a unique secure default password (`Admin#...`).
     * Server derives official admin email (`<handle>@<slug>.com`), hashes the password with bcrypt (10 salt rounds), provisions a genuine ProxiSpeak `Account` in memory cache and MongoDB, and issues a 14-day JWT token.
