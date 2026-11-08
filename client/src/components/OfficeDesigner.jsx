@@ -30,6 +30,13 @@ import {
 
 } from './architecturalComponents';
 
+import {
+  checkPlacementCollision,
+  getWallExpansionArrows,
+  drawExpansionArrow,
+  drawExpansionPreview,
+} from './designerGeometry';
+
 const WORLD_W = 2200;
 
 const WORLD_H = 1300;
@@ -566,6 +573,8 @@ export default function OfficeDesigner({
 
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [isCustomizerExpanded, setIsCustomizerExpanded] = useState(true);
+  const [hoveredExpansionArrow, setHoveredExpansionArrow] = useState(null);
+  const [collisionAlert, setCollisionAlert] = useState(null);
 
   const [panelTab, setPanelTab] = useState('catalog'); // 'catalog' | 'inspector' | 'presets'
 
@@ -682,10 +691,12 @@ export default function OfficeDesigner({
   const [selectedItem, setSelectedItem] = useState(null); // { type: 'wall'|'door'|'furniture'|'zone'|'spawn', index: number }
 
   const isDraggingRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const dragStartRef = useRef({ x: 0, y: 0 });
 
   const isPanningRef = useRef(false);
+  const [isPanning, setIsPanning] = useState(false);
 
   const panStartRef = useRef({ x: 0, y: 0 });
 
@@ -1026,6 +1037,22 @@ export default function OfficeDesigner({
 
     }
 
+    // 5b. Wall Expansion Arrows (Clash of Clans-style interactive building)
+    if (selectedItem?.type === 'wall' && (activeTool === 'select' || activeTool === 'wall')) {
+      const selWall = walls[selectedItem.index];
+      if (selWall) {
+        const arrows = getWallExpansionArrows(selWall, walls, WORLD_W, WORLD_H);
+        for (let aIdx = 0; aIdx < arrows.length; aIdx++) {
+          const arrow = arrows[aIdx];
+          const isHov = hoveredExpansionArrow?.id === arrow.id;
+          if (isHov) {
+            drawExpansionPreview(ctx, arrow);
+          }
+          drawExpansionArrow(ctx, arrow, isHov, zoom);
+        }
+      }
+    }
+
     // 6. Spawn Point Marker
 
     const isSpawnSel = selectedItem?.type === 'spawn';
@@ -1071,6 +1098,41 @@ export default function OfficeDesigner({
       const gcx = cursorPos.snX;
 
       const gcy = cursorPos.snY;
+
+      // Construct candidate object to test SAT placement collision in real time
+      let ghostCandidate = null;
+      if (activeTool === 'wall') {
+        const wCust = toolCustomization.wall;
+        const isVertical = rotationAngle === 90 || rotationAngle === 270;
+        const gw = isVertical ? wCust.thickness : wCust.length;
+        const gh = isVertical ? wCust.length : wCust.thickness;
+        ghostCandidate = { type: 'wall', x: gcx - gw / 2, y: gcy - gh / 2, w: gw, h: gh, rotation: 0 };
+      } else if (activeTool === 'door') {
+        const dCust = toolCustomization.door;
+        const isVertical = rotationAngle === 90 || rotationAngle === 270;
+        const dw = isVertical ? 8 : dCust.width;
+        const dh = isVertical ? dCust.width : 8;
+        ghostCandidate = { type: 'door', x: gcx - dw / 2, y: gcy - dh / 2, w: dw, h: dh, rotation: rotationAngle };
+      } else if (activeTool === 'desk') {
+        const dkCust = toolCustomization.desk;
+        ghostCandidate = { type: 'furniture', furnitureType: 'desk', x: gcx - dkCust.w / 2, y: gcy - dkCust.h / 2, w: dkCust.w, h: dkCust.h, rotation: rotationAngle };
+      } else if (activeTool === 'conf_table') {
+        const tCust = toolCustomization.conf_table;
+        ghostCandidate = { type: 'furniture', furnitureType: 'conf_table', x: gcx - tCust.w / 2, y: gcy - tCust.h / 2, w: tCust.w, h: tCust.h, rotation: rotationAngle };
+      } else if (activeTool === 'sofa') {
+        const sCust = toolCustomization.sofa;
+        ghostCandidate = { type: 'furniture', furnitureType: 'sofa', x: gcx - sCust.w / 2, y: gcy - sCust.h / 2, w: sCust.w, h: sCust.h, rotation: rotationAngle };
+      } else if (activeTool === 'server_rack') {
+        const rCust = toolCustomization.server_rack;
+        ghostCandidate = { type: 'furniture', furnitureType: 'server_rack', x: gcx - rCust.w / 2, y: gcy - rCust.h / 2, w: rCust.w, h: rCust.h, rotation: rotationAngle };
+      } else if (activeTool === 'plant') {
+        const plCust = toolCustomization.plant;
+        ghostCandidate = { type: 'plant', furnitureType: 'plant', x: gcx, y: gcy, r: plCust.r || 22 };
+      } else if (activeTool === 'spawn') {
+        ghostCandidate = { type: 'spawn', x: gcx, y: gcy, r: 22 };
+      }
+
+      const ghostCollision = ghostCandidate ? checkPlacementCollision(ghostCandidate, { walls, doors, furniture, spawnPoint }) : { isCollision: false };
 
       // Draw subtle grid snap crosshair
 
@@ -1418,41 +1480,38 @@ export default function OfficeDesigner({
 
       ctx.restore();
 
-      // Floating Live HUD Angle Pill (Fixed upright next to cursor)
-
+      // Floating Live HUD Angle Pill & Placement Collision Status
       ctx.save();
 
       const pillX = gcx + 24;
-
       const pillY = gcy - 28;
+      const isBlocked = ghostCollision.isCollision;
+      const pillW = isBlocked ? 130 : 86;
 
-      ctx.fillStyle = 'rgba(11, 16, 28, 0.9)';
-
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
-
-      ctx.lineWidth = 1;
+      ctx.fillStyle = isBlocked ? 'rgba(30, 8, 12, 0.95)' : 'rgba(11, 16, 28, 0.92)';
+      ctx.strokeStyle = isBlocked ? 'rgba(239, 68, 68, 0.85)' : 'rgba(56, 189, 248, 0.55)';
+      ctx.lineWidth = 1.2;
 
       ctx.beginPath();
-
-      ctx.roundRect(pillX, pillY - 14, 82, 22, 6);
-
+      ctx.roundRect(pillX, pillY - 14, pillW, 22, 6);
       ctx.fill();
-
       ctx.stroke();
 
-      ctx.font = '700 10px Inter, sans-serif';
+      if (isBlocked) {
+        ctx.font = '700 9px Inter, sans-serif';
+        ctx.fillStyle = '#f87171';
+        ctx.textAlign = 'left';
+        ctx.fillText(`⊘ BLOCKED: ${ghostCollision.collidingType || 'Collision'}`, pillX + 8, pillY + 1);
+      } else {
+        ctx.font = '700 10px Inter, sans-serif';
+        ctx.fillStyle = '#38bdf8';
+        ctx.textAlign = 'left';
+        ctx.fillText(`⟳ ${rotationAngle}°`, pillX + 8, pillY + 1);
 
-      ctx.fillStyle = '#38bdf8';
-
-      ctx.textAlign = 'left';
-
-      ctx.fillText(`⟳ ${rotationAngle}°`, pillX + 8, pillY + 1);
-
-      ctx.font = '500 8.5px Inter, sans-serif';
-
-      ctx.fillStyle = '#94a3b8';
-
-      ctx.fillText(`Scroll / [R]`, pillX + 44, pillY + 1);
+        ctx.font = '500 8.5px Inter, sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText(`Scroll / [R]`, pillX + 44, pillY + 1);
+      }
 
       ctx.restore();
 
@@ -1460,7 +1519,7 @@ export default function OfficeDesigner({
 
     ctx.restore();
 
-  }, [walls, doors, furniture, soundZones, spawnPoint, selectedItem, camera, zoom, canvasSize, cursorPos, activeTool, rotationAngle]);
+  }, [walls, doors, furniture, soundZones, spawnPoint, selectedItem, camera, zoom, canvasSize, cursorPos, activeTool, rotationAngle, hoveredExpansionArrow]);
 
   // Pointer interaction
 
@@ -1471,6 +1530,7 @@ export default function OfficeDesigner({
     if (e.button === 1 || e.shiftKey) {
 
       isPanningRef.current = true;
+      setIsPanning(true);
 
       panStartRef.current = { x: e.clientX, y: e.clientY };
 
@@ -1483,6 +1543,28 @@ export default function OfficeDesigner({
     const snX = snap(wx);
 
     const snY = snap(wy);
+
+    // 1. Check Clash of Clans-style directional wall expansion arrow clicks first (in select or wall mode)
+    if (selectedItem?.type === 'wall' && (activeTool === 'select' || activeTool === 'wall') && expansionArrows.length > 0) {
+      for (let aIdx = 0; aIdx < expansionArrows.length; aIdx++) {
+        const arrow = expansionArrows[aIdx];
+        const dist = Math.hypot(wx - arrow.x, wy - arrow.y);
+        if (dist <= 22) {
+          const col = checkPlacementCollision(arrow.targetWall, { walls, doors, furniture, spawnPoint });
+          if (!col.isCollision) {
+            setWalls((prev) => {
+              const next = [...prev, arrow.targetWall];
+              setSelectedItem({ type: 'wall', index: next.length - 1 });
+              return next;
+            });
+          } else {
+            setCollisionAlert({ message: `Cannot expand wall: ${col.reason}` });
+            setTimeout(() => setCollisionAlert(null), 2500);
+          }
+          return;
+        }
+      }
+    }
 
     if (activeTool === 'select') {
 
@@ -1498,6 +1580,8 @@ export default function OfficeDesigner({
 
         isDraggingRef.current = true;
 
+
+        setIsDragging(true);
         dragStartRef.current = { x: snX - spawnPoint.x, y: snY - spawnPoint.y };
 
         return;
@@ -1516,6 +1600,8 @@ export default function OfficeDesigner({
 
           isDraggingRef.current = true;
 
+
+          setIsDragging(true);
           dragStartRef.current = { x: snX - w.x, y: snY - w.y };
 
           return;
@@ -1536,6 +1622,8 @@ export default function OfficeDesigner({
 
           isDraggingRef.current = true;
 
+
+          setIsDragging(true);
           dragStartRef.current = { x: snX - d.x, y: snY - d.y };
 
           return;
@@ -1556,6 +1644,8 @@ export default function OfficeDesigner({
 
           isDraggingRef.current = true;
 
+
+          setIsDragging(true);
           dragStartRef.current = { x: snX - f.x, y: snY - f.y };
 
           return;
@@ -1572,6 +1662,8 @@ export default function OfficeDesigner({
 
             isDraggingRef.current = true;
 
+
+            setIsDragging(true);
             dragStartRef.current = { x: snX - f.x, y: snY - f.y };
 
             return;
@@ -1590,6 +1682,8 @@ export default function OfficeDesigner({
 
             isDraggingRef.current = true;
 
+
+            setIsDragging(true);
             dragStartRef.current = { x: snX - f.x, y: snY - f.y };
 
             return;
@@ -1612,6 +1706,8 @@ export default function OfficeDesigner({
 
           isDraggingRef.current = true;
 
+
+          setIsDragging(true);
           dragStartRef.current = { x: snX - z.bounds.x1, y: snY - z.bounds.y1 };
 
           return;
@@ -1642,7 +1738,7 @@ export default function OfficeDesigner({
 
         h: gh,
 
-        rotation: rotationAngle,
+        rotation: 0,
 
         variation: wCust.variation,
 
@@ -1651,6 +1747,13 @@ export default function OfficeDesigner({
         thickness: wCust.thickness,
 
       };
+
+      const wallCol = checkPlacementCollision(newW, { walls, doors, furniture, spawnPoint });
+      if (wallCol.isCollision) {
+        setCollisionAlert({ message: wallCol.reason || `Wall intersects ${wallCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
 
       setWalls((prev) => {
 
@@ -1661,8 +1764,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'door') {
 
@@ -1712,6 +1813,13 @@ export default function OfficeDesigner({
 
       };
 
+      const doorCol = checkPlacementCollision(newD, { walls, doors, furniture, spawnPoint });
+      if (doorCol.isCollision) {
+        setCollisionAlert({ message: doorCol.reason || `Door placement blocked by ${doorCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setDoors((prev) => {
 
         const next = [...prev, newD];
@@ -1721,8 +1829,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'zone') {
 
@@ -1764,8 +1870,6 @@ export default function OfficeDesigner({
 
       });
 
-      setActiveTool('select');
-
     } else if (activeTool === 'desk') {
 
       const dkCust = toolCustomization.desk;
@@ -1794,6 +1898,13 @@ export default function OfficeDesigner({
 
       };
 
+      const deskCol = checkPlacementCollision(newDesk, { walls, doors, furniture, spawnPoint });
+      if (deskCol.isCollision) {
+        setCollisionAlert({ message: deskCol.reason || `Desk blocked by ${deskCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1805,8 +1916,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'conf_table') {
 
@@ -1838,6 +1947,13 @@ export default function OfficeDesigner({
 
       };
 
+      const tableCol = checkPlacementCollision(newTable, { walls, doors, furniture, spawnPoint });
+      if (tableCol.isCollision) {
+        setCollisionAlert({ message: tableCol.reason || `Boardroom table blocked by ${tableCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1849,8 +1965,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'sofa') {
 
@@ -1880,6 +1994,13 @@ export default function OfficeDesigner({
 
       };
 
+      const sofaCol = checkPlacementCollision(newSofa, { walls, doors, furniture, spawnPoint });
+      if (sofaCol.isCollision) {
+        setCollisionAlert({ message: sofaCol.reason || `Sofa blocked by ${sofaCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1891,8 +2012,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'server_rack') {
 
@@ -1922,6 +2041,13 @@ export default function OfficeDesigner({
 
       };
 
+      const rackCol = checkPlacementCollision(newRack, { walls, doors, furniture, spawnPoint });
+      if (rackCol.isCollision) {
+        setCollisionAlert({ message: rackCol.reason || `Server rack blocked by ${rackCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1933,8 +2059,6 @@ export default function OfficeDesigner({
         return next;
 
       });
-
-      setActiveTool('select');
 
     } else if (activeTool === 'plant') {
 
@@ -1960,6 +2084,13 @@ export default function OfficeDesigner({
 
       };
 
+      const plantCol = checkPlacementCollision(newPlant, { walls, doors, furniture, spawnPoint });
+      if (plantCol.isCollision) {
+        setCollisionAlert({ message: plantCol.reason || `Plant decor blocked by ${plantCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
+
       setFurniture((prev) => {
 
         const targetIndex = prev.length;
@@ -1972,9 +2103,14 @@ export default function OfficeDesigner({
 
       });
 
-      setActiveTool('select');
-
     } else if (activeTool === 'spawn') {
+
+      const spawnCol = checkPlacementCollision({ type: 'spawn', x: snX, y: snY, r: 22 }, { walls, doors, furniture });
+      if (spawnCol.isCollision) {
+        setCollisionAlert({ message: spawnCol.reason || `Spawn arrival marker blocked by ${spawnCol.collidingType}` });
+        setTimeout(() => setCollisionAlert(null), 2500);
+        return;
+      }
 
       setSpawnPoint({ x: snX, y: snY });
 
@@ -1993,8 +2129,22 @@ export default function OfficeDesigner({
     const snY = snap(wy);
 
     // Update live cursor coordinates for preview
-
     setCursorPos({ wx, wy, snX, snY, isOver: true });
+
+    // Expansion arrow hover tracking (Clash of Clans wall building)
+    if (selectedItem?.type === 'wall' && (activeTool === 'select' || activeTool === 'wall') && expansionArrows.length > 0) {
+      let foundHover = null;
+      for (let aIdx = 0; aIdx < expansionArrows.length; aIdx++) {
+        const arrow = expansionArrows[aIdx];
+        if (Math.hypot(wx - arrow.x, wy - arrow.y) <= 22) {
+          foundHover = arrow;
+          break;
+        }
+      }
+      setHoveredExpansionArrow((prev) => (prev?.id === foundHover?.id ? prev : foundHover));
+    } else if (hoveredExpansionArrow) {
+      setHoveredExpansionArrow(null);
+    }
 
     if (isPanningRef.current) {
 
@@ -2125,18 +2275,23 @@ export default function OfficeDesigner({
   const handlePointerUp = () => {
 
     isDraggingRef.current = false;
+    setIsDragging(false);
 
     isPanningRef.current = false;
+    setIsPanning(false);
 
   };
 
   const handlePointerLeave = () => {
 
     isDraggingRef.current = false;
+    setIsDragging(false);
 
     isPanningRef.current = false;
+    setIsPanning(false);
 
     setCursorPos((prev) => ({ ...prev, isOver: false }));
+    setHoveredExpansionArrow(null);
 
   };
 
@@ -2506,14 +2661,13 @@ export default function OfficeDesigner({
 
       }
 
-      // Escape to deselect
-
+      // Escape to deselect / exit active placement mode
       if (e.key === 'Escape') {
-
+        if (activeTool !== 'select') {
+          setActiveTool('select');
+        }
         setSelectedItem(null);
-
         return;
-
       }
 
       // Quick Tool Hotkeys
@@ -2950,6 +3104,27 @@ export default function OfficeDesigner({
 
   }, [selectedItem, walls, doors, furniture, soundZones, spawnPoint]);
 
+  // Wall Expansion Arrows (Clash of Clans directional handles)
+  const expansionArrows = useMemo(() => {
+    if (selectedItem?.type !== 'wall' || (activeTool !== 'select' && activeTool !== 'wall')) return [];
+    const w = walls[selectedItem.index];
+    if (!w) return [];
+    return getWallExpansionArrows(w, walls, WORLD_W, WORLD_H);
+  }, [selectedItem, walls, activeTool]);
+
+  // Dynamic Canvas Cursor (pointing hand for walls, grab/grabbing for models/objects)
+  const canvasCursor = useMemo(() => {
+    if (isDragging || isPanning) return 'cursor-grabbing';
+    if (hoveredExpansionArrow) return 'cursor-pointer';
+    if (activeTool === 'wall') return 'cursor-pointer';
+    if (['desk', 'conf_table', 'sofa', 'server_rack', 'plant', 'chair', 'door', 'spawn'].includes(activeTool)) {
+      return 'cursor-grab';
+    }
+    if (activeTool === 'zone') return 'cursor-crosshair';
+    if (selectedItem) return 'cursor-grab';
+    return 'cursor-default';
+  }, [isDragging, isPanning, hoveredExpansionArrow, activeTool, selectedItem]);
+
   // Armed Tool Details (for when no object is selected)
 
   const armedToolDetails = useMemo(() => {
@@ -2966,7 +3141,7 @@ export default function OfficeDesigner({
 
       {/* Top Studio Control Header */}
 
-      <header className="h-12 border-b border-[#182030] bg-[#0b101c] px-3.5 flex items-center justify-between z-30 shrink-0">
+      <header onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }} className="h-12 border-b border-[#182030] bg-[#0b101c] px-3.5 flex items-center justify-between z-30 shrink-0">
 
         <div className="flex items-center gap-2.5">
 
@@ -3132,7 +3307,7 @@ export default function OfficeDesigner({
 
         {/* Left Fixed Rail Bar (56px width, always clickable) */}
 
-        <aside className="w-14 h-full bg-[#0a0e17] border-r border-[#171f2e] flex flex-col items-center py-2 shrink-0 z-20 select-none justify-between">
+        <aside onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }} className="w-14 h-full bg-[#0a0e17] border-r border-[#171f2e] flex flex-col items-center py-2 shrink-0 z-20 select-none justify-between">
 
           {/* Top Rail Section: Toggle Drawer + Mode Switchers */}
 
@@ -3386,6 +3561,8 @@ export default function OfficeDesigner({
         {/* Sliding Flyout Drawer (Natural Flex width transition) */}
 
         <div
+
+          onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }}
 
           className={`h-full bg-[#0d131f] border-r border-[#1a2333] transition-[width,opacity] duration-300 ease-in-out shrink-0 overflow-hidden z-10 flex flex-col ${
 
@@ -4941,6 +5118,14 @@ export default function OfficeDesigner({
 
           )}
 
+          {/* Live Collision Warning Alert */}
+          {collisionAlert && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3.5 py-2 rounded-lg bg-red-950/92 border border-red-500/60 text-red-200 text-xs font-semibold shadow-2xl backdrop-blur pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+              <span>{collisionAlert.message}</span>
+            </div>
+          )}
+
           {/* Canvas Tag: sized reactively with pointer and wheel listeners */}
 
           <canvas
@@ -4961,7 +5146,7 @@ export default function OfficeDesigner({
 
             onWheel={handleWheel}
 
-            className="w-full h-full cursor-crosshair block"
+            className={`w-full h-full block ${canvasCursor}`}
 
           />
 

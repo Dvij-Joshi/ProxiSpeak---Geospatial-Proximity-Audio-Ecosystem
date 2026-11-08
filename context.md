@@ -222,7 +222,31 @@ git checkout branch-dvij
 ---
 
 ## 9. Current Active Repository State
-* **Latest Milestone:** Pillar 2 & Organization Engine Refinement — Robust Admin & Member Dashboards, Meeting Center & Architectural Templates
+* **Latest Milestone:** Custom Office Designer – Interactive Wall Expansion & SAT Component Collision Detection Engine
+  * **Interactive Directional Wall Expansion (Clash of Clans-Style Mechanics):**
+    * Selecting any placed architectural wall segment on the canvas generates interactive directional expansion arrow buttons:
+      * Horizontal walls provide straight East/West extensions plus 90° North/South corner turn controls.
+      * Vertical walls provide straight North/South extensions plus 90° East/West corner turn controls.
+    * Clicking any expansion arrow automatically instantiates a connected wall segment inheriting the exact dimensions, thickness, material variation, and color of the source wall with zero visible gap.
+    * Continuous building workflow: newly created segments immediately display their own directional handles, enabling rapid boundary construction of entire conference rooms and offices through sequential clicks.
+    * Hovering over any directional handle displays a translucent dashed guide preview with `+ CONNECT` indicator.
+    * Built-in duplicate prevention and canvas perimeter boundary checks (2200x1300).
+  * **SAT (Separating Axis Theorem) 2D Collision Detection Engine (`client/src/components/designerGeometry.js`):**
+    * Mathematical 2D collision validator supporting oriented bounding boxes rotated at arbitrary angles and circle-polygon collision for biophilic plants and spawn arrival zones.
+    * Configurable margin tolerance (2px) ensuring architectural edge-to-edge contacts (corner joints, touching walls) are recognized as valid connections while physical penetrations and overlaps are caught.
+    * Architectural domain rules:
+      * Doors on walls: Allowed (doors puncture partitions).
+      * Furniture on furniture / walls / doors: Blocked.
+      * Sound isolation zones: Non-physical, never collide or block placement.
+    * Real-time cursor HUD feedback: Displays crimson warning pill (`⊘ BLOCKED: [Type]`) with dimmed ghost preview when hovering obstructed regions.
+    * Placement protection: Blocks invalid placement attempts in `handlePointerDown` and flashes an animated floating collision banner.
+    * **Wall Expansion Direction Fix:** Upgraded 2D endpoint connection detection in `client/src/components/designerGeometry.js` to use rigorous 2D point-to-box distance (`isPointNearWallBox`). Fixed false positive connection suppression where distant walls sharing a 1D coordinate falsely blocked directional arrows. Added `isValidTarget` collision check against other walls.
+    * **Continuous Tool Placement & Armed Tool Persistence:** Enabled continuous multi-item plotting across all tools (walls, workstation pods, conference tables, sofas, server racks, plants, doors, sound zones) by maintaining `activeTool` state across canvas clicks instead of auto-resetting to `select`. Wall expansion handles are active and clickable during both `wall` and `select` modes. Added `Esc` key shortcut to return to select mode.
+    * **Wall Bounding Box Math & Double-Rotation Fix:** Implemented `getWallBoxCorners` in `designerGeometry.js` to preserve true axis-aligned bounding rectangles for orthogonal walls without rotation distortions. Resolved false-positive furniture collision bugs where vertical wall expansion arrows double-rotated into neighboring furniture.
+    * **Dynamic Interactive Cursors:** Implemented contextual canvas cursors: pointing-hand cursor (`cursor-pointer`) for the wall-building tool and expansion arrow hover, open grab hand (`cursor-grab`) for selectable models, closed grabbing hand (`cursor-grabbing`) during active object dragging and canvas panning, crosshair for non-wall placement, and default pointer.
+    * **Clean UI Hover & Overlay Dismissal:** Added automatic overlay clearance (`onPointerEnter`) to toolbar, sidebar, and header containers, instantly hiding blueprint suggestion overlays and expansion guides when hovering over interface tool buttons.
+    * **Refined Cursor Dynamics & Drag State Synchronization:** Ensured `setIsDragging(true)` is dispatched across all canvas element drag handlers (walls, doors, furniture, sound zones, spawn marker), seamlessly activating the closed grabbing hand (`cursor-grabbing`) during mouse moves. Mapped all studio model placement tools (`desk`, `conf_table`, `sofa`, `server_rack`, `plant`, `chair`, `door`, `spawn`) to `cursor-grab` on the canvas, eliminating unwanted `+` crosshairs during model placement while maintaining `cursor-pointer` for walls and expansion arrows.
+* **Prior Milestone:** Pillar 2 & Organization Engine Refinement — Robust Admin & Member Dashboards, Meeting Center & Architectural Templates
   * Created server/models/Meeting.js schema supporting instant and scheduled meetings with template routing (office, conference, 
 ooftop, custom), duration tracking, and meeting histories.
   * Enhanced server/models/Organization.js with case-insensitive uniqueness (
