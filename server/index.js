@@ -161,6 +161,16 @@ function saveAccountToCache(account) {
   }
 }
 
+function saveAccountsToDisk() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    const all = Array.from(memoryAccounts.values());
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(all, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[Cache] Failed to persist accounts to disk:', err.message);
+  }
+}
+
 async function syncCachedAccountsToDb() {
   if (!isDbConnected() || memoryAccounts.size === 0) return;
   let synced = 0;
@@ -204,176 +214,78 @@ async function syncCachedAccountsToDb() {
   }
 }
 
-loadCachedAccounts();
-loadCachedOrgsAndLayouts();
-// Default seed organizations and office layouts
-const SEED_ORGS = [
-  {
-    orgId: 'acme-corp',
-    name: 'Acme Corporation',
-    slug: 'acme-corp',
-    description: 'Enterprise virtual headquarters with departmental suites and collaboration pods.',
-    logoColor: '#2563eb',
-    owner: 'dvijjoshi',
-    members: [
-      { username: 'dvijjoshi', role: 'owner', avatarColor: '#3b82f6', joinedAt: new Date() },
-      { username: 'kunj', role: 'admin', avatarColor: '#10b981', joinedAt: new Date() },
-      { username: 'sumit', role: 'member', avatarColor: '#f59e0b', joinedAt: new Date() },
-      { username: 'uma', role: 'member', avatarColor: '#ec4899', joinedAt: new Date() },
-    ],
-    createdAt: new Date(),
-  },
-  {
-    orgId: 'deepmind-lab',
-    name: 'DeepMind Research Lab',
-    slug: 'deepmind-lab',
-    description: 'AI intelligence sandbox, keynote auditoriums, and quiet focus pods.',
-    logoColor: '#8b5cf6',
-    owner: 'dvijjoshi',
-    members: [
-      { username: 'dvijjoshi', role: 'owner', avatarColor: '#8b5cf6', joinedAt: new Date() },
-    ],
-    createdAt: new Date(),
-  },
-];
-
-const SEED_MEETINGS = [
-  {
-    meetingId: 'mtg-acme-standup',
-    orgId: 'acme-corp',
-    title: 'Daily Architecture Standup',
-    description: 'Sync on spatial audio WebRTC mesh and canvas LERP optimizations.',
-    template: 'office',
-    layoutId: 'acme-corp-office',
-    scheduledAt: new Date(Date.now() + 3600 * 1000 * 3),
-    status: 'scheduled',
-    host: 'dvijjoshi',
-    participants: ['dvijjoshi', 'kunj'],
-    durationMinutes: 30,
-    roomId: 'acme-corp-office',
-    createdAt: new Date(),
-  },
-  {
-    meetingId: 'mtg-acme-townhall',
-    orgId: 'acme-corp',
-    title: 'All-Hands Engineering Townhall',
-    description: 'Quarterly milestone review and live spatial audio acoustic demonstration.',
-    template: 'conference',
-    layoutId: 'acme-corp-conference',
-    scheduledAt: new Date(Date.now() - 86400 * 1000 * 2),
-    status: 'completed',
-    host: 'dvijjoshi',
-    participants: ['dvijjoshi', 'kunj', 'sumit', 'uma'],
-    startedAt: new Date(Date.now() - 86400 * 1000 * 2),
-    endedAt: new Date(Date.now() - 86400 * 1000 * 2 + 45 * 60 * 1000),
-    durationMinutes: 45,
-    roomId: 'acme-corp-conference',
-    createdAt: new Date(Date.now() - 86400 * 1000 * 3),
-  },
-];
-
-const SEED_LAYOUTS = [
-  {
-    layoutId: 'acme-main-hq',
-    orgId: 'acme-corp',
-    name: 'Engineering Campus HQ',
-    description: 'Flagship multi-department spatial office with meeting rooms and acoustic zones.',
-    theme: 'office',
-    width: 2200,
-    height: 1300,
-    spawnPoint: { x: 1100, y: 720 },
-    createdBy: 'dvijjoshi',
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    layoutId: 'acme-townhall',
-    orgId: 'acme-corp',
-    name: 'Townhall Auditorium',
-    description: 'Keynote stage, presentation hall, and breakout zones.',
-    theme: 'conference',
-    width: 2200,
-    height: 1300,
-    spawnPoint: { x: 1100, y: 1050 },
-    createdBy: 'kunj',
-    isDefault: false,
-    createdAt: new Date(),
-  },
-  {
-    layoutId: 'acme-lounge',
-    orgId: 'acme-corp',
-    name: 'Executive Sky Lounge',
-    description: 'Relaxed ambient terrace with fireside booths and cocktail bar.',
-    theme: 'lounge',
-    width: 2200,
-    height: 1300,
-    spawnPoint: { x: 1100, y: 650 },
-    createdBy: 'sumit',
-    isDefault: false,
-    createdAt: new Date(),
-  },
-  {
-    layoutId: 'deepmind-research-hub',
-    orgId: 'deepmind-lab',
-    name: 'Frontier AI Research Hub',
-    description: 'Specialized lab layout with high-isolation neural model review rooms.',
-    theme: 'office',
-    width: 2200,
-    height: 1300,
-    spawnPoint: { x: 1100, y: 720 },
-    createdBy: 'dvijjoshi',
-    isDefault: true,
-    createdAt: new Date(),
-  },
-];
+// Default seed configurations (empty by default - organizations are strictly user-created)
+const SEED_ORGS = [];
+const SEED_MEETINGS = [];
+const SEED_LAYOUTS = [];
 
 function loadCachedOrgsAndLayouts() {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    // Load Orgs
+    // Load Orgs and purge any legacy fake seeds
     if (fs.existsSync(ORGS_FILE)) {
       const raw = fs.readFileSync(ORGS_FILE, 'utf8');
       const list = JSON.parse(raw);
       if (Array.isArray(list) && list.length > 0) {
-        for (const o of list) if (o && o.orgId) memoryOrgs.set(o.orgId, o);
+        for (const o of list) {
+          if (o && o.orgId && o.orgId !== 'acme-corp' && o.orgId !== 'deepmind-lab') {
+            memoryOrgs.set(o.orgId, o);
+          }
+        }
       }
     }
-    if (memoryOrgs.size === 0) {
-      for (const o of SEED_ORGS) memoryOrgs.set(o.orgId, o);
-      fs.writeFileSync(ORGS_FILE, JSON.stringify(SEED_ORGS, null, 2), 'utf8');
-    }
+    memoryOrgs.delete('acme-corp');
+    memoryOrgs.delete('deepmind-lab');
+    saveOrgsToDisk();
 
-    // Load Layouts
+    // Load Layouts and purge legacy layout seeds
     if (fs.existsSync(LAYOUTS_FILE)) {
       const raw = fs.readFileSync(LAYOUTS_FILE, 'utf8');
       const list = JSON.parse(raw);
       if (Array.isArray(list) && list.length > 0) {
-        for (const l of list) if (l && l.layoutId) memoryLayouts.set(l.layoutId, l);
+        for (const l of list) {
+          if (l && l.layoutId && l.orgId !== 'acme-corp' && l.orgId !== 'deepmind-lab') {
+            memoryLayouts.set(l.layoutId, l);
+          }
+        }
       }
     }
-    if (memoryLayouts.size === 0) {
-      for (const l of SEED_LAYOUTS) memoryLayouts.set(l.layoutId, l);
-      fs.writeFileSync(LAYOUTS_FILE, JSON.stringify(SEED_LAYOUTS, null, 2), 'utf8');
+    for (const key of Array.from(memoryLayouts.keys())) {
+      const l = memoryLayouts.get(key);
+      if (l && (l.orgId === 'acme-corp' || l.orgId === 'deepmind-lab')) {
+        memoryLayouts.delete(key);
+      }
     }
+    saveLayoutsToDisk();
 
-    // Load Meetings
+    // Load Meetings and purge legacy meeting seeds
     if (fs.existsSync(MEETINGS_FILE)) {
       const raw = fs.readFileSync(MEETINGS_FILE, 'utf8');
       const list = JSON.parse(raw);
       if (Array.isArray(list) && list.length > 0) {
-        for (const m of list) if (m && m.meetingId) memoryMeetings.set(m.meetingId, m);
+        for (const m of list) {
+          if (m && m.meetingId && m.orgId !== 'acme-corp' && m.orgId !== 'deepmind-lab') {
+            memoryMeetings.set(m.meetingId, m);
+          }
+        }
       }
     }
-    if (memoryMeetings.size === 0) {
-      for (const m of SEED_MEETINGS) memoryMeetings.set(m.meetingId, m);
-      fs.writeFileSync(MEETINGS_FILE, JSON.stringify(SEED_MEETINGS, null, 2), 'utf8');
+    for (const key of Array.from(memoryMeetings.keys())) {
+      const m = memoryMeetings.get(key);
+      if (m && (m.orgId === 'acme-corp' || m.orgId === 'deepmind-lab')) {
+        memoryMeetings.delete(key);
+      }
     }
+    saveMeetingsToDisk();
   } catch (err) {
     console.warn('[Cache] Error loading orgs/layouts/meetings cache:', err.message);
   }
 }
+
+loadCachedAccounts();
+loadCachedOrgsAndLayouts();
 
 function saveOrgsToDisk() {
   try {
@@ -1050,21 +962,78 @@ app.get('/api/rooms/:roomId', async (req, res) => {
 
 // ─── Organization & Custom Office Layouts API (Pillar 2) ─────────────────────
 
-// GET /api/organizations - List organizations with office count
-app.get('/api/organizations', async (_req, res) => {
+// GET /api/organizations - List organizations strictly scoped to the requesting authenticated user
+app.get('/api/organizations', async (req, res) => {
   try {
-    let orgs = [];
-    if (isDbConnected()) {
+    let reqUser = null;
+    let reqEmail = null;
+
+    // 1. Try JWT token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
       try {
-        orgs = await Organization.find({}).sort({ createdAt: -1 }).lean();
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded) {
+          reqUser = decoded.username;
+          reqEmail = decoded.email;
+        }
       } catch (_e) {}
     }
-    if (!orgs || orgs.length === 0) {
-      orgs = Array.from(memoryOrgs.values());
+
+    // 2. Fallback to query params
+    if (!reqUser && req.query.username) {
+      reqUser = String(req.query.username).trim();
+    }
+    if (!reqEmail && req.query.email) {
+      reqEmail = String(req.query.email).trim();
     }
 
-    // Attach office layout count to each org
-    const enriched = orgs.map((org) => {
+    // Unauthenticated or unknown visitor: strictly return empty array (zero data leakage)
+    if (!reqUser && !reqEmail) {
+      return res.json([]);
+    }
+
+    const userLower = (reqUser || '').toLowerCase();
+    const emailLower = (reqEmail || '').toLowerCase();
+
+    let allOrgs = [];
+    if (isDbConnected()) {
+      try {
+        allOrgs = await Organization.find({
+          $or: [
+            { owner: { $regex: new RegExp(`^${userLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+            { ownerEmail: { $regex: new RegExp(`^${emailLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+            { 'members.username': { $regex: new RegExp(`^${userLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+            { 'members.email': { $regex: new RegExp(`^${emailLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+          ]
+        }).sort({ createdAt: -1 }).lean();
+      } catch (_e) {}
+    }
+
+    // Memory cache query / fallback
+    const memMatching = Array.from(memoryOrgs.values()).filter((org) => {
+      if (!org) return false;
+      const oOwner = (org.owner || '').toLowerCase();
+      const oOwnerEmail = (org.ownerEmail || '').toLowerCase();
+      if ((userLower && oOwner === userLower) || (emailLower && oOwnerEmail === emailLower)) return true;
+      return (org.members || []).some((m) => {
+        const mUser = (m.username || '').toLowerCase();
+        const mEmail = (m.email || '').toLowerCase();
+        return (userLower && mUser === userLower) || (emailLower && mEmail === emailLower);
+      });
+    });
+
+    // Merge DB & memory unique by orgId
+    const map = new Map();
+    for (const o of allOrgs) map.set(o.orgId, o);
+    for (const o of memMatching) {
+      if (!map.has(o.orgId)) map.set(o.orgId, o);
+    }
+    const finalOrgs = Array.from(map.values());
+
+    // Enrich with office layout count
+    const enriched = finalOrgs.map((org) => {
       const officeCount = Array.from(memoryLayouts.values()).filter((l) => l.orgId === org.orgId).length;
       return {
         ...org,
@@ -1078,10 +1047,18 @@ app.get('/api/organizations', async (_req, res) => {
   }
 });
 
-// POST /api/organizations - Create a new organization with unique name enforcement
+// POST /api/organizations - Create organization, provision Admin account with default ID & password
 app.post('/api/organizations', generalApiLimiter, async (req, res) => {
   try {
-    const { name, description = '', owner = 'Anonymous', logoColor = '#2563eb' } = req.body;
+    const {
+      name,
+      description = '',
+      logoColor = '#2563eb',
+      adminFullName,
+      adminPassword,
+      owner
+    } = req.body;
+
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Organization name is required' });
     }
@@ -1113,9 +1090,61 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
 
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'org';
     const orgId = `${slug}-${Math.random().toString(36).substring(2, 6)}`;
-    const ownerHandle = owner.toLowerCase().trim().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '') || 'admin';
-    const ownerEmail = `${ownerHandle}@${slug}.com`;
 
+    // Derive Admin profile & official company email: e.g. "Ramesh Kumar" -> "ramesh.kumar@google.com"
+    const adminCleanName = (adminFullName || owner || 'Administrator').trim();
+    let adminHandle = adminCleanName.toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+    if (!adminHandle || adminHandle.length < 2) {
+      adminHandle = `admin.${Math.random().toString(36).substring(2, 6)}`;
+    }
+    const adminEmail = `${adminHandle}@${slug}.com`;
+
+    // Secure default password generation (unique per admin)
+    const finalAdminPassword = (adminPassword && typeof adminPassword === 'string' && adminPassword.trim().length >= 6)
+      ? adminPassword.trim()
+      : `Admin#${Math.random().toString(36).substring(2, 5).toUpperCase()}${Math.random().toString(36).substring(2, 6)}`;
+
+    // Hash admin password & provision ProxiSpeak Account
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(finalAdminPassword, salt);
+    const adminId = `acc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    const adminAccountData = {
+      id: adminId,
+      username: adminHandle,
+      usernameLower: adminHandle.toLowerCase(),
+      email: adminEmail,
+      passwordHash,
+      avatarColor: logoColor,
+      createdAt: new Date().toISOString(),
+    };
+    memoryAccounts.set(adminHandle.toLowerCase(), adminAccountData);
+    saveAccountsToDisk();
+
+    if (isDbConnected()) {
+      try {
+        const existingAcc = await Account.findByCredentials(adminHandle) || await Account.findByCredentials(adminEmail);
+        if (existingAcc) {
+          existingAcc.passwordHash = passwordHash;
+          existingAcc.avatarColor = logoColor;
+          await existingAcc.save();
+        } else {
+          const createdDoc = await Account.create(adminAccountData);
+          adminAccountData.id = createdDoc._id.toString();
+        }
+      } catch (dbErr) {
+        console.warn('[CreateOrg] Admin account DB notice:', dbErr.message);
+      }
+    }
+
+    // Issue 14-day JWT Token for Admin
+    const adminToken = jwt.sign(
+      { id: adminAccountData.id, username: adminHandle, email: adminEmail },
+      JWT_SECRET,
+      { expiresIn: '14d' }
+    );
+
+    // Create the organization record with the admin as owner
     const newOrg = {
       orgId,
       name: cleanName,
@@ -1123,15 +1152,16 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
       slug,
       description: description.trim(),
       logoColor,
-      owner,
+      owner: adminHandle,
+      ownerEmail: adminEmail,
       members: [
         {
-          username: owner,
-          displayName: owner,
-          email: ownerEmail,
+          username: adminHandle,
+          displayName: adminCleanName,
+          email: adminEmail,
           role: 'owner',
           avatarColor: logoColor,
-          joinedAt: new Date()
+          joinedAt: new Date(),
         }
       ],
       createdAt: new Date(),
@@ -1151,7 +1181,7 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
         width: 2200,
         height: 1300,
         spawnPoint: { x: 1100, y: 720 },
-        createdBy: owner,
+        createdBy: adminHandle,
         isDefault: true,
         createdAt: new Date(),
       },
@@ -1164,7 +1194,7 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
         width: 2200,
         height: 1300,
         spawnPoint: { x: 1100, y: 1050 },
-        createdBy: owner,
+        createdBy: adminHandle,
         isDefault: false,
         createdAt: new Date(),
       },
@@ -1177,7 +1207,7 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
         width: 2200,
         height: 1300,
         spawnPoint: { x: 1100, y: 650 },
-        createdBy: owner,
+        createdBy: adminHandle,
         isDefault: false,
         createdAt: new Date(),
       },
@@ -1197,9 +1227,25 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
       } catch (_e) {}
     }
 
-    res.status(201).json({ ...newOrg, officeCount: defaultTemplates.length });
+    res.status(201).json({
+      organization: newOrg,
+      officeCount: defaultTemplates.length,
+      adminCredentials: {
+        fullName: adminCleanName,
+        username: adminHandle,
+        email: adminEmail,
+        password: finalAdminPassword,
+        token: adminToken,
+        user: {
+          id: adminAccountData.id,
+          username: adminHandle,
+          email: adminEmail,
+          avatarColor: logoColor,
+        },
+      },
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create organization' });
+    res.status(500).json({ error: 'Failed to create organization: ' + (err.message || 'Server error') });
   }
 });
 
@@ -2362,6 +2408,9 @@ connectDB()
       if (cleared.deletedCount > 0) {
         console.log(`[DB] Cleaned up ${cleared.deletedCount} stale socket presence record(s).`);
       }
+      await Organization.deleteMany({ orgId: { $in: ['acme-corp', 'deepmind-lab'] } });
+      await OfficeLayout.deleteMany({ orgId: { $in: ['acme-corp', 'deepmind-lab'] } });
+      await Meeting.deleteMany({ orgId: { $in: ['acme-corp', 'deepmind-lab'] } });
     } catch (_e) {}
     await syncCachedAccountsToDb();
     await initRedisAdapter();

@@ -47,6 +47,9 @@ export default function OrganizationHub({
   onSelectOrg,
   onOpenDesigner,
   onLaunchOffice,
+  onLogout,
+  onAuthSuccess,
+  onRequestAuth,
   onClose,
 }) {
   const [organizations, setOrganizations] = useState([]);
@@ -62,7 +65,30 @@ export default function OrganizationHub({
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgDesc, setNewOrgDesc] = useState('');
   const [newOrgColor, setNewOrgColor] = useState('#2563eb');
+  const [adminFullName, setAdminFullName] = useState(user?.username || '');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
+  const [createdAdminCredentials, setCreatedAdminCredentials] = useState(null);
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+
+  // Secure password generator helper
+  const generateSecurePassword = (prefix = 'Admin#') => {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let rand = '';
+    for (let i = 0; i < 3; i++) rand += upper[Math.floor(Math.random() * upper.length)];
+    for (let i = 0; i < 4; i++) rand += chars[Math.floor(Math.random() * chars.length)];
+    return `${prefix}${rand}`;
+  };
+
+  const handleOpenCreateOrg = () => {
+    setNewOrgName('');
+    setNewOrgDesc('');
+    setNewOrgColor('#2563eb');
+    setAdminFullName(user?.username || '');
+    setAdminPassword(generateSecurePassword('Admin#'));
+    setShowCreateOrgModal(true);
+  };
 
   // Add User Modal State (Admin)
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -111,39 +137,51 @@ export default function OrganizationHub({
 
   // Determine current user's role in the selected organization
   const myUsername = (user?.username || '').trim().toLowerCase();
-  const isOwner = selectedOrg && selectedOrg.owner?.trim().toLowerCase() === myUsername;
-  const myMemberRecord = (selectedOrg?.members || []).find(
-    (m) => m.username?.trim().toLowerCase() === myUsername
+  const myEmail = (user?.email || '').trim().toLowerCase();
+  const isOwner = Boolean(
+    selectedOrg && (
+      (selectedOrg.owner && selectedOrg.owner.trim().toLowerCase() === myUsername) ||
+      (selectedOrg.ownerEmail && selectedOrg.ownerEmail.trim().toLowerCase() === myEmail)
+    )
   );
-  const isAdmin = isOwner || myMemberRecord?.role === 'admin' || myMemberRecord?.role === 'owner';
+  const myMemberRecord = (selectedOrg?.members || []).find((m) => {
+    const mUser = (m.username || '').trim().toLowerCase();
+    const mEmail = (m.email || '').trim().toLowerCase();
+    return (myUsername && mUser === myUsername) || (myEmail && mEmail === myEmail);
+  });
+  const isAdmin = Boolean(
+    isOwner ||
+    myMemberRecord?.role === 'admin' ||
+    myMemberRecord?.role === 'owner'
+  );
 
-  // Fetch organizations
+  // Fetch organizations scoped strictly to authenticated user
   const fetchOrgs = async () => {
     try {
-      const res = await fetch(`${SERVER_URL}/api/organizations`);
+      const token = localStorage.getItem('proxispeak_token');
+      const queryParams = new URLSearchParams();
+      if (user?.username) queryParams.append('username', user.username);
+      if (user?.email) queryParams.append('email', user.email);
+      const url = `${SERVER_URL}/api/organizations${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         setOrganizations(data);
-        if (!selectedOrg && data.length > 0) {
+        if (data.length > 0) {
           const match = data.find((o) => o.orgId === currentOrg?.orgId) || data[0];
           setSelectedOrg(match);
+        } else {
+          setSelectedOrg(null);
         }
+      } else {
+        setOrganizations([]);
+        setSelectedOrg(null);
       }
     } catch (_e) {
-      setOrganizations([
-        {
-          orgId: 'acme-corp',
-          name: 'Acme Corporation',
-          slug: 'acme-corp',
-          description: 'Enterprise virtual headquarters with departmental suites.',
-          logoColor: '#2563eb',
-          owner: 'dvijjoshi',
-          members: [
-            { username: 'dvijjoshi', displayName: 'Dvij Joshi', email: 'dvijjoshi@acme-corp.com', role: 'owner' },
-            { username: 'kunj', displayName: 'Kunj Kachhiya', email: 'kunj@acme-corp.com', role: 'admin' },
-          ],
-        },
-      ]);
+      setOrganizations([]);
+      setSelectedOrg(null);
     } finally {
       setLoading(false);
     }
@@ -151,7 +189,7 @@ export default function OrganizationHub({
 
   useEffect(() => {
     fetchOrgs();
-  }, []);
+  }, [user?.username, user?.email]);
 
   // Fetch layouts & meetings for selected org
   const fetchOrgDetails = async (orgId) => {
@@ -197,7 +235,35 @@ export default function OrganizationHub({
     return `${h}@${selectedOrg.slug}.com`;
   }, [derivedUserHandle, selectedOrg?.slug]);
 
-  // Handle Create Organization
+  // Derived values for Create Organization Admin preview
+  const derivedNewOrgSlug = useMemo(() => {
+    if (!newOrgName.trim()) return '';
+    return newOrgName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 30) || 'org';
+  }, [newOrgName]);
+
+  const derivedAdminHandle = useMemo(() => {
+    const name = (adminFullName || user?.username || 'admin').trim();
+    let h = name
+      .toLowerCase()
+      .replace(/\s+/g, '.')
+      .replace(/[^a-z0-9.]/g, '')
+      .replace(/\.+/g, '.')
+      .replace(/^\.|\.$/g, '');
+    return h || 'admin';
+  }, [adminFullName, user?.username]);
+
+  const derivedAdminEmail = useMemo(() => {
+    const slug = derivedNewOrgSlug || 'company';
+    return `${derivedAdminHandle}@${slug}.com`;
+  }, [derivedAdminHandle, derivedNewOrgSlug]);
+
+  // Handle Create Organization with auto-provisioned Admin and auto-logout
   const handleCreateOrg = async (e) => {
     e.preventDefault();
     if (!newOrgName.trim()) return;
@@ -211,18 +277,26 @@ export default function OrganizationHub({
           name: newOrgName.trim(),
           description: newOrgDesc.trim(),
           logoColor: newOrgColor,
-          owner: user?.username || 'Admin',
+          adminFullName: adminFullName.trim() || 'Administrator',
+          adminPassword: adminPassword.trim(),
         }),
       });
 
       if (res.ok) {
-        const created = await res.json();
-        setOrganizations((prev) => [created, ...prev]);
-        setSelectedOrg(created);
+        const data = await res.json();
+        const created = data.organization || data;
+        const creds = data.adminCredentials;
+
+        // Bug 2: Log out previous normal user session immediately
+        if (onLogout) onLogout();
+        localStorage.removeItem('proxispeak_token');
+        localStorage.removeItem('proxispeak_user');
+
         setShowCreateOrgModal(false);
-        setNewOrgName('');
-        setNewOrgDesc('');
-        showToast(`Organization "${created.name}" created! You are designated as Admin.`, 'success');
+        setOrganizations([created]);
+        setSelectedOrg(created);
+        setCreatedAdminCredentials(creds);
+        showToast(`Organization "${created.name}" created! Review your official Admin credentials.`, 'success');
         fetchOrgDetails(created.orgId);
       } else {
         const err = await res.json();
@@ -592,7 +666,7 @@ export default function OrganizationHub({
               )}
 
               <button
-                onClick={() => setShowCreateOrgModal(true)}
+                onClick={handleOpenCreateOrg}
                 className="mt-2 w-full py-2.5 px-3 rounded-2xl border border-dashed border-[#D9D7D0] hover:border-[#2563eb] text-xs font-semibold text-[#2563eb] hover:bg-blue-50/50 transition-colors flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-[16px]">add_business</span>
@@ -619,6 +693,36 @@ export default function OrganizationHub({
 
           {/* ─── Right Content Dashboard ──────────────────────────────────────── */}
           <div className="flex-1 flex flex-col overflow-hidden bg-white">
+            {organizations.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#FAF9F5]/40 select-none">
+                <div className="w-16 h-16 rounded-3xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#2563eb] mb-4 shadow-sm">
+                  <span className="material-symbols-outlined text-[32px]">apartment</span>
+                </div>
+                <h2 className="text-base font-bold text-[#1c1b1b] tracking-tight">No Organizations Found</h2>
+                <p className="text-xs text-[#5e5f5c] max-w-md mt-1.5 leading-relaxed">
+                  Organizations in ProxiSpeak are strictly private to verified company members. Create your organization to become the primary administrator, or sign in with your corporate credentials.
+                </p>
+                <div className="flex items-center gap-3 mt-6">
+                  <button
+                    onClick={handleOpenCreateOrg}
+                    className="px-5 py-2.5 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add_business</span>
+                    <span>Create Organization</span>
+                  </button>
+                  {!user && onRequestAuth && (
+                    <button
+                      onClick={onRequestAuth}
+                      className="px-4 py-2.5 rounded-xl bg-white hover:bg-[#F4F3EF] border border-[#D9D7D0] text-[#1c1b1b] text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">login</span>
+                      <span>Sign In to Account</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Dashboard Navigation Tabs */}
             <div className="px-6 pt-3 border-b border-[#E9E8E4] flex items-center gap-1 bg-[#FAF9F5] overflow-x-auto shrink-0">
               {[
@@ -666,9 +770,24 @@ export default function OrganizationHub({
                       <div className="text-2xl font-bold text-[#1c1b1b] mt-1">
                         {selectedOrg?.members?.length || 1}
                       </div>
-                      <div className="text-[11px] text-[#059669] mt-1 flex items-center gap-1 font-medium">
-                        <span className="material-symbols-outlined text-[14px]">verified_user</span>
-                        <span>{isAdmin ? 'Admin managed' : 'Member access'}</span>
+                      <div className="text-[11px] text-[#059669] mt-1 flex items-center justify-between font-medium">
+                        <div className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">verified_user</span>
+                          <span>{isAdmin ? 'Admin managed' : 'Member access'}</span>
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={() => {
+                              setCreatedCredentials(null);
+                              setNewUserPassword(generateSecurePassword('User#'));
+                              setShowAddUserModal(true);
+                            }}
+                            className="text-[10px] text-[#2563eb] hover:underline font-bold flex items-center gap-0.5"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">person_add</span>
+                            <span>Add</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -972,6 +1091,7 @@ export default function OrganizationHub({
                       <button
                         onClick={() => {
                           setCreatedCredentials(null);
+                          setNewUserPassword(generateSecurePassword('User#'));
                           setShowAddUserModal(true);
                         }}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all shrink-0"
@@ -1227,14 +1347,16 @@ export default function OrganizationHub({
                 </div>
               )}
             </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ─── MODAL 1: CREATE ORGANIZATION ───────────────────────────────────── */}
+      {/* ─── MODAL 1: CREATE NEW ORGANIZATION & PROVISION ADMIN ─────────────── */}
       {showCreateOrgModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 flex flex-col gap-4">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 flex flex-col gap-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#E9E8E4]">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#2563eb] text-[20px]">add_business</span>
@@ -1245,21 +1367,21 @@ export default function OrganizationHub({
               </button>
             </div>
 
-            <form onSubmit={handleCreateOrg} className="flex flex-col gap-3">
+            <form onSubmit={handleCreateOrg} className="flex flex-col gap-3.5">
               <div>
                 <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
                   Organization Name
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Google, DeepMind, Stripe"
+                  placeholder="e.g. Google, Acme, DeepMind"
                   value={newOrgName}
                   onChange={(e) => setNewOrgName(e.target.value)}
                   required
                   className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
                 />
                 <p className="text-[10px] text-[#8C8880] mt-1">
-                  Unique case-insensitive name. You will be designated as the Admin.
+                  Unique case-insensitive name. Generates company domain (@{derivedNewOrgSlug || 'org'}.com).
                 </p>
               </div>
 
@@ -1268,12 +1390,79 @@ export default function OrganizationHub({
                   Description
                 </label>
                 <textarea
-                  placeholder="Describe your organization's mission and team focus..."
+                  placeholder="Describe your organization's mission and virtual workspaces..."
                   value={newOrgDesc}
                   onChange={(e) => setNewOrgDesc(e.target.value)}
                   rows={2}
                   className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                    Admin Full Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ramesh Kumar"
+                    value={adminFullName}
+                    onChange={(e) => setAdminFullName(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider">
+                      Admin Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPassword(generateSecurePassword('Admin#'))}
+                      className="text-[10px] text-[#2563eb] font-semibold hover:underline"
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showAdminPass ? 'text' : 'password'}
+                      placeholder="At least 6 characters"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      required
+                      className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb] pr-9 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPass(!showAdminPass)}
+                      className="absolute right-2.5 top-2 text-[#8C8880] hover:text-[#1c1b1b]"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">
+                        {showAdminPass ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Admin Account Preview Banner */}
+              <div className="p-3 rounded-2xl bg-[#eff6ff] border border-blue-200 text-xs flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-[#64748b] uppercase tracking-wider font-semibold">
+                    Generated Admin Email:
+                  </span>
+                  <span className="font-mono font-bold text-[#2563eb]">{derivedAdminEmail}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-[#64748b]">Login Handle:</span>
+                  <span className="font-mono font-bold text-[#1c1b1b]">@{derivedAdminHandle}</span>
+                </div>
+                <p className="text-[10px] text-[#64748b] pt-1 border-t border-blue-100">
+                  Notice: Creating this organization will log out your current session and provide your dedicated Admin credentials to sign in.
+                </p>
               </div>
 
               <div>
@@ -1305,10 +1494,10 @@ export default function OrganizationHub({
                 </button>
                 <button
                   type="submit"
-                  disabled={isCreatingOrg || !newOrgName.trim()}
-                  className="px-5 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold disabled:opacity-50 transition-all"
+                  disabled={isCreatingOrg || !newOrgName.trim() || !adminFullName.trim() || !adminPassword}
+                  className="px-5 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold disabled:opacity-50 transition-all flex items-center gap-1.5"
                 >
-                  {isCreatingOrg ? 'Creating...' : 'Create Organization'}
+                  <span>{isCreatingOrg ? 'Provisioning...' : 'Create Organization & Admin'}</span>
                 </button>
               </div>
             </form>
@@ -1316,6 +1505,128 @@ export default function OrganizationHub({
         </div>
       )}
 
+      {/* ─── MODAL: ADMIN CREDENTIALS GENERATED (1-CLICK ADMIN LOGIN) ───────── */}
+      {createdAdminCredentials && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 sm:p-7 flex flex-col gap-5">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E9E8E4]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-[#2563eb] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#1c1b1b]">Organization & Admin Provisioned</h3>
+                  <p className="text-[11px] text-[#8C8880]">Previous normal user session has been logged out</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCreatedAdminCredentials(null)}
+                className="text-[#8C8880] hover:text-[#1c1b1b]"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#eff6ff] border border-blue-200 flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-blue-800 font-bold text-xs">
+                <span className="material-symbols-outlined text-[18px]">verified</span>
+                <span>Official Administrator Credentials Created</span>
+              </div>
+              <p className="text-xs text-[#1e293b] leading-relaxed">
+                Your new organization <span className="font-bold">{selectedOrg?.name}</span> has been created. You are designated as Primary Administrator. Save these credentials securely:
+              </p>
+
+              <div className="p-3.5 rounded-xl bg-white border border-blue-200 font-mono text-xs flex flex-col gap-2 shadow-inner">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748b]">Administrator:</span>
+                  <span className="font-bold text-[#0f172a]">{createdAdminCredentials.fullName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748b]">Login ID / Email:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-[#2563eb] select-all">{createdAdminCredentials.email}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyText(createdAdminCredentials.email, 'Email copied')}
+                      className="text-[#64748b] hover:text-[#2563eb]"
+                      title="Copy email"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748b]">Username Handle:</span>
+                  <span className="font-bold text-[#0f172a] select-all">@{createdAdminCredentials.username}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748b]">Initial Password:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#059669] select-all font-mono">
+                      {showAdminPass ? createdAdminCredentials.password : '••••••••••••'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPass(!showAdminPass)}
+                      className="text-[#64748b] hover:text-[#0f172a]"
+                      title="Show password"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">
+                        {showAdminPass ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyText(createdAdminCredentials.password, 'Password copied')}
+                      className="text-[#64748b] hover:text-[#059669]"
+                      title="Copy password"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-[#f1f5f9]">
+                  <span className="text-[#64748b]">Role:</span>
+                  <span className="font-bold text-[#1d4ed8] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 border border-blue-200">
+                    Administrator (Owner)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
+              <button
+                onClick={() => {
+                  if (onAuthSuccess && createdAdminCredentials.token) {
+                    onAuthSuccess({
+                      token: createdAdminCredentials.token,
+                      user: createdAdminCredentials.user,
+                    });
+                  }
+                  setCreatedAdminCredentials(null);
+                  showToast(`Signed in as Administrator: ${createdAdminCredentials.fullName}`, 'success');
+                }}
+                className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[16px]">login</span>
+                <span>Sign In as Admin Now</span>
+              </button>
+              <button
+                onClick={() => {
+                  const text = `ProxiSpeak Admin Credentials for ${selectedOrg?.name}:\nEmail: ${createdAdminCredentials.email}\nUsername: ${createdAdminCredentials.username}\nPassword: ${createdAdminCredentials.password}\nSign In: ${window.location.origin}`;
+                  copyText(text, 'Full admin credentials copied');
+                  setCreatedAdminCredentials(null);
+                  if (onRequestAuth) onRequestAuth();
+                }}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-white border border-[#D9D7D0] text-[#1c1b1b] text-xs font-semibold hover:bg-[#F4F3EF] transition-all flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                <span>Copy & Sign In Manually</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ─── MODAL 2: ADD USER (ADMIN ONLY) ─────────────────────────────────── */}
       {showAddUserModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

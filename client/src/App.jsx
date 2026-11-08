@@ -321,6 +321,15 @@ export default function App() {
             setShowOrgHub(false);
             handleJoinRoom(officeData);
           }}
+          onLogout={handleLogout}
+          onAuthSuccess={(authData) => {
+            if (authData?.token) localStorage.setItem('proxispeak_token', authData.token);
+            if (authData?.user) {
+              localStorage.setItem('proxispeak_user', JSON.stringify(authData.user));
+              setUser(authData.user);
+            }
+          }}
+          onRequestAuth={() => setShowAuthModal(true)}
           onClose={() => setShowOrgHub(false)}
         />
       )}
