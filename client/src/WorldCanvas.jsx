@@ -360,7 +360,7 @@ function drawConference(ctx) {
   drawRoundRect(ctx, 350, 92, 54, 42, 4);
   ctx.fillStyle = '#4f46e5'; ctx.fill();
   ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '700 9px Inter, sans-serif'; ctx.fillStyle = '#e0e7ff'; ctx.textAlign = 'center'; ctx.fillText('MIC', 377, 117);
+  ctx.font = '700 9px Inter, sans-serif'; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.fillText('MIC', 377, 117);
 
   // Auditorium Seating rows (left and right banks, center aisle)
   const rows = 4, cols = 5;
@@ -2298,26 +2298,34 @@ export default function WorldCanvas({
           <div
             style={{
               position: 'absolute',
-              top: doorToast ? '68px' : '16px',
+              top: doorToast ? '72px' : '20px',
               left: '50%',
               transform: 'translateX(-50%)',
-              background: '#ffffff',
-              border: '1px solid #D9D7D0',
-              borderRadius: '16px',
-              padding: '12px 18px',
-              boxShadow: '0 16px 36px rgba(0,0,0,0.15)',
+              background: '#FAF9F5',
+              border: '1px solid #E5E4DE',
+              borderRadius: '24px',
+              padding: '16px 20px',
+              boxShadow: '0 24px 60px -12px rgba(20,20,19,0.22)',
               zIndex: 30,
               display: 'flex',
               flexDirection: 'column',
-              gap: '10px',
-              minWidth: '280px',
+              gap: '12px',
+              minWidth: '320px',
+              maxWidth: '92vw',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #E9E8E4', paddingBottom: '6px' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: "16px", color: "#1c1b1b" }}>doorbell</span>
-              <span style={{ fontWeight: 700, fontSize: '13px', color: '#1c1b1b' }}>
-                Knock at the Door
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #EBEAE5', paddingBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '10px', background: '#ffffff', border: '1px solid #E5E4DE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: "16px", color: "#141413" }}>doorbell</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '9px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#8C8880', fontWeight: 600 }}>Access Request</div>
+                  <span style={{ fontWeight: 700, fontSize: '13px', color: '#141413', letterSpacing: '-0.01em' }}>
+                    Knock at the Door
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2329,20 +2337,23 @@ export default function WorldCanvas({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '12px',
-                    padding: '6px 10px',
-                    background: '#F4F3EF',
-                    borderRadius: '10px',
-                    border: '1px solid #D9D7D0',
+                    padding: '10px 12px',
+                    background: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #E5E4DE',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "16px", color: "#5e5f5c" }}>person</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '12px', background: '#FAF9F5', border: '1px solid #E5E4DE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "16px", color: "#141413" }}>person</span>
+                    </div>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '12px', color: '#1c1b1b' }}>
+                      <div style={{ fontWeight: 600, fontSize: '12px', color: '#141413' }}>
                         {k.visitorName}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#5e5f5c' }}>
-                        Requests permission to enter
+                      <div style={{ fontSize: '10px', color: '#8C8880', fontFamily: 'monospace' }}>
+                        Requests entry
                       </div>
                     </div>
                   </div>
@@ -2352,10 +2363,10 @@ export default function WorldCanvas({
                       onClick={() => handleWelcomeVisitor(k.doorKey, k.visitorId)}
                       style={{
                         padding: '6px 12px',
-                        background: '#10b981',
-                        color: '#ffffff',
+                        background: '#141413',
+                        color: '#FAF9F5',
                         border: 'none',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         fontWeight: 600,
                         fontSize: '11px',
                         cursor: 'pointer',
@@ -2363,10 +2374,11 @@ export default function WorldCanvas({
                         alignItems: 'center',
                         gap: '4px',
                         transition: 'all 0.15s ease',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
                       }}
                       title="Welcome visitor into the room and open the door"
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>meeting_room</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>meeting_room</span>
                       <span>Welcome</span>
                     </button>
 
@@ -2374,10 +2386,10 @@ export default function WorldCanvas({
                       onClick={() => handleDeclineVisitor(k.doorKey, k.visitorId)}
                       style={{
                         padding: '6px 10px',
-                        background: '#fef2f2',
-                        border: '1px solid #fecaca',
-                        color: '#dc2626',
-                        borderRadius: '8px',
+                        background: '#ffffff',
+                        border: '1px solid #E5E4DE',
+                        color: '#5e5f5c',
+                        borderRadius: '10px',
                         fontWeight: 500,
                         fontSize: '11px',
                         cursor: 'pointer',
@@ -2964,228 +2976,265 @@ export default function WorldCanvas({
               position: 'absolute',
               top: '20px',
               right: '20px',
-              width: '320px',
-              maxHeight: '480px',
+              width: '340px',
+              maxHeight: '520px',
               overflowY: 'auto',
-              background: '#ffffff',
-              border: '1px solid #D9D7D0',
-              borderRadius: '16px',
-              padding: '16px',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.12)',
+              background: '#FAF9F5',
+              border: '1px solid #E5E4DE',
+              borderRadius: '26px',
+              padding: '18px',
+              boxShadow: '0 24px 60px -12px rgba(20,20,19,0.22)',
               zIndex: 25,
               fontSize: '12px',
-              color: '#1c1b1b',
+              color: '#141413',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid #E9E8E4', paddingBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#1c1b1b' }}>tune</span>
-                <span style={{ fontWeight: 700, fontSize: '13px', color: '#1c1b1b' }}>Audio Diagnostics</span>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #EBEAE5', paddingBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '12px', background: '#ffffff', border: '1px solid #E5E4DE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#141413' }}>tune</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '9px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#8C8880', fontWeight: 600 }}>Real-Time Telemetry</div>
+                  <span style={{ fontWeight: 700, fontSize: '13px', color: '#141413', letterSpacing: '-0.01em' }}>Audio Diagnostics</span>
+                </div>
               </div>
               <button
                 onClick={() => setShowDiagnostics(false)}
                 style={{
-                  background: '#F4F3EF',
-                  border: '1px solid #D9D7D0',
-                  color: '#5e5f5c',
+                  background: '#ffffff',
+                  border: '1px solid #E5E4DE',
+                  color: '#8C8880',
                   cursor: 'pointer',
-                  borderRadius: '6px',
-                  width: '24px',
-                  height: '24px',
+                  borderRadius: '10px',
+                  width: '28px',
+                  height: '28px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  transition: 'all 0.15s ease',
                 }}
+                title="Close diagnostics"
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>close</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#5e5f5c' }}>Local Mic Input:</span>
-                <span style={{ fontWeight: 600, color: diagData?.hasLocalStream ? '#10b981' : '#dc2626' }}>
+            {/* Core Metrics Card */}
+            <div style={{ background: '#ffffff', border: '1px solid #E5E4DE', borderRadius: '18px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#5e5f5c', fontSize: '11px', fontFamily: 'monospace' }}>Local Mic Input</span>
+                <span style={{ fontWeight: 600, fontSize: '10px', fontFamily: 'monospace', padding: '2px 8px', borderRadius: '9999px', background: diagData?.hasLocalStream ? '#ecfdf5' : '#fef2f2', color: diagData?.hasLocalStream ? '#059669' : '#dc2626', border: `1px solid ${diagData?.hasLocalStream ? '#a7f3d0' : '#fecaca'}` }}>
                   {diagData?.hasLocalStream ? 'Active' : 'No Stream'}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#5e5f5c' }}>Track State:</span>
-                <span style={{ fontWeight: 600, color: diagData?.micTrackState === 'live' ? '#10b981' : '#d97706' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#5e5f5c', fontSize: '11px', fontFamily: 'monospace' }}>Track State</span>
+                <span style={{ fontWeight: 600, fontSize: '10px', fontFamily: 'monospace', color: diagData?.micTrackState === 'live' ? '#059669' : '#d97706' }}>
                   {diagData?.micTrackState || 'none'}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#5e5f5c' }}>Mute State:</span>
-                <span style={{ fontWeight: 600, color: diagData?.isMuted ? '#dc2626' : '#10b981' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#5e5f5c', fontSize: '11px', fontFamily: 'monospace' }}>Mute State</span>
+                <span style={{ fontWeight: 600, fontSize: '10px', fontFamily: 'monospace', padding: '2px 8px', borderRadius: '9999px', background: diagData?.isMuted ? '#fef2f2' : '#ecfdf5', color: diagData?.isMuted ? '#dc2626' : '#059669', border: `1px solid ${diagData?.isMuted ? '#fecaca' : '#a7f3d0'}` }}>
                   {diagData?.isMuted ? 'Muted' : 'Unmuted'}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#5e5f5c' }}>AudioContext:</span>
-                <span style={{ fontWeight: 600, color: diagData?.audioCtxState === 'running' ? '#10b981' : '#d97706' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#5e5f5c', fontSize: '11px', fontFamily: 'monospace' }}>AudioContext</span>
+                <span style={{ fontWeight: 600, fontSize: '10px', fontFamily: 'monospace', color: diagData?.audioCtxState === 'running' ? '#059669' : '#d97706' }}>
                   {diagData?.audioCtxState || 'unknown'}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#5e5f5c' }}>Playback Unlocked:</span>
-                <span style={{ fontWeight: 600, color: diagData?.isAudioUnlocked ? '#10b981' : '#dc2626' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#5e5f5c', fontSize: '11px', fontFamily: 'monospace' }}>Playback Unlocked</span>
+                <span style={{ fontWeight: 600, fontSize: '10px', fontFamily: 'monospace', color: diagData?.isAudioUnlocked ? '#059669' : '#dc2626' }}>
                   {diagData?.isAudioUnlocked ? 'Yes' : 'No (tap canvas)'}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#5e5f5c' }}>Connected Peers:</span>
-                <span style={{ fontWeight: 600, color: (diagData?.peerCount || 0) > 0 ? '#1c1b1b' : '#5e5f5c' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #EBEAE5', paddingTop: '6px' }}>
+                <span style={{ color: '#5e5f5c', fontSize: '11px', fontFamily: 'monospace' }}>Connected Peers</span>
+                <span style={{ fontWeight: 700, fontSize: '11px', fontFamily: 'monospace', color: '#141413' }}>
                   {diagData?.peerCount || 0}
                 </span>
               </div>
+            </div>
 
-              {/* Peer Connection Status List */}
-              {diagData?.peers && Object.keys(diagData.peers).length > 0 && (
-                <div style={{ marginTop: '8px', borderTop: '1px solid #E9E8E4', paddingTop: '8px' }}>
-                  <span style={{ color: '#5e5f5c', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Peer ICE States:</span>
-                  <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {Object.entries(diagData.peers).map(([pid, pinfo]) => (
-                      <div key={pid} style={{ background: '#F4F3EF', padding: '6px 8px', borderRadius: '8px', fontSize: '11px', border: '1px solid #D9D7D0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#1c1b1b', fontWeight: 500 }}>Peer {pid.slice(0, 6)}:</span>
-                          <span style={{
-                            color: pinfo.iceState === 'connected' || pinfo.iceState === 'completed'
-                              ? '#10b981'
-                              : pinfo.iceState === 'failed'
-                              ? '#dc2626'
-                              : '#d97706',
-                            fontWeight: 600,
-                          }}>
-                            {pinfo.iceState}
+            {/* Peer Connection Status List */}
+            {diagData?.peers && Object.keys(diagData.peers).length > 0 && (
+              <div style={{ marginTop: '12px' }}>
+                <span style={{ color: '#8C8880', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, fontFamily: 'monospace' }}>Peer Mesh Links</span>
+                <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {Object.entries(diagData.peers).map(([pid, pinfo]) => (
+                    <div key={pid} style={{ background: '#ffffff', padding: '8px 10px', borderRadius: '14px', fontSize: '11px', border: '1px solid #E5E4DE' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: '#141413', fontWeight: 600, fontFamily: 'monospace' }}>Peer {pid.slice(0, 6)}:</span>
+                        <span style={{
+                          color: pinfo.iceState === 'connected' || pinfo.iceState === 'completed'
+                            ? '#059669'
+                            : pinfo.iceState === 'failed'
+                            ? '#dc2626'
+                            : '#d97706',
+                          fontWeight: 600,
+                          fontSize: '10px',
+                          fontFamily: 'monospace',
+                        }}>
+                          {pinfo.iceState}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#8C8880', fontSize: '10px', fontFamily: 'monospace', marginTop: '3px' }}>
+                        <span>Signaling: {pinfo.signalingState}</span>
+                        <span>Sender: {pinfo.senderTrackState}</span>
+                      </div>
+                      {pinfo.stats && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#5e5f5c', fontSize: '10px', fontFamily: 'monospace', marginTop: '4px', borderTop: '1px solid #EBEAE5', paddingTop: '4px' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>public</span>
+                            <span>{pinfo.stats.modeLabel} ({pinfo.stats.protocol})</span>
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>bolt</span>
+                            <span>{pinfo.stats.rtt != null ? `${pinfo.stats.rtt}ms RTT` : 'Active'}</span>
                           </span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#5e5f5c', fontSize: '10px', marginTop: '2px' }}>
-                          <span>Signaling: {pinfo.signalingState}</span>
-                          <span>Sender: {pinfo.senderTrackState}</span>
-                        </div>
-                        {pinfo.stats && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#93c5fd', fontSize: '10px', marginTop: '3px', borderTop: '1px solid rgba(51, 65, 85, 0.4)', paddingTop: '3px' }}>
-                            <span><span className="material-symbols-outlined" style={{ fontSize: '11px', verticalAlign: 'middle' }}>public</span> {pinfo.stats.modeLabel} ({pinfo.stats.protocol})</span>
-                            <span>{pinfo.stats.rtt != null ? `${pinfo.stats.rtt}ms RTT` : 'Active'}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Microphone Hardware Selector */}
-              {micDevices.length > 0 && (
-                <div style={{ marginTop: '10px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px', fontWeight: 600 }}>
-                    Microphone Device:
-                  </label>
-                  <select
-                    value={selectedMicId}
-                    onChange={async (e) => {
-                      const devId = e.target.value;
-                      setSelectedMicId(devId);
-                      try {
-                        await webrtc.switchAudioInputDevice(devId);
-                        showToast('Switched microphone device', 'success');
-                        refreshDiagnostics();
-                      } catch (err) {
-                        showToast(`Could not switch mic: ${err.message}`, 'alert');
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      borderRadius: '6px',
-                      background: '#0f172a',
-                      border: '1px solid #334155',
-                      color: '#f8fafc',
-                      fontSize: '11px',
-                      outline: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="">Default Microphone</option>
-                    {micDevices.map((d) => (
-                      <option key={d.deviceId} value={d.deviceId}>
-                        {d.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Quick Action Recovery Buttons */}
-              <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <button
-                  onClick={() => {
-                    spatialAudio.resumeAll();
-                    setAudioUnlocked(true);
-                    refreshDiagnostics();
-                    showToast('Audio playback resumed', 'success');
-                  }}
-                  style={{
-                    padding: '7px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #D9D7D0',
-                    background: '#F4F3EF',
-                    color: '#1c1b1b',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '14px', verticalAlign: 'middle' }}>volume_up</span> Resume / Unlock Audio
-                </button>
-                <button
-                  onClick={async () => {
+            {/* Microphone Hardware Selector */}
+            {micDevices.length > 0 && (
+              <div style={{ marginTop: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#8C8880', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'monospace' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>mic</span>
+                  <span>Audio Input Device</span>
+                </label>
+                <select
+                  value={selectedMicId}
+                  onChange={async (e) => {
+                    const devId = e.target.value;
+                    setSelectedMicId(devId);
                     try {
-                      const audioCtx = spatialAudio.ensureContext();
-                      await webrtc.startMicrophone(audioCtx);
-                      setMicActive(true);
-                      isMutedRef.current = false;
-                      setIsMuted(false);
+                      await webrtc.switchAudioInputDevice(devId);
+                      showToast('Switched microphone device', 'success');
                       refreshDiagnostics();
-                      showToast('Microphone re-acquired and unmuted', 'success');
-                    } catch (e) {
-                      showToast(`${e.message}`, 'alert');
+                    } catch (err) {
+                      showToast(`Could not switch mic: ${err.message}`, 'alert');
                     }
                   }}
                   style={{
-                    padding: '7px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #bbf7d0',
-                    background: '#f0fdf4',
-                    color: '#166534',
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '12px',
+                    background: '#ffffff',
+                    border: '1px solid #E5E4DE',
+                    color: '#141413',
                     fontSize: '11px',
-                    fontWeight: 600,
+                    outline: 'none',
                     cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                   }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '14px', verticalAlign: 'middle' }}>mic</span> Re-acquire Microphone
-                </button>
-                <button
-                  onClick={() => {
-                    webrtc.reconnectAllPeers();
-                    spatialAudio.resumeAll();
-                    refreshDiagnostics();
-                    showToast('Reconnecting all peer connections...', 'info');
-                  }}
-                  style={{
-                    padding: '7px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #fde68a',
-                    background: '#fffbeb',
-                    color: '#92400e',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '14px', verticalAlign: 'middle' }}>sync</span> Force Reconnect All Peers
-                </button>
+                  <option value="">Default System Microphone</option>
+                  {micDevices.map((d) => (
+                    <option key={d.deviceId} value={d.deviceId}>
+                      {d.label || `Microphone ${d.deviceId.slice(0, 5)}`}
+                    </option>
+                  ))}
+                </select>
               </div>
+            )}
+
+            {/* Quick Action Recovery Buttons */}
+            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <button
+                onClick={() => {
+                  spatialAudio.resumeAll();
+                  setAudioUnlocked(true);
+                  refreshDiagnostics();
+                  showToast('Audio playback resumed', 'success');
+                }}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '12px',
+                  border: '1px solid #E5E4DE',
+                  background: '#ffffff',
+                  color: '#141413',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>volume_up</span>
+                <span>Resume / Unlock Audio</span>
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const audioCtx = spatialAudio.ensureContext();
+                    await webrtc.startMicrophone(audioCtx);
+                    setMicActive(true);
+                    isMutedRef.current = false;
+                    setIsMuted(false);
+                    refreshDiagnostics();
+                    showToast('Microphone re-acquired and unmuted', 'success');
+                  } catch (e) {
+                    showToast(`${e.message}`, 'alert');
+                  }
+                }}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '12px',
+                  border: '1px solid #a7f3d0',
+                  background: '#f0fdf4',
+                  color: '#166534',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>mic</span>
+                <span>Re-acquire Microphone</span>
+              </button>
+              <button
+                onClick={() => {
+                  webrtc.reconnectAllPeers();
+                  spatialAudio.resumeAll();
+                  refreshDiagnostics();
+                  showToast('Reconnecting all peer connections...', 'info');
+                }}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '12px',
+                  border: '1px solid #E5E4DE',
+                  background: '#ffffff',
+                  color: '#141413',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>sync</span>
+                <span>Force Reconnect All Peers</span>
+              </button>
             </div>
           </div>
         )}

@@ -47,6 +47,9 @@ export default function OrganizationHub({
   onSelectOrg,
   onOpenDesigner,
   onLaunchOffice,
+  onLogout,
+  onAuthSuccess,
+  onRequestAuth,
   onClose,
 }) {
   const [organizations, setOrganizations] = useState([]);
@@ -62,7 +65,30 @@ export default function OrganizationHub({
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgDesc, setNewOrgDesc] = useState('');
   const [newOrgColor, setNewOrgColor] = useState('#2563eb');
+  const [adminFullName, setAdminFullName] = useState(user?.username || '');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
+  const [createdAdminCredentials, setCreatedAdminCredentials] = useState(null);
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+
+  // Secure password generator helper
+  const generateSecurePassword = (prefix = 'Admin#') => {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let rand = '';
+    for (let i = 0; i < 3; i++) rand += upper[Math.floor(Math.random() * upper.length)];
+    for (let i = 0; i < 4; i++) rand += chars[Math.floor(Math.random() * chars.length)];
+    return `${prefix}${rand}`;
+  };
+
+  const handleOpenCreateOrg = () => {
+    setNewOrgName('');
+    setNewOrgDesc('');
+    setNewOrgColor('#2563eb');
+    setAdminFullName(user?.username || '');
+    setAdminPassword(generateSecurePassword('Admin#'));
+    setShowCreateOrgModal(true);
+  };
 
   // Add User Modal State (Admin)
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -111,39 +137,51 @@ export default function OrganizationHub({
 
   // Determine current user's role in the selected organization
   const myUsername = (user?.username || '').trim().toLowerCase();
-  const isOwner = selectedOrg && selectedOrg.owner?.trim().toLowerCase() === myUsername;
-  const myMemberRecord = (selectedOrg?.members || []).find(
-    (m) => m.username?.trim().toLowerCase() === myUsername
+  const myEmail = (user?.email || '').trim().toLowerCase();
+  const isOwner = Boolean(
+    selectedOrg && (
+      (selectedOrg.owner && selectedOrg.owner.trim().toLowerCase() === myUsername) ||
+      (selectedOrg.ownerEmail && selectedOrg.ownerEmail.trim().toLowerCase() === myEmail)
+    )
   );
-  const isAdmin = isOwner || myMemberRecord?.role === 'admin' || myMemberRecord?.role === 'owner';
+  const myMemberRecord = (selectedOrg?.members || []).find((m) => {
+    const mUser = (m.username || '').trim().toLowerCase();
+    const mEmail = (m.email || '').trim().toLowerCase();
+    return (myUsername && mUser === myUsername) || (myEmail && mEmail === myEmail);
+  });
+  const isAdmin = Boolean(
+    isOwner ||
+    myMemberRecord?.role === 'admin' ||
+    myMemberRecord?.role === 'owner'
+  );
 
-  // Fetch organizations
+  // Fetch organizations scoped strictly to authenticated user
   const fetchOrgs = async () => {
     try {
-      const res = await fetch(`${SERVER_URL}/api/organizations`);
+      const token = localStorage.getItem('proxispeak_token');
+      const queryParams = new URLSearchParams();
+      if (user?.username) queryParams.append('username', user.username);
+      if (user?.email) queryParams.append('email', user.email);
+      const url = `${SERVER_URL}/api/organizations${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         setOrganizations(data);
-        if (!selectedOrg && data.length > 0) {
+        if (data.length > 0) {
           const match = data.find((o) => o.orgId === currentOrg?.orgId) || data[0];
           setSelectedOrg(match);
+        } else {
+          setSelectedOrg(null);
         }
+      } else {
+        setOrganizations([]);
+        setSelectedOrg(null);
       }
     } catch (_e) {
-      setOrganizations([
-        {
-          orgId: 'acme-corp',
-          name: 'Acme Corporation',
-          slug: 'acme-corp',
-          description: 'Enterprise virtual headquarters with departmental suites.',
-          logoColor: '#2563eb',
-          owner: 'dvijjoshi',
-          members: [
-            { username: 'dvijjoshi', displayName: 'Dvij Joshi', email: 'dvijjoshi@acme-corp.com', role: 'owner' },
-            { username: 'kunj', displayName: 'Kunj Kachhiya', email: 'kunj@acme-corp.com', role: 'admin' },
-          ],
-        },
-      ]);
+      setOrganizations([]);
+      setSelectedOrg(null);
     } finally {
       setLoading(false);
     }
@@ -151,7 +189,7 @@ export default function OrganizationHub({
 
   useEffect(() => {
     fetchOrgs();
-  }, []);
+  }, [user?.username, user?.email]);
 
   // Fetch layouts & meetings for selected org
   const fetchOrgDetails = async (orgId) => {
@@ -197,7 +235,35 @@ export default function OrganizationHub({
     return `${h}@${selectedOrg.slug}.com`;
   }, [derivedUserHandle, selectedOrg?.slug]);
 
-  // Handle Create Organization
+  // Derived values for Create Organization Admin preview
+  const derivedNewOrgSlug = useMemo(() => {
+    if (!newOrgName.trim()) return '';
+    return newOrgName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 30) || 'org';
+  }, [newOrgName]);
+
+  const derivedAdminHandle = useMemo(() => {
+    const name = (adminFullName || user?.username || 'admin').trim();
+    let h = name
+      .toLowerCase()
+      .replace(/\s+/g, '.')
+      .replace(/[^a-z0-9.]/g, '')
+      .replace(/\.+/g, '.')
+      .replace(/^\.|\.$/g, '');
+    return h || 'admin';
+  }, [adminFullName, user?.username]);
+
+  const derivedAdminEmail = useMemo(() => {
+    const slug = derivedNewOrgSlug || 'company';
+    return `${derivedAdminHandle}@${slug}.com`;
+  }, [derivedAdminHandle, derivedNewOrgSlug]);
+
+  // Handle Create Organization with auto-provisioned Admin and auto-logout
   const handleCreateOrg = async (e) => {
     e.preventDefault();
     if (!newOrgName.trim()) return;
@@ -211,18 +277,26 @@ export default function OrganizationHub({
           name: newOrgName.trim(),
           description: newOrgDesc.trim(),
           logoColor: newOrgColor,
-          owner: user?.username || 'Admin',
+          adminFullName: adminFullName.trim() || 'Administrator',
+          adminPassword: adminPassword.trim(),
         }),
       });
 
       if (res.ok) {
-        const created = await res.json();
-        setOrganizations((prev) => [created, ...prev]);
-        setSelectedOrg(created);
+        const data = await res.json();
+        const created = data.organization || data;
+        const creds = data.adminCredentials;
+
+        // Bug 2: Log out previous normal user session immediately
+        if (onLogout) onLogout();
+        localStorage.removeItem('proxispeak_token');
+        localStorage.removeItem('proxispeak_user');
+
         setShowCreateOrgModal(false);
-        setNewOrgName('');
-        setNewOrgDesc('');
-        showToast(`Organization "${created.name}" created! You are designated as Admin.`, 'success');
+        setOrganizations([created]);
+        setSelectedOrg(created);
+        setCreatedAdminCredentials(creds);
+        showToast(`Organization "${created.name}" created! Review your official Admin credentials.`, 'success');
         fetchOrgDetails(created.orgId);
       } else {
         const err = await res.json();
@@ -462,28 +536,28 @@ export default function OrganizationHub({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-3 md:p-6 select-none animate-in fade-in duration-200">
-      <div className="w-full max-w-6xl bg-[#FAF9F5] rounded-3xl border border-[#D9D7D0] shadow-2xl overflow-hidden flex flex-col h-[90vh] max-h-[920px]">
+      <div className="w-full max-w-6xl bg-[#FAF9F5] rounded-[28px] border border-[#E5E4DE] shadow-[0_32px_80px_-16px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col h-[90vh] max-h-[920px]">
         {/* ─── Top Main Navigation Bar ────────────────────────────────────────── */}
-        <div className="px-6 py-4 border-b border-[#E9E8E4] flex items-center justify-between bg-white shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="px-6 py-4 border-b border-[#EBEAE5] flex items-center justify-between bg-[#FAF9F5] shrink-0">
+          <div className="flex items-center gap-3.5">
             <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm shadow-md"
-              style={{ backgroundColor: selectedOrg?.logoColor || '#2563eb' }}
+              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm shadow-xs border border-black/5"
+              style={{ backgroundColor: selectedOrg?.logoColor || '#141413' }}
             >
               {selectedOrg?.name?.slice(0, 2).toUpperCase() || 'OG'}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-[#1c1b1b] tracking-tight">{selectedOrg?.name || 'Organization Workspace'}</h1>
-                <span className="font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[#FAF9F5] border border-[#E9E8E4] text-[#5e5f5c]">
+                <h1 className="text-base font-bold text-[#141413] tracking-tight">{selectedOrg?.name || 'Organization Workspace'}</h1>
+                <span className="font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-white border border-[#E5E4DE] text-[#5e5f5c]">
                   @{selectedOrg?.slug || 'workspace'}.com
                 </span>
                 {isAdmin ? (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#dbeafe] text-[#1d4ed8] border border-blue-200">
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#141413] text-[#FAF9F5] font-semibold">
                     Administrator
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#F4F3EF] text-[#5e5f5c] border border-[#D9D7D0]">
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white text-[#5e5f5c] border border-[#E5E4DE] font-semibold">
                     Team Member
                   </span>
                 )}
@@ -497,7 +571,7 @@ export default function OrganizationHub({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowStartMeetingModal(true)}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all"
+              className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold shadow-sm transition-all active:scale-[0.99] cursor-pointer"
             >
               <span className="material-symbols-outlined text-[16px]">video_call</span>
               <span>Start Instant Call</span>
@@ -506,7 +580,7 @@ export default function OrganizationHub({
             {isAdmin && (
               <button
                 onClick={() => setShowScheduleModal(true)}
-                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-[#F4F3EF] border border-[#D9D7D0] text-[#1c1b1b] text-xs font-semibold shadow-sm transition-all"
+                className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#F5F4EE] border border-[#E5E4DE] text-[#141413] text-xs font-semibold shadow-2xs transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px]">calendar_month</span>
                 <span>Schedule Meeting</span>
@@ -515,10 +589,10 @@ export default function OrganizationHub({
 
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-[#8C8880] hover:text-[#1c1b1b] hover:bg-[#F4F3EF] transition-colors ml-1"
+              className="w-9 h-9 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors ml-1 flex items-center justify-center cursor-pointer"
               title="Close Workspace"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <span className="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
         </div>
@@ -592,7 +666,7 @@ export default function OrganizationHub({
               )}
 
               <button
-                onClick={() => setShowCreateOrgModal(true)}
+                onClick={handleOpenCreateOrg}
                 className="mt-2 w-full py-2.5 px-3 rounded-2xl border border-dashed border-[#D9D7D0] hover:border-[#2563eb] text-xs font-semibold text-[#2563eb] hover:bg-blue-50/50 transition-colors flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-[16px]">add_business</span>
@@ -619,6 +693,36 @@ export default function OrganizationHub({
 
           {/* ─── Right Content Dashboard ──────────────────────────────────────── */}
           <div className="flex-1 flex flex-col overflow-hidden bg-white">
+            {organizations.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#FAF9F5]/40 select-none">
+                <div className="w-16 h-16 rounded-3xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#2563eb] mb-4 shadow-sm">
+                  <span className="material-symbols-outlined text-[32px]">apartment</span>
+                </div>
+                <h2 className="text-base font-bold text-[#1c1b1b] tracking-tight">No Organizations Found</h2>
+                <p className="text-xs text-[#5e5f5c] max-w-md mt-1.5 leading-relaxed">
+                  Organizations in ProxiSpeak are strictly private to verified company members. Create your organization to become the primary administrator, or sign in with your corporate credentials.
+                </p>
+                <div className="flex items-center gap-3 mt-6">
+                  <button
+                    onClick={handleOpenCreateOrg}
+                    className="px-5 py-2.5 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add_business</span>
+                    <span>Create Organization</span>
+                  </button>
+                  {!user && onRequestAuth && (
+                    <button
+                      onClick={onRequestAuth}
+                      className="px-4 py-2.5 rounded-xl bg-white hover:bg-[#F4F3EF] border border-[#D9D7D0] text-[#1c1b1b] text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">login</span>
+                      <span>Sign In to Account</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Dashboard Navigation Tabs */}
             <div className="px-6 pt-3 border-b border-[#E9E8E4] flex items-center gap-1 bg-[#FAF9F5] overflow-x-auto shrink-0">
               {[
@@ -666,9 +770,24 @@ export default function OrganizationHub({
                       <div className="text-2xl font-bold text-[#1c1b1b] mt-1">
                         {selectedOrg?.members?.length || 1}
                       </div>
-                      <div className="text-[11px] text-[#059669] mt-1 flex items-center gap-1 font-medium">
-                        <span className="material-symbols-outlined text-[14px]">verified_user</span>
-                        <span>{isAdmin ? 'Admin managed' : 'Member access'}</span>
+                      <div className="text-[11px] text-[#059669] mt-1 flex items-center justify-between font-medium">
+                        <div className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">verified_user</span>
+                          <span>{isAdmin ? 'Admin managed' : 'Member access'}</span>
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={() => {
+                              setCreatedCredentials(null);
+                              setNewUserPassword(generateSecurePassword('User#'));
+                              setShowAddUserModal(true);
+                            }}
+                            className="text-[10px] text-[#2563eb] hover:underline font-bold flex items-center gap-0.5"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">person_add</span>
+                            <span>Add</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -972,6 +1091,7 @@ export default function OrganizationHub({
                       <button
                         onClick={() => {
                           setCreatedCredentials(null);
+                          setNewUserPassword(generateSecurePassword('User#'));
                           setShowAddUserModal(true);
                         }}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all shrink-0"
@@ -1227,88 +1347,177 @@ export default function OrganizationHub({
                 </div>
               )}
             </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ─── MODAL 1: CREATE ORGANIZATION ───────────────────────────────────── */}
+      {/* ─── MODAL 1: CREATE NEW ORGANIZATION & PROVISION ADMIN ─────────────── */}
       {showCreateOrgModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E9E8E4]">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#2563eb] text-[20px]">add_business</span>
-                <h3 className="font-bold text-sm text-[#1c1b1b]">Create New Organization</h3>
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            {/* Studio Header */}
+            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">add_business</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Organization Setup</span>
+                  </div>
+                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Create New Organization</h3>
+                </div>
               </div>
-              <button onClick={() => setShowCreateOrgModal(false)} className="text-[#8C8880] hover:text-[#1c1b1b]">
+              <button
+                type="button"
+                onClick={() => setShowCreateOrgModal(false)}
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                title="Close"
+              >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleCreateOrg} className="flex flex-col gap-3">
+            <form onSubmit={handleCreateOrg} className="p-6 flex flex-col gap-4 bg-white/50">
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                   Organization Name
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Google, DeepMind, Stripe"
+                  placeholder="e.g. Google, Acme, DeepMind"
                   value={newOrgName}
                   onChange={(e) => setNewOrgName(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                 />
-                <p className="text-[10px] text-[#8C8880] mt-1">
-                  Unique case-insensitive name. You will be designated as the Admin.
+                <p className="text-[10px] font-mono text-[#8C8880] mt-1.5">
+                  Unique case-insensitive name · Domain: @{derivedNewOrgSlug || 'org'}.com
                 </p>
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                   Description
                 </label>
                 <textarea
-                  placeholder="Describe your organization's mission and team focus..."
+                  placeholder="Describe your organization's mission and virtual workspaces..."
                   value={newOrgDesc}
                   onChange={(e) => setNewOrgDesc(e.target.value)}
                   rows={2}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans resize-none"
                 />
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                    Admin Full Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ramesh Kumar"
+                    value={adminFullName}
+                    onChange={(e) => setAdminFullName(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] font-semibold">
+                      Admin Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPassword(generateSecurePassword('Admin#'))}
+                      className="text-[10px] font-mono text-[#141413] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">autorenew</span>
+                      <span>Regenerate</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showAdminPass ? 'text' : 'password'}
+                      placeholder="At least 6 characters"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      required
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-mono pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPass(!showAdminPass)}
+                      className="absolute right-2.5 top-2.5 text-[#8C8880] hover:text-[#141413] transition-colors cursor-pointer"
+                      title={showAdminPass ? 'Hide password' : 'Show password'}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">
+                        {showAdminPass ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Technical Admin Preview Card */}
+              <div className="p-3.5 rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] text-xs flex flex-col gap-2 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#5e5f5c] font-semibold">
+                      Generated Admin Email
+                    </span>
+                  </div>
+                  <span className="font-mono font-bold text-xs text-[#141413]">{derivedAdminEmail}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-[#EBEAE5]">
+                  <span className="font-mono text-[#8C8880]">Login Handle:</span>
+                  <span className="font-mono font-semibold text-[#141413]">@{derivedAdminHandle}</span>
+                </div>
+                <div className="text-[10px] text-[#8C8880] leading-relaxed pt-1 border-t border-[#EBEAE5]/60">
+                  Creating this organization automatically provisions dedicated Administrator credentials and signs you in securely.
+                </div>
+              </div>
+
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
-                  Brand Color
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-2 font-semibold">
+                  Brand Identity Accent
                 </label>
-                <div className="flex items-center gap-2">
-                  {['#2563eb', '#7c3aed', '#059669', '#ea580c', '#db2777'].map((c) => (
+                <div className="flex items-center gap-2.5">
+                  {['#141413', '#2563eb', '#7c3aed', '#059669', '#ea580c', '#db2777'].map((c) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setNewOrgColor(c)}
-                      className={`w-7 h-7 rounded-xl transition-all border-2 ${
-                        newOrgColor === c ? 'border-[#1c1b1b] scale-110' : 'border-transparent'
+                      className={`w-7 h-7 rounded-full transition-all border-2 cursor-pointer ${
+                        newOrgColor === c ? 'border-[#141413] scale-110 shadow-sm ring-2 ring-[#141413]/20' : 'border-white hover:scale-105'
                       }`}
                       style={{ backgroundColor: c }}
+                      title={`Select ${c}`}
                     />
                   ))}
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-[#E9E8E4] flex items-center justify-end gap-2">
+              <div className="pt-4 mt-1 border-t border-[#EBEAE5] flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowCreateOrgModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:bg-[#F4F3EF]"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isCreatingOrg || !newOrgName.trim()}
-                  className="px-5 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold disabled:opacity-50 transition-all"
+                  disabled={isCreatingOrg || !newOrgName.trim() || !adminFullName.trim() || !adminPassword}
+                  className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold shadow-sm transition-all disabled:opacity-40 flex items-center gap-2 cursor-pointer active:scale-[0.99]"
                 >
-                  {isCreatingOrg ? 'Creating...' : 'Create Organization'}
+                  <span className="material-symbols-outlined text-[16px]">verified_user</span>
+                  <span>{isCreatingOrg ? 'Provisioning...' : 'Create Organization & Admin'}</span>
                 </button>
               </div>
             </form>
@@ -1316,78 +1525,217 @@ export default function OrganizationHub({
         </div>
       )}
 
-      {/* ─── MODAL 2: ADD USER (ADMIN ONLY) ─────────────────────────────────── */}
-      {showAddUserModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E9E8E4]">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#2563eb] text-[20px]">person_add</span>
-                <h3 className="font-bold text-sm text-[#1c1b1b]">Add Colleague to {selectedOrg?.name}</h3>
+      {/* ─── MODAL 1.5: ADMIN CREDENTIALS GENERATED (1-CLICK ADMIN LOGIN) ───── */}
+      {createdAdminCredentials && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-600 font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Provisioned Successfully
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Organization & Admin Provisioned</h3>
+                </div>
               </div>
               <button
+                type="button"
+                onClick={() => setCreatedAdminCredentials(null)}
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                title="Close"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-4 bg-white/50">
+              <p className="text-xs text-[#5e5f5c] leading-relaxed">
+                Your new organization <strong className="text-[#141413]">{selectedOrg?.name}</strong> has been provisioned. Your prior normal session was logged out. Save these primary administrator credentials securely:
+              </p>
+
+              <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-xs flex flex-col gap-2.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#8C8880]">Administrator:</span>
+                  <span className="font-bold text-[#141413]">{createdAdminCredentials.fullName}</span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-[#EBEAE5]">
+                  <span className="text-[#8C8880]">Login Email:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#141413] select-all">{createdAdminCredentials.email}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyText(createdAdminCredentials.email, 'Email copied')}
+                      className="w-6 h-6 rounded-lg border border-[#E5E4DE] bg-white hover:bg-[#FAF9F5] text-[#5e5f5c] hover:text-[#141413] flex items-center justify-center transition-colors cursor-pointer"
+                      title="Copy email"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-[#EBEAE5]">
+                  <span className="text-[#8C8880]">Handle:</span>
+                  <span className="font-bold text-[#141413] select-all">@{createdAdminCredentials.username}</span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-[#EBEAE5]">
+                  <span className="text-[#8C8880]">Initial Password:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#141413] select-all">
+                      {showAdminPass ? createdAdminCredentials.password : '••••••••••••'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPass(!showAdminPass)}
+                      className="w-6 h-6 rounded-lg border border-[#E5E4DE] bg-white hover:bg-[#FAF9F5] text-[#5e5f5c] hover:text-[#141413] flex items-center justify-center transition-colors cursor-pointer"
+                      title={showAdminPass ? 'Hide password' : 'Show password'}
+                    >
+                      <span className="material-symbols-outlined text-[13px]">
+                        {showAdminPass ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyText(createdAdminCredentials.password, 'Password copied')}
+                      className="w-6 h-6 rounded-lg border border-[#E5E4DE] bg-white hover:bg-[#FAF9F5] text-[#5e5f5c] hover:text-[#141413] flex items-center justify-center transition-colors cursor-pointer"
+                      title="Copy password"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-[#EBEAE5]">
+                  <span className="text-[#8C8880]">Role:</span>
+                  <span className="font-mono text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-[#141413] text-[#FAF9F5]">
+                    Administrator (Owner)
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2 border-t border-[#EBEAE5]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onAuthSuccess && createdAdminCredentials.token) {
+                      onAuthSuccess({
+                        token: createdAdminCredentials.token,
+                        user: createdAdminCredentials.user,
+                      });
+                    }
+                    setCreatedAdminCredentials(null);
+                    showToast(`Signed in as Administrator: ${createdAdminCredentials.fullName}`, 'success');
+                  }}
+                  className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                >
+                  <span className="material-symbols-outlined text-[16px]">login</span>
+                  <span>Sign In as Admin Now</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = `ProxiSpeak Admin Credentials for ${selectedOrg?.name}:\nEmail: ${createdAdminCredentials.email}\nUsername: ${createdAdminCredentials.username}\nPassword: ${createdAdminCredentials.password}\nSign In: ${window.location.origin}`;
+                    copyText(text, 'Full admin credentials copied');
+                    setCreatedAdminCredentials(null);
+                    if (onRequestAuth) onRequestAuth();
+                  }}
+                  className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-white border border-[#E5E4DE] text-[#141413] text-xs font-semibold hover:bg-[#FAF9F5] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                  <span>Copy & Sign In Manually</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL 2: ADD USER (ADMIN ONLY) ─────────────────────────────────── */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">person_add</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Team Enrollment</span>
+                  </div>
+                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Add Colleague to {selectedOrg?.name}</h3>
+                </div>
+              </div>
+              <button
+                type="button"
                 onClick={() => {
                   setShowAddUserModal(false);
                   setCreatedCredentials(null);
                 }}
-                className="text-[#8C8880] hover:text-[#1c1b1b]"
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                title="Close"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
             {createdCredentials ? (
-              <div className="flex flex-col gap-4 p-4 rounded-2xl bg-[#eff6ff] border border-blue-200">
-                <div className="flex items-center gap-2 text-blue-700 font-bold text-xs">
-                  <span className="material-symbols-outlined text-[18px]">verified</span>
-                  <span>User Account Created Successfully!</span>
+              <div className="p-6 flex flex-col gap-4 bg-white/50">
+                <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs">
+                  <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                  <span>User Account Created Successfully</span>
                 </div>
-                <p className="text-xs text-[#1c1b1b] leading-relaxed">
+                <p className="text-xs text-[#5e5f5c] leading-relaxed">
                   The colleague can immediately sign in to ProxiSpeak with these generated credentials:
                 </p>
 
-                <div className="p-3 rounded-xl bg-white border border-blue-200 font-mono text-xs flex flex-col gap-1.5">
+                <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-xs flex flex-col gap-2 shadow-2xs">
                   <div className="flex justify-between">
                     <span className="text-[#8C8880]">Full Name:</span>
-                    <span className="font-bold text-[#1c1b1b]">{createdCredentials.fullName}</span>
+                    <span className="font-bold text-[#141413]">{createdCredentials.fullName}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between pt-1 border-t border-[#EBEAE5]">
                     <span className="text-[#8C8880]">Official Email:</span>
-                    <span className="font-bold text-[#2563eb]">{createdCredentials.email}</span>
+                    <span className="font-bold text-[#141413] select-all">{createdCredentials.email}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between pt-1 border-t border-[#EBEAE5]">
                     <span className="text-[#8C8880]">Username:</span>
-                    <span className="font-bold text-[#1c1b1b]">{createdCredentials.username}</span>
+                    <span className="font-bold text-[#141413] select-all">@{createdCredentials.username}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-[#8C8880]">Password:</span>
-                    <span className="font-bold text-[#059669]">{createdCredentials.initialPassword}</span>
+                  <div className="flex justify-between pt-1 border-t border-[#EBEAE5]">
+                    <span className="text-[#8C8880]">Initial Password:</span>
+                    <span className="font-bold text-[#141413] select-all">{createdCredentials.initialPassword}</span>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2.5 pt-2 border-t border-[#EBEAE5]">
                   <button
+                    type="button"
                     onClick={() => {
                       const text = `ProxiSpeak Credentials for ${selectedOrg?.name}:\nEmail: ${createdCredentials.email}\nUsername: ${createdCredentials.username}\nPassword: ${createdCredentials.initialPassword}\nSign in: ${window.location.origin}`;
                       copyText(text, 'Full credentials copied');
                     }}
-                    className="flex-1 py-2 px-3 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                   >
                     <span className="material-symbols-outlined text-[16px]">content_copy</span>
                     <span>Copy Credentials</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => setCreatedCredentials(null)}
-                    className="py-2 px-3 rounded-xl bg-white border border-[#D9D7D0] text-[#1c1b1b] text-xs font-semibold hover:bg-[#F4F3EF]"
+                    className="py-2.5 px-4 rounded-xl bg-white border border-[#E5E4DE] text-[#141413] text-xs font-semibold hover:bg-[#FAF9F5] transition-colors cursor-pointer shadow-2xs"
                   >
                     Add Another
                   </button>
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleAddUser} className="flex flex-col gap-3.5">
+              <form onSubmit={handleAddUser} className="p-6 flex flex-col gap-4 bg-white/50">
                 <div>
-                  <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                     Colleague Full Name
                   </label>
                   <input
@@ -1396,22 +1744,24 @@ export default function OrganizationHub({
                     value={newUserFullName}
                     onChange={(e) => setNewUserFullName(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                   />
                 </div>
 
                 {/* Real-time Email Preview Banner */}
-                <div className="p-3 rounded-xl bg-[#FAF9F5] border border-[#E9E8E4] flex items-center justify-between text-xs">
+                <div className="p-3.5 rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] flex items-center justify-between text-xs shadow-2xs">
                   <div>
-                    <span className="text-[10px] text-[#8C8880] uppercase tracking-wider block">Generated Company Email:</span>
-                    <span className="font-mono font-bold text-[#2563eb]">{derivedUserEmail}</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#8C8880] block">Generated Company Email:</span>
+                    <span className="font-mono font-bold text-xs text-[#141413] mt-0.5 block">{derivedUserEmail}</span>
                   </div>
-                  <span className="text-[10px] font-mono text-[#8C8880]">Handle: @{derivedUserHandle || '...'}</span>
+                  <span className="text-[10px] font-mono text-[#8C8880] px-2 py-1 rounded-lg bg-white border border-[#E5E4DE]">
+                    @{derivedUserHandle || '...'}
+                  </span>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] font-semibold">
                       Initial Password
                     </label>
                     <button
@@ -1420,9 +1770,10 @@ export default function OrganizationHub({
                         const randomPass = 'Proxi' + Math.random().toString(36).substring(2, 8) + '!';
                         setNewUserPassword(randomPass);
                       }}
-                      className="text-[10px] text-[#2563eb] font-semibold hover:underline"
+                      className="text-[10px] font-mono text-[#141413] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      Generate Password
+                      <span className="material-symbols-outlined text-[13px]">autorenew</span>
+                      <span>Generate Password</span>
                     </button>
                   </div>
                   <div className="relative">
@@ -1432,12 +1783,13 @@ export default function OrganizationHub({
                       value={newUserPassword}
                       onChange={(e) => setNewUserPassword(e.target.value)}
                       required
-                      className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb] pr-10"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-mono pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-[#8C8880] hover:text-[#1c1b1b]"
+                      className="absolute right-2.5 top-2.5 text-[#8C8880] hover:text-[#141413] transition-colors cursor-pointer"
+                      title={showPassword ? 'Hide password' : 'Show password'}
                     >
                       <span className="material-symbols-outlined text-[16px]">
                         {showPassword ? 'visibility_off' : 'visibility'}
@@ -1447,17 +1799,17 @@ export default function OrganizationHub({
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-2 font-semibold">
                     Organization Role
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2.5">
                     <button
                       type="button"
                       onClick={() => setNewUserRole('member')}
-                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all ${
+                      className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2.5 transition-all cursor-pointer ${
                         newUserRole === 'member'
-                          ? 'border-[#2563eb] bg-blue-50/50 text-[#2563eb]'
-                          : 'border-[#D9D7D0] text-[#5e5f5c]'
+                          ? 'border-[#141413] bg-[#141413] text-[#FAF9F5] shadow-xs'
+                          : 'border-[#E5E4DE] bg-white text-[#5e5f5c] hover:bg-[#FAF9F5]'
                       }`}
                     >
                       <span className="material-symbols-outlined text-[18px]">person</span>
@@ -1466,10 +1818,10 @@ export default function OrganizationHub({
                     <button
                       type="button"
                       onClick={() => setNewUserRole('admin')}
-                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all ${
+                      className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2.5 transition-all cursor-pointer ${
                         newUserRole === 'admin'
-                          ? 'border-[#2563eb] bg-blue-50/50 text-[#2563eb]'
-                          : 'border-[#D9D7D0] text-[#5e5f5c]'
+                          ? 'border-[#141413] bg-[#141413] text-[#FAF9F5] shadow-xs'
+                          : 'border-[#E5E4DE] bg-white text-[#5e5f5c] hover:bg-[#FAF9F5]'
                       }`}
                     >
                       <span className="material-symbols-outlined text-[18px]">shield_person</span>
@@ -1478,19 +1830,20 @@ export default function OrganizationHub({
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-[#E9E8E4] flex items-center justify-end gap-2">
+                <div className="pt-4 border-t border-[#EBEAE5] flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setShowAddUserModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:bg-[#F4F3EF]"
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isAddingUser || !newUserFullName.trim() || !newUserPassword}
-                    className="px-5 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold disabled:opacity-50 transition-all flex items-center gap-1.5"
+                    className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold disabled:opacity-40 transition-all flex items-center gap-2 cursor-pointer active:scale-[0.99] shadow-sm"
                   >
+                    <span className="material-symbols-outlined text-[16px]">person_add</span>
                     <span>{isAddingUser ? 'Adding...' : 'Create Account & Add Member'}</span>
                   </button>
                 </div>
@@ -1502,40 +1855,52 @@ export default function OrganizationHub({
 
       {/* ─── MODAL 3: EDIT USER (ADMIN ONLY) ─────────────────────────────────── */}
       {editingMember && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E9E8E4]">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#2563eb] text-[20px]">manage_accounts</span>
-                <h3 className="font-bold text-sm text-[#1c1b1b]">Edit Member: {editingMember.username}</h3>
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">manage_accounts</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Member Settings</span>
+                  </div>
+                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Edit Member: {editingMember.username}</h3>
+                </div>
               </div>
-              <button onClick={() => setEditingMember(null)} className="text-[#8C8880] hover:text-[#1c1b1b]">
+              <button
+                type="button"
+                onClick={() => setEditingMember(null)}
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                title="Close"
+              >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditUser} className="flex flex-col gap-3">
+            <form onSubmit={handleSaveEditUser} className="p-6 flex flex-col gap-4 bg-white/50">
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                   Display Name
                 </label>
                 <input
                   type="text"
                   value={editDisplayName}
                   onChange={(e) => setEditDisplayName(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                   Role
                 </label>
                 <select
                   value={editRole}
                   onChange={(e) => setEditRole(e.target.value)}
                   disabled={editingMember.role === 'owner'}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                 >
                   <option value="member">Team Member</option>
                   <option value="admin">Administrator</option>
@@ -1544,7 +1909,7 @@ export default function OrganizationHub({
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                   Reset Password (Leave blank to keep current)
                 </label>
                 <input
@@ -1552,22 +1917,22 @@ export default function OrganizationHub({
                   placeholder="New password (optional)"
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-mono"
                 />
               </div>
 
-              <div className="pt-3 border-t border-[#E9E8E4] flex items-center justify-end gap-2">
+              <div className="pt-4 border-t border-[#EBEAE5] flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setEditingMember(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:bg-[#F4F3EF]"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isEditingMember}
-                  className="px-5 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold transition-all"
+                  className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                 >
                   {isEditingMember ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -1579,30 +1944,53 @@ export default function OrganizationHub({
 
       {/* ─── MODAL 4: DELETE USER CONFIRMATION ──────────────────────────────── */}
       {deletingMember && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-red-600">
-              <span className="material-symbols-outlined text-[22px]">warning</span>
-              <h3 className="font-bold text-sm text-[#1c1b1b]">Remove Member</h3>
-            </div>
-            <p className="text-xs text-[#5e5f5c] leading-relaxed">
-              Are you sure you want to remove <span className="font-bold text-[#1c1b1b]">{deletingMember.displayName || deletingMember.username}</span> from {selectedOrg.name}? They will lose access to the organization's workspaces.
-            </p>
-
-            <div className="pt-2 flex items-center justify-end gap-2">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-200 shadow-2xs text-red-600 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">person_remove</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-red-600 font-semibold">Access Revocation</span>
+                  </div>
+                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Remove Member</h3>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setDeletingMember(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:bg-[#F4F3EF]"
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                title="Close"
               >
-                Cancel
+                <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
-              <button
-                onClick={handleRemoveUser}
-                disabled={isDeletingMember}
-                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-all"
-              >
-                {isDeletingMember ? 'Removing...' : 'Remove User'}
-              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-4 bg-white/50">
+              <p className="text-xs text-[#5e5f5c] leading-relaxed">
+                Are you sure you want to remove <strong className="text-[#141413]">{deletingMember.displayName || deletingMember.username}</strong> from {selectedOrg?.name}? They will immediately lose access to the organization's workspaces.
+              </p>
+
+              <div className="pt-3 border-t border-[#EBEAE5] flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setDeletingMember(null)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveUser}
+                  disabled={isDeletingMember}
+                  className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99] flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[15px]">delete</span>
+                  <span>{isDeletingMember ? 'Removing...' : 'Remove User'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1610,116 +1998,129 @@ export default function OrganizationHub({
 
       {/* ─── MODAL 5: START INSTANT MEETING (TEMPLATE SELECTOR) ─────────────── */}
       {showStartMeetingModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E9E8E4]">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#2563eb] text-[22px]">video_call</span>
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">video_call</span>
+                </div>
                 <div>
-                  <h3 className="font-bold text-sm text-[#1c1b1b]">Start Instant Spatial Call</h3>
-                  <p className="text-[11px] text-[#8C8880]">Select the architectural template for your meeting room</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Spatial Soundstage</span>
+                  </div>
+                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Start Instant Spatial Call</h3>
                 </div>
               </div>
-              <button onClick={() => setShowStartMeetingModal(false)} className="text-[#8C8880] hover:text-[#1c1b1b]">
+              <button
+                type="button"
+                onClick={() => setShowStartMeetingModal(false)}
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                title="Close"
+              >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <div>
-              <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
-                Meeting Room Title
-              </label>
-              <input
-                type="text"
-                value={meetingTitle}
-                onChange={(e) => setMeetingTitle(e.target.value)}
-                placeholder="e.g. Daily Standup or Design Critique"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-2">
-                Choose Room Template
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {DEFAULT_TEMPLATES.map((tmpl) => {
-                  const isSelected = selectedTemplate === tmpl.id;
-                  return (
-                    <button
-                      key={tmpl.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTemplate(tmpl.id);
-                        setSelectedCustomLayoutId('');
-                      }}
-                      className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between gap-3 transition-all ${
-                        isSelected
-                          ? 'border-[#2563eb] bg-blue-50/40 ring-1 ring-[#2563eb]'
-                          : 'border-[#D9D7D0] hover:bg-[#FAF9F5]'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span
-                            className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: tmpl.badgeBg, color: tmpl.badgeColor }}
-                          >
-                            {tmpl.badge}
-                          </span>
-                          <span className="material-symbols-outlined text-[18px] text-[#8C8880]">{tmpl.icon}</span>
-                        </div>
-                        <div className="font-bold text-xs text-[#1c1b1b] mt-1">{tmpl.name}</div>
-                        <p className="text-[10px] text-[#5e5f5c] mt-0.5 line-clamp-2">{tmpl.description}</p>
-                      </div>
-                      <div className="text-[9px] text-[#2563eb] font-semibold">{tmpl.capacity}</div>
-                    </button>
-                  );
-                })}
+            <div className="p-6 flex flex-col gap-4 bg-white/50">
+              <div>
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                  Meeting Room Title
+                </label>
+                <input
+                  type="text"
+                  value={meetingTitle}
+                  onChange={(e) => setMeetingTitle(e.target.value)}
+                  placeholder="e.g. Daily Standup or Design Critique"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                />
               </div>
 
-              {/* Custom layouts option if available */}
-              {layouts.length > 0 && (
-                <div className="mt-3">
-                  <div className="text-[11px] font-bold text-[#8C8880] uppercase tracking-wider mb-1.5">
-                    Or select custom team template:
-                  </div>
-                  <select
-                    value={selectedCustomLayoutId}
-                    onChange={(e) => {
-                      setSelectedCustomLayoutId(e.target.value);
-                      if (e.target.value) setSelectedTemplate('custom');
-                    }}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
-                  >
-                    <option value="">-- Use Standard Template Selected Above --</option>
-                    {layouts.map((l) => (
-                      <option key={l.layoutId} value={l.layoutId}>
-                        Custom: {l.name}
-                      </option>
-                    ))}
-                  </select>
+              <div>
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-2 font-semibold">
+                  Choose Architectural Room Template
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {DEFAULT_TEMPLATES.map((tmpl) => {
+                    const isSelected = selectedTemplate === tmpl.id;
+                    return (
+                      <button
+                        key={tmpl.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTemplate(tmpl.id);
+                          setSelectedCustomLayoutId('');
+                        }}
+                        className={`p-4 rounded-2xl border text-left flex flex-col justify-between gap-3 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-[#141413] bg-white ring-2 ring-[#141413]/10 shadow-sm'
+                            : 'border-[#E5E4DE] bg-white/60 hover:bg-white hover:border-[#D0CFC8]'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span
+                              className="text-[9px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: tmpl.badgeBg, color: tmpl.badgeColor }}
+                            >
+                              {tmpl.badge}
+                            </span>
+                            <span className="material-symbols-outlined text-[18px] text-[#5e5f5c]">{tmpl.icon}</span>
+                          </div>
+                          <div className="font-bold text-xs text-[#141413]">{tmpl.name}</div>
+                          <p className="text-[11px] text-[#5e5f5c] mt-1 line-clamp-2 leading-relaxed">{tmpl.description}</p>
+                        </div>
+                        <div className="text-[10px] font-mono text-[#8C8880] font-semibold pt-2 border-t border-[#EBEAE5]">
+                          {tmpl.capacity}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
 
-            <div className="pt-3 border-t border-[#E9E8E4] flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowStartMeetingModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:bg-[#F4F3EF]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleStartInstantMeeting()}
-                disabled={isStartingMeeting}
-                className="px-6 py-2.5 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-[16px]">rocket_launch</span>
-                <span>{isStartingMeeting ? 'Launching...' : 'Start Meeting Now'}</span>
-              </button>
+                {/* Custom layouts option if available */}
+                {layouts.length > 0 && (
+                  <div className="mt-3.5">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#8C8880] mb-1.5 font-semibold">
+                      Or Select Custom Team Canvas
+                    </div>
+                    <select
+                      value={selectedCustomLayoutId}
+                      onChange={(e) => {
+                        setSelectedCustomLayoutId(e.target.value);
+                        if (e.target.value) setSelectedTemplate('custom');
+                      }}
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                    >
+                      <option value="">-- Use Standard Template Selected Above --</option>
+                      {layouts.map((l) => (
+                        <option key={l.layoutId} value={l.layoutId}>
+                          Custom: {l.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-[#EBEAE5] flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowStartMeetingModal(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStartInstantMeeting()}
+                  disabled={isStartingMeeting}
+                  className="px-6 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer active:scale-[0.99]"
+                >
+                  <span className="material-symbols-outlined text-[16px]">rocket_launch</span>
+                  <span>{isStartingMeeting ? 'Launching...' : 'Start Meeting Now'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1727,21 +2128,33 @@ export default function OrganizationHub({
 
       {/* ─── MODAL 6: SCHEDULE MEETING (ADMIN & MEMBERS) ────────────────────── */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#D9D7D0] shadow-2xl p-6 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E9E8E4]">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#2563eb] text-[20px]">calendar_month</span>
-                <h3 className="font-bold text-sm text-[#1c1b1b]">Schedule Meeting for {selectedOrg.name}</h3>
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">calendar_month</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Calendar & Scheduling</span>
+                  </div>
+                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Schedule Meeting for {selectedOrg.name}</h3>
+                </div>
               </div>
-              <button onClick={() => setShowScheduleModal(false)} className="text-[#8C8880] hover:text-[#1c1b1b]">
+              <button
+                type="button"
+                onClick={() => setShowScheduleModal(false)}
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                title="Close"
+              >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleScheduleMeeting} className="flex flex-col gap-3">
+            <form onSubmit={handleScheduleMeeting} className="p-6 flex flex-col gap-4 bg-white/50">
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                   Meeting Title
                 </label>
                 <input
@@ -1750,12 +2163,12 @@ export default function OrganizationHub({
                   value={schedTitle}
                   onChange={(e) => setSchedTitle(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                   Description / Agenda (Optional)
                 </label>
                 <textarea
@@ -1763,13 +2176,13 @@ export default function OrganizationHub({
                   value={schedDesc}
                   onChange={(e) => setSchedDesc(e.target.value)}
                   rows={2}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                     Date
                   </label>
                   <input
@@ -1777,11 +2190,11 @@ export default function OrganizationHub({
                     value={schedDate}
                     onChange={(e) => setSchedDate(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                     Start Time
                   </label>
                   <input
@@ -1789,19 +2202,19 @@ export default function OrganizationHub({
                     value={schedTime}
                     onChange={(e) => setSchedTime(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-[#1c1b1b] uppercase tracking-wider block mb-1">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
                   Room Template
                 </label>
                 <select
                   value={schedTemplate}
                   onChange={(e) => setSchedTemplate(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#D9D7D0] focus:outline-none focus:border-[#2563eb]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                 >
                   <option value="office">Corporate Headquarters (Default Office)</option>
                   <option value="conference">Townhall & Keynote Auditorium</option>
@@ -1814,18 +2227,18 @@ export default function OrganizationHub({
                 </select>
               </div>
 
-              <div className="pt-3 border-t border-[#E9E8E4] flex items-center justify-end gap-2">
+              <div className="pt-4 border-t border-[#EBEAE5] flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowScheduleModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:bg-[#F4F3EF]"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isScheduling}
-                  className="px-5 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold transition-all"
+                  className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                 >
                   {isScheduling ? 'Scheduling...' : 'Schedule Meeting'}
                 </button>

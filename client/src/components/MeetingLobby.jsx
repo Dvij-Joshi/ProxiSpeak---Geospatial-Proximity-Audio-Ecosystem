@@ -86,7 +86,7 @@ const THEME_OPTIONS = [
   {
     id: 'office',
     name: 'Corporate Office',
-    icon: 'apartment',
+    icon: 'domain',
     desc: 'Executive suites, conference room, lounge, and open desks.',
     image: '/images/office.jpg',
   },
@@ -100,7 +100,7 @@ const THEME_OPTIONS = [
   {
     id: 'lounge',
     name: 'Rooftop Social Lounge',
-    icon: 'local_cafe',
+    icon: 'deck',
     desc: 'Casual coffee bar, sofa booths, and open air terrace.',
     image: '/images/lounge.jpg',
   },
@@ -964,38 +964,41 @@ export default function MeetingLobby({
       {/* Host New Meeting Modal */}
       {showHostModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in"
           onClick={() => setShowHostModal(false)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-line relative text-on-surface"
+            className="w-full max-w-lg rounded-[26px] bg-[#FAF9F5] p-6 sm:p-7 shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] border border-[#E5E4DE] relative text-[#141413] flex flex-col gap-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-start justify-between pb-4 border-b border-line/40">
-              <div>
-                <h3 className="font-h3 text-lg font-bold text-on-surface tracking-tight">
-                  Host Workspace
-                </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Create a spatial room for your team with real-time proximity audio.
-                </p>
+            <div className="flex items-start justify-between pb-4 border-b border-[#EBEAE5]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">add_circle</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Soundstage Deployment</span>
+                  </div>
+                  <h3 className="font-bold text-base text-[#141413] tracking-tight">Host Workspace</h3>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowHostModal(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-on-surface hover:bg-soft-card-2 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
                 aria-label="Close modal"
               >
-                <span className="material-symbols-outlined text-[20px]">close</span>
+                <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleCreateRoom} className="mt-5 space-y-5">
+            <form onSubmit={handleCreateRoom} className="space-y-4">
               {/* Workspace Name */}
               <div>
-                <label className="block text-xs font-semibold text-on-surface mb-1.5">
-                  Workspace name
+                <label className="block text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] mb-1.5 font-semibold">
+                  Workspace Name
                 </label>
                 <input
                   type="text"
@@ -1003,7 +1006,7 @@ export default function MeetingLobby({
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   placeholder="e.g. Design Sync, Engineering Standup"
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-white border border-line text-sm text-on-surface placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-on-surface focus:border-on-surface transition-all shadow-sm"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E5E4DE] text-xs text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
                   autoFocus
                 />
               </div>
@@ -1011,10 +1014,10 @@ export default function MeetingLobby({
               {/* Environment Layout */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-on-surface">
-                    Environment layout
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] font-semibold">
+                    Environment Layout
                   </label>
-                  <span className="text-[11px] text-muted">Acoustic template</span>
+                  <span className="text-[10px] font-mono text-[#8C8880]">Acoustic Template</span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
@@ -1025,28 +1028,28 @@ export default function MeetingLobby({
                         key={theme.id}
                         type="button"
                         onClick={() => setNewRoomTheme(theme.id)}
-                        className={`group text-left rounded-xl p-2 border transition-all flex flex-col cursor-pointer ${
+                        className={`group text-left rounded-2xl p-2.5 border transition-all flex flex-col cursor-pointer ${
                           isSelected
-                            ? 'border-on-surface bg-soft-card-2 ring-1 ring-on-surface shadow-sm'
-                            : 'border-line/60 bg-white hover:border-line hover:bg-soft-card-2/50'
+                            ? 'border-[#141413] bg-white ring-2 ring-[#141413]/10 shadow-sm'
+                            : 'border-[#E5E4DE] bg-white/60 hover:border-[#D0CFC8] hover:bg-white'
                         }`}
                       >
-                        <div className="w-full aspect-[4/3] rounded-lg overflow-hidden bg-neutral-100 mb-2 relative">
+                        <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-neutral-100 mb-2 relative border border-[#E5E4DE]">
                           <img
                             src={theme.image}
                             alt={theme.name}
                             className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                           />
                           {isSelected && (
-                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-on-surface text-on-primary flex items-center justify-center shadow">
+                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[#141413] text-[#FAF9F5] flex items-center justify-center shadow">
                               <span className="material-symbols-outlined text-[11px] leading-none">check</span>
                             </div>
                           )}
                         </div>
-                        <span className="font-semibold text-xs text-on-surface truncate w-full">
+                        <span className="font-semibold text-xs text-[#141413] truncate w-full">
                           {theme.name}
                         </span>
-                        <span className="text-[11px] text-muted mt-0.5 line-clamp-1">
+                        <span className="text-[10px] text-[#8C8880] font-mono mt-0.5 line-clamp-1">
                           {theme.id === 'office' && 'Desks & pods'}
                           {theme.id === 'conference' && 'Auditorium'}
                           {theme.id === 'lounge' && 'Open terrace'}
@@ -1058,29 +1061,29 @@ export default function MeetingLobby({
               </div>
 
               {/* Footer Actions */}
-              <div className="pt-4 border-t border-line/40 flex items-center justify-end gap-2.5">
+              <div className="pt-4 border-t border-[#EBEAE5] flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowHostModal(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-medium text-muted hover:text-on-surface hover:bg-soft-card-2 transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-4 py-2 rounded-lg bg-on-surface hover:bg-black text-on-primary text-xs font-medium transition-colors shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                  className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold transition-all shadow-sm active:scale-[0.99] cursor-pointer disabled:opacity-40 flex items-center gap-2"
                 >
                   {creating ? (
                     <>
-                      <svg className="animate-spin h-3.5 w-3.5 text-on-primary" viewBox="0 0 24 24" fill="none">
+                      <svg className="animate-spin h-3.5 w-3.5 text-[#FAF9F5]" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
                       <span>Creating...</span>
                     </>
                   ) : (
-                    <span>Create workspace</span>
+                    <span>Create Workspace</span>
                   )}
                 </button>
               </div>
@@ -1092,77 +1095,117 @@ export default function MeetingLobby({
       {/* Info Modals (Spatial Audio / Hardware / Docs) */}
       {activeModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in"
           onClick={() => setActiveModal(null)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-line relative text-on-surface"
+            className="w-full max-w-lg rounded-[26px] bg-[#FAF9F5] p-6 sm:p-7 shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] border border-[#E5E4DE] relative text-[#141413] flex flex-col gap-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between pb-4 border-b border-line/40">
-              <h3 className="font-h3 text-lg font-bold text-on-surface tracking-tight">
-                {activeModal === 'spatial-audio' && 'Spatial Audio Architecture'}
-                {activeModal === 'hardware' && 'Audio Hardware & Latency'}
-                {activeModal === 'docs' && 'ProxiSpeak Documentation'}
-              </h3>
+            <div className="flex items-center justify-between pb-4 border-b border-[#EBEAE5]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">
+                    {activeModal === 'spatial-audio' && 'graphic_eq'}
+                    {activeModal === 'hardware' && 'headphones'}
+                    {activeModal === 'docs' && 'menu_book'}
+                  </span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Technical Specification</span>
+                  </div>
+                  <h3 className="font-bold text-base text-[#141413] tracking-tight">
+                    {activeModal === 'spatial-audio' && 'Spatial Audio Architecture'}
+                    {activeModal === 'hardware' && 'Audio Hardware & Latency'}
+                    {activeModal === 'docs' && 'ProxiSpeak Documentation'}
+                  </h3>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setActiveModal(null)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-on-surface hover:bg-soft-card-2 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
                 aria-label="Close modal"
               >
-                <span className="material-symbols-outlined text-[20px]">close</span>
+                <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-1">
               {activeModal === 'spatial-audio' && (
-                <div className="space-y-3 text-sm text-on-surface-variant leading-relaxed">
-                  <p>
-                    ProxiSpeak integrates a browser-native WebAudio spatial panner node calibrated to Head-Related Transfer Function (HRTF) impulse responses.
-                  </p>
-                  <p>
-                    <strong>Acoustic Isolation:</strong> When meeting participants step into private rooms or close doors, soundproof filters attenuate audio by -40dB, providing true privacy for confidential syncs.
-                  </p>
-                  <p>
-                    <strong>Smooth Distance Falloff:</strong> As you navigate your avatar across the office floor, voice levels scale according to inverse-square distance equations for natural, organic conversations.
-                  </p>
+                <div className="space-y-3 text-xs text-[#5e5f5c] leading-relaxed">
+                  <div className="p-3.5 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs">
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">WebAudio HRTF Engine</div>
+                    <p className="text-[#141413]">
+                      ProxiSpeak integrates a browser-native WebAudio spatial panner node calibrated to Head-Related Transfer Function (HRTF) impulse responses.
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs">
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">Acoustic Isolation</div>
+                    <p className="text-[#141413]">
+                      When meeting participants step into private rooms or close doors, soundproof filters attenuate audio by -40dB, providing true privacy for confidential syncs.
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs">
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">Inverse-Square Attenuation</div>
+                    <p className="text-[#141413]">
+                      As you navigate your avatar across the office floor, voice levels scale according to inverse-square distance equations for natural, organic conversations.
+                    </p>
+                  </div>
                 </div>
               )}
 
               {activeModal === 'hardware' && (
-                <div className="space-y-3 text-sm text-on-surface-variant leading-relaxed">
-                  <p>
-                    ProxiSpeak delivers optimal immersion with stereo headphones or binaural headsets.
+                <div className="space-y-3 text-xs text-[#5e5f5c] leading-relaxed">
+                  <p className="text-[#141413]">
+                    ProxiSpeak delivers optimal spatial immersion with stereo headphones or binaural headsets.
                   </p>
-                  <ul className="list-disc pl-5 space-y-1.5 text-xs text-on-surface-variant">
-                    <li>Recommended: Apple AirPods Max/Pro, Sony WH-1000XM5, Bose QuietComfort.</li>
-                    <li>Supports standard 44.1kHz or 48kHz audio interfaces without external drivers.</li>
-                    <li>Built-in hardware echo cancellation, noise suppression, and auto gain control.</li>
-                  </ul>
+                  <div className="p-4 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs space-y-2 text-[#141413]">
+                    <div className="flex items-start gap-2">
+                      <span className="material-symbols-outlined text-[16px] text-[#141413] mt-0.5">verified</span>
+                      <span><strong>Recommended:</strong> Apple AirPods Max/Pro, Sony WH-1000XM5, Bose QuietComfort.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="material-symbols-outlined text-[16px] text-[#141413] mt-0.5">check_circle</span>
+                      <span>Supports standard 44.1kHz or 48kHz audio interfaces without external drivers.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="material-symbols-outlined text-[16px] text-[#141413] mt-0.5">check_circle</span>
+                      <span>Built-in hardware echo cancellation, noise suppression, and auto gain control.</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {activeModal === 'docs' && (
-                <div className="space-y-3 text-sm text-on-surface-variant leading-relaxed">
-                  <p>
+                <div className="space-y-3 text-xs text-[#5e5f5c] leading-relaxed">
+                  <p className="text-[#141413]">
                     ProxiSpeak is powered by a low-latency WebRTC mesh paired with a persistent WebSocket presence and state synchronization protocol.
                   </p>
-                  <p>
-                    <strong>Controls:</strong> Use <kbd className="px-1.5 py-0.5 rounded bg-soft-card font-mono text-xs">W, A, S, D</kbd> or <kbd className="px-1.5 py-0.5 rounded bg-soft-card font-mono text-xs">Arrow Keys</kbd> to move your avatar. Press <kbd className="px-1.5 py-0.5 rounded bg-soft-card font-mono text-xs">M</kbd> to toggle mute, or <kbd className="px-1.5 py-0.5 rounded bg-soft-card font-mono text-xs">Spacebar</kbd> for push-to-talk.
-                  </p>
-                  <p>
-                    <strong>Room Invites:</strong> Share meeting links with <code className="px-1.5 py-0.5 rounded bg-soft-card text-xs font-mono text-on-surface">?room=your-room-id</code> for instant access.
-                  </p>
+                  <div className="p-4 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs space-y-2.5">
+                    <div>
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">Controls</div>
+                      <p className="text-[#141413]">
+                        Use <kbd className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-[11px] text-[#141413]">W, A, S, D</kbd> or <kbd className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-[11px] text-[#141413]">Arrow Keys</kbd> to move your avatar. Press <kbd className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-[11px] text-[#141413]">M</kbd> to toggle mute, or <kbd className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-[11px] text-[#141413]">Spacebar</kbd> for push-to-talk.
+                      </p>
+                    </div>
+                    <div className="pt-2 border-t border-[#EBEAE5]">
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">Room Invites</div>
+                      <p className="text-[#141413]">
+                        Share meeting links with <code className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] text-[11px] font-mono text-[#141413]">?room=your-room-id</code> for instant access.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="mt-6 pt-4 border-t border-line/40 flex justify-end">
+            <div className="pt-4 border-t border-[#EBEAE5] flex justify-end">
               <button
                 type="button"
                 onClick={() => setActiveModal(null)}
-                className="px-4 py-2 rounded-lg bg-on-surface hover:bg-black text-on-primary text-xs font-medium transition-colors shadow-sm cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
               >
                 Done
               </button>
