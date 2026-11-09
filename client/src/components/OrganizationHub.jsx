@@ -82,6 +82,10 @@ export default function OrganizationHub({
   };
 
   const handleOpenCreateOrg = () => {
+    if (organizations.length > 0) {
+      showToast(`You are already part of "${organizations[0].name}". Accounts cannot create multiple organizations.`, 'error');
+      return;
+    }
     setNewOrgName('');
     setNewOrgDesc('');
     setNewOrgColor('#2563eb');
@@ -267,18 +271,30 @@ export default function OrganizationHub({
   const handleCreateOrg = async (e) => {
     e.preventDefault();
     if (!newOrgName.trim()) return;
+
+    if (organizations.length > 0) {
+      showToast(`You are already part of "${organizations[0].name}". Accounts cannot create multiple organizations.`, 'error');
+      return;
+    }
+
     setIsCreatingOrg(true);
 
     try {
+      const token = localStorage.getItem('proxispeak_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${SERVER_URL}/api/organizations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           name: newOrgName.trim(),
           description: newOrgDesc.trim(),
           logoColor: newOrgColor,
           adminFullName: adminFullName.trim() || 'Administrator',
           adminPassword: adminPassword.trim(),
+          currentUser: user?.username,
+          currentEmail: user?.email,
         }),
       });
 
@@ -665,13 +681,20 @@ export default function OrganizationHub({
                 </div>
               )}
 
-              <button
-                onClick={handleOpenCreateOrg}
-                className="mt-2 w-full py-2.5 px-3 rounded-2xl border border-dashed border-[#D9D7D0] hover:border-[#2563eb] text-xs font-semibold text-[#2563eb] hover:bg-blue-50/50 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-[16px]">add_business</span>
-                <span>Create Organization</span>
-              </button>
+              {organizations.length === 0 ? (
+                <button
+                  onClick={handleOpenCreateOrg}
+                  className="mt-2 w-full py-2.5 px-3 rounded-2xl border border-dashed border-[#E5E4DE] hover:border-[#141413] text-xs font-semibold text-[#141413] hover:bg-white transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add_business</span>
+                  <span>Create Organization</span>
+                </button>
+              ) : (
+                <div className="mt-2 px-3 py-2.5 rounded-2xl bg-white border border-[#E5E4DE] text-[11px] font-mono text-[#5e5f5c] text-center shadow-2xs flex items-center justify-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="truncate font-semibold">Enrolled: {selectedOrg?.name || 'Workspace'}</span>
+                </div>
+              )}
             </div>
 
             {/* Signed-in Account Footer */}

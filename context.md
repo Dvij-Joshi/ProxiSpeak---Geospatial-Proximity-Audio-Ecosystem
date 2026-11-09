@@ -260,7 +260,22 @@ ooftop), with custom templates created via the in-app Office Designer.
   * Decoupled Socket.IO connection lifecycle from theme and layout rendering in client/src/WorldCanvas.jsx, eliminating connection thrashing, 400+ reconnect loops, and flashing Online/Offline status.
   * Upgraded Minimap Radar to directly render the exact pre-rendered world canvas floor plan (offscreenRef.current), guaranteeing 100% pixel-perfect architectural synchronization between minimap and main office view.
   * Added dynamic template fallback to GET /api/layouts/:layoutId and increased socket concurrency limit to 35 to prevent 404s and connection rejections.
-* **Current Active Milestone:** Application-Wide Studio Redesign of All Dialog Popups & Modals (`OrganizationHub.jsx`, `MeetingLobby.jsx`, `WorldCanvas.jsx`)
+* **Current Active Milestone:** Single-Organization Membership Enforcement (`server/index.js`, `OrganizationHub.jsx`)
+  * **Core Invariant:** A user who is part of an organization cannot create another organization (enforced across owners, administrators, and team members).
+  * **Backend Enforcement (`server/index.js` in `POST /api/organizations`):**
+    * Authenticates caller via Bearer JWT token or request metadata (`currentUser`, `currentEmail`).
+    * Checks both in-memory cache (`memoryOrgs`) and MongoDB (`Organization.findOne`) for existing ownership or membership in `org.members`.
+    * If caller or proposed administrator is already part of any organization, the request is immediately rejected with HTTP 403 Forbidden: `"You are already part of \"<OrgName>\". Users who are part of an organization cannot create another organization."`
+    * Verifies proposed admin handle and company email across all organizations before provisioning.
+  * **Frontend Enforcement (`client/src/components/OrganizationHub.jsx`):**
+    * In the workspace selector sidebar, hides the `Create Organization` button whenever `organizations.length > 0`, rendering an active membership status pill (`Enrolled: <OrgName>`) with a live status dot instead.
+    * Only surfaces the `Create Organization` button in the sidebar and empty state view if the user belongs to zero organizations (`organizations.length === 0`).
+    * Guards `handleOpenCreateOrg` and `handleCreateOrg` to block execution and show an error toast if the user already belongs to an organization.
+    * Passes active `Authorization: Bearer <token>` and user metadata in `POST /api/organizations` calls.
+  * **Verification:**
+    * Automated integration test suite (`AlphaCorp` creation, Alice second org creation attempt via Bearer token, Bob colleague addition, Bob creation attempt while enrolled, and unassociated Charlie creation) passed with 100% success (5/5 tests passed).
+    * Production Vite build verified clean (1.14s).
+* **Prior Milestone:** Application-Wide Studio Redesign of All Dialog Popups & Modals (`OrganizationHub.jsx`, `MeetingLobby.jsx`, `WorldCanvas.jsx`)
   * **Design System Alignment:** Eliminated generic "AI-sloppy" UI artifacts (harsh borders, clumsy `rounded-full` inputs, stark uppercase labels, and emojis) and unified all floating dialogs into the warm porcelain studio aesthetic (`#FAF9F5`, hairline borders `#E5E4DE`, soft ambient elevation `shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)]`, dark obsidian action CTAs `bg-[#141413]`, tactile `rounded-xl` inputs, and technical monospace metadata badges).
   * **Organization Hub Modals (`client/src/components/OrganizationHub.jsx`):**
     * **Top Navigation & Window Shell:** Upgraded main workspace shell to `rounded-[28px] border border-[#E5E4DE] shadow-[0_32px_80px_-16px_rgba(20,20,19,0.22)]` with studio top bar, framed close button, and obsidian "Start Instant Call" CTA.

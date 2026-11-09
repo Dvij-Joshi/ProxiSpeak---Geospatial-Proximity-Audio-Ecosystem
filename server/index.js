@@ -1056,8 +1056,74 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
       logoColor = '#2563eb',
       adminFullName,
       adminPassword,
-      owner
+      owner,
+      currentUser,
+      currentEmail
     } = req.body;
+
+    // 0. Enforce Rule: Any user who is part of an organization cannot create another organization
+    let callerUser = null;
+    let callerEmail = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded) {
+          callerUser = decoded.username;
+          callerEmail = decoded.email;
+        }
+      } catch (_e) {}
+    }
+
+    if (!callerUser && currentUser) callerUser = String(currentUser).trim();
+    if (!callerEmail && currentEmail) callerEmail = String(currentEmail).trim();
+    if (!callerUser && req.query.username) callerUser = String(req.query.username).trim();
+    if (!callerEmail && req.query.email) callerEmail = String(req.query.email).trim();
+
+    if (callerUser || callerEmail) {
+      const cUserLower = (callerUser || '').toLowerCase();
+      const cEmailLower = (callerEmail || '').toLowerCase();
+
+      // Check memory cache
+      for (const org of memoryOrgs.values()) {
+        if (!org) continue;
+        const isOwner = (cUserLower && (org.owner || '').toLowerCase() === cUserLower) ||
+                        (cEmailLower && (org.ownerEmail || '').toLowerCase() === cEmailLower);
+        const isMember = (org.members || []).some((m) => {
+          const mUser = (m.username || '').toLowerCase();
+          const mEmail = (m.email || '').toLowerCase();
+          return (cUserLower && mUser === cUserLower) || (cEmailLower && mEmail === cEmailLower);
+        });
+
+        if (isOwner || isMember) {
+          return res.status(403).json({
+            error: `You are already part of "${org.name}". Users who are part of an organization cannot create another organization.`
+          });
+        }
+      }
+
+      // Check MongoDB
+      if (isDbConnected()) {
+        try {
+          const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const existingOrg = await Organization.findOne({
+            $or: [
+              { owner: { $regex: new RegExp(`^${escapeRegex(cUserLower)}$`, 'i') } },
+              { ownerEmail: { $regex: new RegExp(`^${escapeRegex(cEmailLower)}$`, 'i') } },
+              { 'members.username': { $regex: new RegExp(`^${escapeRegex(cUserLower)}$`, 'i') } },
+              { 'members.email': { $regex: new RegExp(`^${escapeRegex(cEmailLower)}$`, 'i') } },
+            ]
+          }).lean();
+
+          if (existingOrg) {
+            return res.status(403).json({
+              error: `You are already part of "${existingOrg.name}". Users who are part of an organization cannot create another organization.`
+            });
+          }
+        } catch (_dbErr) {}
+      }
+    }
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Organization name is required' });
@@ -1098,6 +1164,46 @@ app.post('/api/organizations', generalApiLimiter, async (req, res) => {
       adminHandle = `admin.${Math.random().toString(36).substring(2, 6)}`;
     }
     const adminEmail = `${adminHandle}@${slug}.com`;
+
+    // Verify proposed admin handle or email is not already enrolled in another organization
+    const proposedHandleLower = adminHandle.toLowerCase();
+    const proposedEmailLower = adminEmail.toLowerCase();
+
+    for (const org of memoryOrgs.values()) {
+      if (!org) continue;
+      const isOwner = (org.owner || '').toLowerCase() === proposedHandleLower ||
+                      (org.ownerEmail || '').toLowerCase() === proposedEmailLower;
+      const isMember = (org.members || []).some((m) => {
+        const mUser = (m.username || '').toLowerCase();
+        const mEmail = (m.email || '').toLowerCase();
+        return mUser === proposedHandleLower || mEmail === proposedEmailLower;
+      });
+
+      if (isOwner || isMember) {
+        return res.status(403).json({
+          error: `User "${adminCleanName}" (@${adminHandle}) is already a member of "${org.name}". Users who are part of an organization cannot create another organization.`
+        });
+      }
+    }
+
+    if (isDbConnected()) {
+      try {
+        const existingOrgForAdmin = await Organization.findOne({
+          $or: [
+            { owner: { $regex: new RegExp(`^${proposedHandleLower}$`, 'i') } },
+            { ownerEmail: { $regex: new RegExp(`^${proposedEmailLower}$`, 'i') } },
+            { 'members.username': { $regex: new RegExp(`^${proposedHandleLower}$`, 'i') } },
+            { 'members.email': { $regex: new RegExp(`^${proposedEmailLower}$`, 'i') } },
+          ]
+        }).lean();
+
+        if (existingOrgForAdmin) {
+          return res.status(403).json({
+            error: `User "${adminCleanName}" (@${adminHandle}) is already a member of "${existingOrgForAdmin.name}". Users who are part of an organization cannot create another organization.`
+          });
+        }
+      } catch (_dbErr2) {}
+    }
 
     // Secure default password generation (unique per admin)
     const finalAdminPassword = (adminPassword && typeof adminPassword === 'string' && adminPassword.trim().length >= 6)
