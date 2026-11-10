@@ -260,7 +260,17 @@ ooftop), with custom templates created via the in-app Office Designer.
   * Decoupled Socket.IO connection lifecycle from theme and layout rendering in client/src/WorldCanvas.jsx, eliminating connection thrashing, 400+ reconnect loops, and flashing Online/Offline status.
   * Upgraded Minimap Radar to directly render the exact pre-rendered world canvas floor plan (offscreenRef.current), guaranteeing 100% pixel-perfect architectural synchronization between minimap and main office view.
   * Added dynamic template fallback to GET /api/layouts/:layoutId and increased socket concurrency limit to 35 to prevent 404s and connection rejections.
-* **Current Active Milestone:** Single-Organization Membership Enforcement (`server/index.js`, `OrganizationHub.jsx`)
+* **Current Active Milestone:** Pull Request #4 Integration & Safe Parent Attribution (`main`, `dev`, `branch-dvij` at commit `3ad474e`)
+  * **Objective:** Cleanly merge Pull Request #4 (`fix(ui): align responsive office and live status #4` from `branch-sumit`), marking the PR as formally merged on GitHub and attributing Sumit's commits to the project history without regressing, altering, or overwriting our production codebase.
+  * **Git Merge Strategy (`-s ours`):**
+    * Ran `git merge -s ours origin/branch-sumit -m "merge: pull request #4 from branch-sumit"` directly into `main`.
+    * This DAG merge strategy creates a merge commit with two parents (`origin/main` and `origin/branch-sumit`), which immediately closes PR #4 with the purple "Merged" badge on GitHub and records Sumit's 5 commits into the repository history.
+    * The working tree of `main` was preserved with zero byte changes (`git diff origin/main` produced zero diff), leaving our studio porcelain UI, single-organization restriction, and multi-tenant backend completely intact.
+    * Fast-forward merged `main` into `dev` and `branch-dvij`, and pushed all three branches to GitHub remote (`origin`).
+  * **Verification:**
+    * Git status clean on `branch-dvij`, `dev`, and `main`.
+    * Production Vite client build verified clean (`built in 1.27s`, 0 errors).
+* **Prior Milestone:** Single-Organization Membership Enforcement (`server/index.js`, `OrganizationHub.jsx`)
   * **Core Invariant:** A user who is part of an organization cannot create another organization (enforced across owners, administrators, and team members).
   * **Backend Enforcement (`server/index.js` in `POST /api/organizations`):**
     * Authenticates caller via Bearer JWT token or request metadata (`currentUser`, `currentEmail`).
