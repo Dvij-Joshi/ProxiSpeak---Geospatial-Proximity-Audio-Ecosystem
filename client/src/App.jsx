@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import AuthModal from './components/AuthModal';
 import MeetingLobby from './components/MeetingLobby';
 import WorldCanvas from './WorldCanvas';
-import VoiceTest from './components/VoiceTest';
 import OfficeDesigner from './components/OfficeDesigner';
 import OrganizationHub from './components/OrganizationHub';
 import { SERVER_URL } from './config';
@@ -12,7 +11,6 @@ export default function App() {
   const [authChecking, setAuthChecking] = useState(true);
   const [currentRoom, setCurrentRoom] = useState(null);
   const [inviteRoomId, setInviteRoomId] = useState(null);
-  const [isVoiceTesting, setIsVoiceTesting] = useState(false);
   const [isDesigningOffice, setIsDesigningOffice] = useState(false);
   const [designerOrg, setDesignerOrg] = useState(null);
   const [showOrgHub, setShowOrgHub] = useState(false);
@@ -25,9 +23,6 @@ export default function App() {
       const roomParam = params.get('room');
       if (roomParam && roomParam.trim()) {
         setInviteRoomId(roomParam.trim());
-      }
-      if (params.get('voiceTest') === 'true' || params.has('voiceRoom') || window.location.pathname === '/voice-test') {
-        setIsVoiceTesting(true);
       }
       if (params.get('orgs') === 'true' || params.get('organizations') === 'true' || window.location.pathname === '/organizations') {
         setShowOrgHub(true);
@@ -231,24 +226,6 @@ export default function App() {
     );
   }
 
-  // Dedicated Voice Transfer Server Test Bench
-  if (isVoiceTesting) {
-    return (
-      <VoiceTest
-        user={user}
-        onBackToLobby={() => {
-          setIsVoiceTesting(false);
-          try {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('voiceTest');
-            url.searchParams.delete('voiceRoom');
-            window.history.pushState({}, '', url.pathname + (url.search ? url.search : ''));
-          } catch (_e) {}
-        }}
-      />
-    );
-  }
-
   // Interactive Office Designer View (Pillar 2)
   if (isDesigningOffice) {
     return (
@@ -297,7 +274,6 @@ export default function App() {
         onJoinRoom={handleJoinRoom}
         onLogout={handleLogout}
         onRequestAuth={() => setShowAuthModal(true)}
-        onOpenVoiceTest={() => setIsVoiceTesting(true)}
         onOpenDesigner={(org) => {
           setDesignerOrg(org || activeOrg);
           setIsDesigningOffice(true);

@@ -260,7 +260,20 @@ ooftop), with custom templates created via the in-app Office Designer.
   * Decoupled Socket.IO connection lifecycle from theme and layout rendering in client/src/WorldCanvas.jsx, eliminating connection thrashing, 400+ reconnect loops, and flashing Online/Offline status.
   * Upgraded Minimap Radar to directly render the exact pre-rendered world canvas floor plan (offscreenRef.current), guaranteeing 100% pixel-perfect architectural synchronization between minimap and main office view.
   * Added dynamic template fallback to GET /api/layouts/:layoutId and increased socket concurrency limit to 35 to prevent 404s and connection rejections.
-* **Current Active Milestone:** Pull Request #4 Integration & Safe Parent Attribution (`main`, `dev`, `branch-dvij` at commit `3ad474e`)
+* **Current Active Milestone:** Complete Purge of Experimental Voice-Server & Strict P2P Audio Mesh Alignment (`main`, `dev`, `branch-dvij`)
+  * **Objective:** Safely check and permanently remove the legacy `voice-server/` directory, `VoiceTest.jsx` component, and voice relay environment configurations in accordance with the project plan.
+  * **Architectural Rationale:**
+    * ProxiSpeak strictly mandates a 100% Peer-to-Peer WebRTC Opus mesh where zero audio bytes ever touch or pass through a central media server.
+    * The legacy standalone `voice-server/` directory and experimental `VoiceTest` bench were resurrected during earlier historical branch merges.
+  * **Actions Taken:**
+    * Deleted `voice-server/` directory containing `server.js`, `package.json`, `package-lock.json`, `README.md`, and `.env.example`.
+    * Removed experimental `client/src/components/VoiceTest.jsx` (728 lines) and deleted the orange "Voice Test" navigation button from `client/src/components/MeetingLobby.jsx`.
+    * Cleaned `client/src/App.jsx` routing and state (`isVoiceTesting`, URL search params, and view render branches).
+    * Removed unused `PRODUCTION_VOICE_SERVER_URL` and `resolveVoiceServerUrl` exports from `client/src/config.js`.
+  * **Verification:**
+    * Production Vite client build succeeded in 1.60s with 0 errors (client bundle size reduced by ~17 kB).
+    * Server syntax check passed cleanly with 0 errors.
+* **Prior Milestone:** Pull Request #4 Integration & Safe Parent Attribution (`main`, `dev`, `branch-dvij` at commit `3ad474e`)
   * **Objective:** Cleanly merge Pull Request #4 (`fix(ui): align responsive office and live status #4` from `branch-sumit`), marking the PR as formally merged on GitHub and attributing Sumit's commits to the project history without regressing, altering, or overwriting our production codebase.
   * **Git Merge Strategy (`-s ours`):**
     * Ran `git merge -s ours origin/branch-sumit -m "merge: pull request #4 from branch-sumit"` directly into `main`.
