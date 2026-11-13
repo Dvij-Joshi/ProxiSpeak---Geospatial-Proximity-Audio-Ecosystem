@@ -398,7 +398,17 @@ ooftop), with custom templates created via the in-app Office Designer.
     * Generated brand geometric spatial soundwave favicon in SVG and binary ICO formats, linked in `index.html` with `image/svg+xml` and `alternate icon`, eliminating 404 console errors.
   * **Render Cold-Start Room Fetch Auto-Retry (`client/src/components/MeetingLobby.jsx`):**
     * Added automatic 3-second retry logic to `fetchRooms()` so network disruptions or connection resets during Render free-tier container cold starts recover automatically without requiring user page reload.
-* **Latest Milestone:** Meeting Room Redesign — Studio Side Panel, Initials Squircle Avatar & Private Messaging
+* **Latest Milestone:** Runtime Stability & Blank Screen Bug Resolution (TDZ Hoisting Fix)
+  * **Root Cause Diagnosis:**
+    * In client/src/components/OfficeDesigner.jsx, the canvas ResizeObserver useEffect hook registered a non-passive wheel event listener and referenced handleWheel inside its dependency array.
+    * Because handleWheel was declared with const lower down in the component function body, evaluating it in the useEffect call triggered JavaScript's Temporal Dead Zone (TDZ).
+    * When bundled and minified by Vite, this manifested in production as Uncaught ReferenceError: Cannot access 'Sr' before initialization at Gc, unmounting the React tree and rendering a blank white screen.
+  * **Architectural Resolution:**
+    * Introduced a stable handleWheelRef = useRef(null) declared at the top of OfficeDesigner.jsx alongside canvasRef.
+    * Updated the non-passive wheel listener inside the mounting useEffect to invoke handleWheelRef.current?.(e) with an empty dependency array [].
+    * Assigned handleWheelRef.current = handleWheel immediately following the handleWheel function declaration.
+    * Verified clean Vite bundle compilation (npm --prefix client run build) with 0 errors.
+* **Prior Milestone:** Meeting Room Redesign — Studio Side Panel, Initials Squircle Avatar & Private Messaging
   * **Meeting Room Page Redesign & Edge-to-Edge Responsive Layout:**
     * Completely overhauled client/src/WorldCanvas.jsx from a centered, fixed-width card layout with dead margins to a full-viewport Studio Workspace (100vw x 100vh).
     * Integrated a dynamic ResizeObserver on the canvas container that continuously synchronizes canvas.width and canvas.height to 100% of the available area, completely eliminating misaligned empty spaces and letterboxing on wide displays.

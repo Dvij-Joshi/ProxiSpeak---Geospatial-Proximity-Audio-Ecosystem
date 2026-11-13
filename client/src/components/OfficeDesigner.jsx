@@ -587,6 +587,7 @@ export default function OfficeDesigner({
   const containerRef = useRef(null);
 
   const canvasRef = useRef(null);
+  const handleWheelRef = useRef(null);
 
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
 
@@ -753,7 +754,7 @@ export default function OfficeDesigner({
     // Non-passive wheel event listener to avoid 'Unable to preventDefault inside passive event listener invocation'
     const canvas = canvasRef.current;
     const onWheelNonPassive = (e) => {
-      handleWheel(e);
+      handleWheelRef.current?.(e);
     };
     if (canvas) {
       canvas.addEventListener('wheel', onWheelNonPassive, { passive: false });
@@ -766,7 +767,7 @@ export default function OfficeDesigner({
       }
     };
 
-  }, [handleWheel]);
+  }, []);
 
   // Grid snap helper
 
@@ -2342,6 +2343,8 @@ export default function OfficeDesigner({
     }
 
   };
+
+  handleWheelRef.current = handleWheel;
 
   // Rotate selected canvas entity or armed drawing tool
 
