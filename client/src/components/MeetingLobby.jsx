@@ -146,8 +146,8 @@ export default function MeetingLobby({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Fetch dynamic rooms from backend API
-  const fetchRooms = async () => {
+  // Fetch dynamic rooms from backend API with automatic retry on cold start
+  const fetchRooms = async (isRetry = false) => {
     setIsRotating(true);
     setLoadingRooms(true);
     try {
@@ -155,9 +155,15 @@ export default function MeetingLobby({
       if (res.ok) {
         const data = await res.json();
         setRooms(Array.isArray(data) ? data : []);
+      } else if (!isRetry) {
+        setTimeout(() => fetchRooms(true), 3000);
       }
     } catch (err) {
       console.warn('[Lobby] Failed to fetch dynamic rooms:', err.message);
+      if (!isRetry) {
+        // Automatically retry in 3 seconds to recover cleanly from Render free-tier cold start
+        setTimeout(() => fetchRooms(true), 3000);
+      }
     } finally {
       setLoadingRooms(false);
       setTimeout(() => setIsRotating(false), 600);

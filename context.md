@@ -383,6 +383,21 @@ ooftop), with custom templates created via the in-app Office Designer.
     * **Universal Component Dimensions & Presets:** Integrated tailored size/scale presets across all 9 components (wall length/core thickness, door width, zone dimensions, table seat sizes, desk configurations, sofa lengths, rack bays, plant radii).
     * **Authentic Material Color Palettes:** Dynamic palette mapping for every model with active ring highlight (warm woods, anodized slate, frosted cyan, obsidian, biophilic greens).
     * **Updated Presets & Inspector:** Updated `Startup Loft` and `Executive Suite` layout presets to instantly deploy architectural workstations, boardroom tables, and breakout sofas. Placed furniture in Object Inspector now loads authentic model-specific color palettes.
+* **Latest Milestone:** Custom Office Designer UI Alignment & Console Error Resolution
+  * **Custom Office Designer Scandinavian Editorial Alignment (`client/src/components/OfficeDesigner.jsx`):**
+    * Overhauled the visual styling of the Custom Office Designer from harsh cyberpunk pitch-black (`#070a13`, `#0b101c`) with electric cyan accents to the warm, minimalist Scandinavian aesthetic of the Landing Page and Meeting Lobby.
+    * Converted root workspace to warm linen `#FAF9F5` with crisp elevated surfaces (`#ffffff`), subtle neutral lines (`#E5E4DE`, `#D9D7D0`), and obsidian typography (`#1c1b1b`).
+    * Re-skinned the top control header with white background, subtle border, rounded-full preset pills (`Startup Loft`, `Executive Suite`, `Clear Floor`), and primary royal blue deploy CTA (`#2563eb`).
+    * Redesigned the 56px left rail and 320px flyout drawer with soft `#FAF9F5` and `#ffffff` backgrounds, sleek segment filters (`All`, `Acoustic`, `Desks`, `Decor`), and clean catalog cards with subtle borders.
+    * Re-themed the Object Inspector and component customizer with clean white cards, subtle material swatches, and accessible inputs.
+    * Redesigned the floating bottom helper HUD as an elevated frosted pill with subtle borders, charcoal text, and clean icons.
+    * Converted the canvas drawing outer world border to clean architectural slate `#e2e8f0`.
+  * **Passive Event Listener Resolution (`WorldCanvas.jsx`, `OfficeDesigner.jsx`):**
+    * Resolved Chrome console errors (`Unable to preventDefault inside passive event listener invocation`) by removing default passive `onWheel` props from JSX canvas elements and binding native non-passive wheel listeners via `addEventListener('wheel', handler, { passive: false })` within `useEffect`.
+  * **Favicon 404 Resolution (`client/public/favicon.svg`, `client/public/favicon.ico`, `client/index.html`):**
+    * Generated brand geometric spatial soundwave favicon in SVG and binary ICO formats, linked in `index.html` with `image/svg+xml` and `alternate icon`, eliminating 404 console errors.
+  * **Render Cold-Start Room Fetch Auto-Retry (`client/src/components/MeetingLobby.jsx`):**
+    * Added automatic 3-second retry logic to `fetchRooms()` so network disruptions or connection resets during Render free-tier container cold starts recover automatically without requiring user page reload.
 * **Latest Milestone:** Meeting Room Redesign — Studio Side Panel, Initials Squircle Avatar & Private Messaging
   * **Meeting Room Page Redesign & Edge-to-Edge Responsive Layout:**
     * Completely overhauled client/src/WorldCanvas.jsx from a centered, fixed-width card layout with dead margins to a full-viewport Studio Workspace (100vw x 100vh).

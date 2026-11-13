@@ -1427,6 +1427,23 @@ export default function WorldCanvas({
     offscreenRef.current = offscreen;
   }, [activeTheme]);
 
+  // Non-passive wheel zoom listener
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onCanvasWheel = (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.08 : 0.08;
+      setZoom((prev) => {
+        const next = Math.min(1.5, Math.max(0.55, Number((prev + delta).toFixed(2))));
+        zoomRef.current = next;
+        return next;
+      });
+    };
+    canvas.addEventListener('wheel', onCanvasWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onCanvasWheel);
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) canvas.focus();
@@ -2726,15 +2743,6 @@ export default function WorldCanvas({
           <canvas
             ref={canvasRef}
             tabIndex={0}
-            onWheel={(e) => {
-              e.preventDefault();
-              const delta = e.deltaY > 0 ? -0.08 : 0.08;
-              setZoom((prev) => {
-                const next = Math.min(1.5, Math.max(0.55, Number((prev + delta).toFixed(2))));
-                zoomRef.current = next;
-                return next;
-              });
-            }}
             onClick={(e) => {
               const canvas = canvasRef.current;
               if (!canvas) return;

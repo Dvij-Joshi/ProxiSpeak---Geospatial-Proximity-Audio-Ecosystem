@@ -750,9 +750,23 @@ export default function OfficeDesigner({
 
     ro.observe(container);
 
-    return () => ro.disconnect();
+    // Non-passive wheel event listener to avoid 'Unable to preventDefault inside passive event listener invocation'
+    const canvas = canvasRef.current;
+    const onWheelNonPassive = (e) => {
+      handleWheel(e);
+    };
+    if (canvas) {
+      canvas.addEventListener('wheel', onWheelNonPassive, { passive: false });
+    }
 
-  }, []);
+    return () => {
+      ro.disconnect();
+      if (canvas) {
+        canvas.removeEventListener('wheel', onWheelNonPassive);
+      }
+    };
+
+  }, [handleWheel]);
 
   // Grid snap helper
 
@@ -961,7 +975,7 @@ export default function OfficeDesigner({
 
     // 1. World Deep Space Border
 
-    ctx.fillStyle = '#060911';
+    ctx.fillStyle = '#e2e8f0';
 
     ctx.fillRect(0, 0, WORLD_W, WORLD_H);
 
@@ -3137,11 +3151,11 @@ export default function OfficeDesigner({
 
   return (
 
-    <div className="flex flex-col h-screen w-screen bg-[#070a13] text-[#e2e8f0] select-none overflow-hidden font-['Inter',sans-serif]">
+    <div className="flex flex-col h-screen w-screen bg-[#FAF9F5] text-[#1c1b1b] select-none overflow-hidden font-['Inter',sans-serif]">
 
       {/* Top Studio Control Header */}
 
-      <header onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }} className="h-12 border-b border-[#182030] bg-[#0b101c] px-3.5 flex items-center justify-between z-30 shrink-0">
+      <header onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }} className="h-14 border-b border-[#E5E4DE] bg-[#ffffff] px-4 flex items-center justify-between z-30 shrink-0 shadow-xs">
 
         <div className="flex items-center gap-2.5">
 
@@ -3149,7 +3163,7 @@ export default function OfficeDesigner({
 
             onClick={onBackToLobby}
 
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#131b2a] hover:bg-[#1a253a] text-xs font-semibold text-[#cbd5e1] border border-[#202c42] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF9F5] hover:bg-[#F4F3EF] text-xs font-semibold text-[#1c1b1b] border border-[#D9D7D0] transition-colors cursor-pointer"
 
             title="Return to Space Lobby"
 
@@ -3161,7 +3175,7 @@ export default function OfficeDesigner({
 
           </button>
 
-          <div className="h-4 w-[1px] bg-[#1e293b]" />
+          <div className="h-4 w-[1px] bg-[#E5E4DE]" />
 
           <div className="flex items-center gap-1.5">
 
@@ -3175,7 +3189,7 @@ export default function OfficeDesigner({
 
               onChange={(e) => setOfficeName(e.target.value)}
 
-              className="bg-transparent border-b border-transparent hover:border-[#38bdf8]/50 focus:border-[#38bdf8] focus:outline-none text-xs font-bold text-white px-1 py-0.5 rounded transition-all w-48 sm:w-60"
+              className="bg-transparent border-b border-transparent hover:border-[#2563eb]/50 focus:border-[#2563eb] focus:outline-none text-xs font-bold text-[#1c1b1b] px-1 py-0.5 rounded transition-all w-48 sm:w-60"
 
               placeholder="Custom Office Name"
 
@@ -3183,7 +3197,7 @@ export default function OfficeDesigner({
 
           </div>
 
-          <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#131b2a] border border-[#202c42] text-[#94a3b8]">
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-[#FAF9F5] border border-[#D9D7D0] text-[#5e5f5c]">
 
             {organization?.name || 'Workspace HQ'}
 
@@ -3199,7 +3213,7 @@ export default function OfficeDesigner({
 
             onClick={() => handleLoadPreset('startup')}
 
-            className="px-2.5 py-1 text-xs rounded bg-[#111726] hover:bg-[#192336] text-[#94a3b8] hover:text-white border border-[#1b2538] transition-colors"
+            className="px-3 py-1 text-xs rounded-full bg-[#F4F3EF] hover:bg-[#E9E8E4] text-[#1c1b1b] border border-[#D9D7D0] font-medium transition-colors cursor-pointer"
 
           >
 
@@ -3211,7 +3225,7 @@ export default function OfficeDesigner({
 
             onClick={() => handleLoadPreset('executive')}
 
-            className="px-2.5 py-1 text-xs rounded bg-[#111726] hover:bg-[#192336] text-[#94a3b8] hover:text-white border border-[#1b2538] transition-colors"
+            className="px-3 py-1 text-xs rounded-full bg-[#F4F3EF] hover:bg-[#E9E8E4] text-[#1c1b1b] border border-[#D9D7D0] font-medium transition-colors cursor-pointer"
 
           >
 
@@ -3223,7 +3237,7 @@ export default function OfficeDesigner({
 
             onClick={() => handleLoadPreset('clear')}
 
-            className="px-2.5 py-1 text-xs rounded bg-[#111726] hover:bg-[#26151a] text-[#f87171] hover:text-[#ef4444] border border-[#1b2538] hover:border-red-900/50 transition-colors"
+            className="px-3 py-1 text-xs rounded-full bg-[#fef2f2] hover:bg-[#fee2e2] text-[#dc2626] border border-[#fecaca] font-medium transition-colors cursor-pointer"
 
           >
 
@@ -3247,9 +3261,9 @@ export default function OfficeDesigner({
 
               gridSnap
 
-                ? 'bg-[#0284c7]/20 text-[#38bdf8] border-[#0284c7]/60'
+                ? 'bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe] font-semibold'
 
-                : 'bg-[#111726] text-[#64748b] border-[#1b2538]'
+                : 'bg-[#F4F3EF] text-[#5e5f5c] border-[#D9D7D0]'
 
             }`}
 
@@ -3269,7 +3283,7 @@ export default function OfficeDesigner({
 
             onClick={() => handleRotate(45)}
 
-            className="px-2.5 py-1 rounded bg-[#111726] hover:bg-[#182338] text-xs font-medium text-[#38bdf8] border border-[#1d273a] flex items-center gap-1 transition-colors"
+            className="px-3 py-1 rounded-full bg-[#F4F3EF] hover:bg-[#E9E8E4] text-xs font-semibold text-[#1c1b1b] border border-[#D9D7D0] flex items-center gap-1 transition-colors cursor-pointer"
 
             title="Rotate Component (Scroll Wheel / Hotkey: R)"
 
@@ -3287,7 +3301,7 @@ export default function OfficeDesigner({
 
             disabled={isSaving}
 
-            className="flex items-center gap-1.5 px-3.5 py-1 rounded-md bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-md shadow-blue-500/20 border border-blue-400/40 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-md shadow-blue-500/20 border-none transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer"
 
           >
 
@@ -3307,7 +3321,7 @@ export default function OfficeDesigner({
 
         {/* Left Fixed Rail Bar (56px width, always clickable) */}
 
-        <aside onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }} className="w-14 h-full bg-[#0a0e17] border-r border-[#171f2e] flex flex-col items-center py-2 shrink-0 z-20 select-none justify-between">
+        <aside onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }} className="w-14 h-full bg-[#FAF9F5] border-r border-[#E5E4DE] flex flex-col items-center py-2 shrink-0 z-20 select-none justify-between">
 
           {/* Top Rail Section: Toggle Drawer + Mode Switchers */}
 
@@ -3323,9 +3337,9 @@ export default function OfficeDesigner({
 
                 isPanelOpen
 
-                  ? 'bg-[#162033] text-[#38bdf8] border border-[#23334d]'
+                  ? 'bg-[#ffffff] text-[#1c1b1b] border border-[#D9D7D0] shadow-xs'
 
-                  : 'text-[#94a3b8] hover:text-white hover:bg-[#121927]'
+                  : 'text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#EBEAE5]'
 
               }`}
 
@@ -3341,7 +3355,7 @@ export default function OfficeDesigner({
 
             </button>
 
-            <div className="w-7 h-[1px] bg-[#1a2334] my-0.5" />
+            <div className="w-7 h-[1px] bg-[#E5E4DE] my-0.5" />
 
             {/* Mode 1: Catalog */}
 
@@ -3359,9 +3373,9 @@ export default function OfficeDesigner({
 
                 panelTab === 'catalog' && isPanelOpen
 
-                  ? 'bg-blue-600/20 text-[#38bdf8] border border-blue-500/40'
+                  ? 'bg-[#1c1b1b] text-white border border-[#1c1b1b] shadow-xs'
 
-                  : 'text-[#64748b] hover:text-[#cbd5e1] hover:bg-[#121927]'
+                  : 'text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#EBEAE5]'
 
               }`}
 
@@ -3389,9 +3403,9 @@ export default function OfficeDesigner({
 
                 panelTab === 'inspector' && isPanelOpen
 
-                  ? 'bg-blue-600/20 text-[#38bdf8] border border-blue-500/40'
+                  ? 'bg-[#1c1b1b] text-white border border-[#1c1b1b] shadow-xs'
 
-                  : 'text-[#64748b] hover:text-[#cbd5e1] hover:bg-[#121927]'
+                  : 'text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#EBEAE5]'
 
               }`}
 
@@ -3425,9 +3439,9 @@ export default function OfficeDesigner({
 
                 panelTab === 'presets' && isPanelOpen
 
-                  ? 'bg-blue-600/20 text-[#38bdf8] border border-blue-500/40'
+                  ? 'bg-[#1c1b1b] text-white border border-[#1c1b1b] shadow-xs'
 
-                  : 'text-[#64748b] hover:text-[#cbd5e1] hover:bg-[#121927]'
+                  : 'text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#EBEAE5]'
 
               }`}
 
@@ -3445,7 +3459,7 @@ export default function OfficeDesigner({
 
           <div className="flex flex-col items-center gap-1 w-full my-auto overflow-y-auto no-scrollbar py-1">
 
-            <div className="w-7 h-[1px] bg-[#1a2334] my-0.5" />
+            <div className="w-7 h-[1px] bg-[#E5E4DE] my-0.5" />
 
             {TOOLS.map((tool) => {
 
@@ -3470,9 +3484,9 @@ export default function OfficeDesigner({
 
                     isActive
 
-                      ? 'bg-[#162238] text-white border border-[#38bdf8]/70 shadow-sm'
+                      ? 'bg-[#1c1b1b] text-white border border-[#1c1b1b] shadow-xs'
 
-                      : 'text-[#64748b] hover:text-white hover:bg-[#111726]'
+                      : 'text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#EBEAE5]'
 
                   }`}
 
@@ -3484,7 +3498,7 @@ export default function OfficeDesigner({
 
                   {isActive && (
 
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2.5px] h-4 bg-[#38bdf8] rounded-r-full shadow-[0_0_6px_#38bdf8]" />
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-[#FF4B2B] rounded-r-full" />
 
                   )}
 
@@ -3498,13 +3512,13 @@ export default function OfficeDesigner({
 
           {/* Bottom Zoom & Reset Utilities */}
 
-          <div className="flex flex-col items-center gap-1 w-full pt-1 border-t border-[#171f2e]">
+          <div className="flex flex-col items-center gap-1 w-full pt-1 border-t border-[#E5E4DE]">
 
             <button
 
               onClick={() => setZoom((z) => Math.min(1.5, z + 0.1))}
 
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#64748b] hover:text-white hover:bg-[#121927] transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#EBEAE5] transition-colors"
 
               title="Zoom In"
 
@@ -3524,7 +3538,7 @@ export default function OfficeDesigner({
 
               onClick={() => setZoom((z) => Math.max(0.35, z - 0.1))}
 
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#64748b] hover:text-white hover:bg-[#121927] transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#EBEAE5] transition-colors"
 
               title="Zoom Out"
 
@@ -3544,7 +3558,7 @@ export default function OfficeDesigner({
 
               }}
 
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#64748b] hover:text-[#38bdf8] hover:bg-[#121927] transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#5e5f5c] hover:text-[#2563eb] hover:bg-[#EBEAE5] transition-colors"
 
               title="Center Canvas"
 
@@ -3564,7 +3578,8 @@ export default function OfficeDesigner({
 
           onPointerEnter={() => { setHoveredExpansionArrow(null); setCursorPos((prev) => ({ ...prev, isOver: false })); }}
 
-          className={`h-full bg-[#0d131f] border-r border-[#1a2333] transition-[width,opacity] duration-300 ease-in-out shrink-0 overflow-hidden z-10 flex flex-col ${
+          className={`h-full bg-[#ffffff] border-r border-[#E5E4DE] transition-[width,opacity] duration-300 ease-in-out shrink-0 overflow-hidden z-10 flex flex-col ${
+
 
             isPanelOpen ? 'w-80 opacity-100' : 'w-0 opacity-0 pointer-events-none border-r-0'
 
@@ -3578,7 +3593,7 @@ export default function OfficeDesigner({
 
             {/* Drawer Top Navigation Header */}
 
-            <div className="h-11 px-3 border-b border-[#171f2e] flex items-center justify-between shrink-0 bg-[#0a0e17]">
+            <div className="h-12 px-3.5 border-b border-[#E5E4DE] flex items-center justify-between shrink-0 bg-[#FAF9F5]">
 
               <div className="flex items-center gap-1.5">
 
@@ -3588,7 +3603,7 @@ export default function OfficeDesigner({
 
                 </span>
 
-                <span className="text-[11px] font-bold uppercase tracking-wider text-white">
+                <span className="text-[12px] font-bold uppercase tracking-wider text-[#1c1b1b]">
 
                   {panelTab === 'catalog' ? 'Studio Components' : panelTab === 'inspector' ? 'Object Inspector' : 'Floor Templates'}
 
@@ -3620,7 +3635,7 @@ export default function OfficeDesigner({
 
                 {/* Search & Segment Control */}
 
-                <div className="p-2.5 border-b border-[#171f2e] space-y-2 shrink-0 bg-[#0c121e]">
+                <div className="p-3 border-b border-[#E5E4DE] space-y-2 shrink-0 bg-[#ffffff]">
 
                   <div className="relative">
 
@@ -3640,7 +3655,7 @@ export default function OfficeDesigner({
 
                       placeholder="Filter components (e.g. wall, desk)..."
 
-                      className="w-full bg-[#111726] border border-[#1d273a] focus:border-[#38bdf8] rounded-md pl-8 pr-7 py-1 text-xs text-white placeholder-[#64748b] focus:outline-none transition-colors"
+                      className="w-full bg-[#FAF9F5] border border-[#D9D7D0] focus:border-[#2563eb] rounded-lg pl-8 pr-7 py-1.5 text-xs text-[#1c1b1b] placeholder-[#8C8880] focus:outline-none transition-colors"
 
                     />
 
@@ -3664,7 +3679,7 @@ export default function OfficeDesigner({
 
                   {/* 4-Segment Clean Category Bar */}
 
-                  <div className="grid grid-cols-4 gap-1 p-0.5 bg-[#090d16] rounded-md border border-[#171f2e] text-[10px]">
+                  <div className="grid grid-cols-4 gap-1 p-1 bg-[#F4F3EF] rounded-lg border border-[#E5E4DE] text-[10px]">
 
                     {[
 
@@ -3688,9 +3703,9 @@ export default function OfficeDesigner({
 
                           activeCategory === cat.id
 
-                            ? 'bg-[#182338] text-white shadow-sm font-semibold'
+                            ? 'bg-[#1c1b1b] text-white shadow-xs font-semibold'
 
-                            : 'text-[#64748b] hover:text-[#cbd5e1]'
+                            : 'text-[#5e5f5c] hover:text-[#1c1b1b]'
 
                         }`}
 
@@ -3730,7 +3745,7 @@ export default function OfficeDesigner({
                     return (
                       <div
                         onClick={() => setIsCustomizerExpanded(true)}
-                        className="mx-2.5 my-1.5 px-2.5 py-1.5 rounded-lg bg-[#0a0f1d] border border-[#1b263b] hover:border-[#38bdf8]/50 cursor-pointer flex items-center justify-between transition-all group shrink-0"
+                        className="mx-2.5 my-1.5 px-3 py-2 rounded-xl bg-[#FAF9F5] border border-[#E5E4DE] hover:border-[#D9D7D0] cursor-pointer flex items-center justify-between transition-all group shrink-0 shadow-xs"
                         title="Click to expand model variations & specs"
                       >
                         <div className="flex items-center gap-2 min-w-0">
@@ -3746,10 +3761,10 @@ export default function OfficeDesigner({
                               {activeModel?.icon || armedToolDetails.icon}
                             </span>
                           </div>
-                          <span className="text-[11px] font-bold text-white truncate">
+                          <span className="text-[11px] font-bold text-[#1c1b1b] truncate">
                             {activeModel?.shortName || armedToolDetails.label}
                           </span>
-                          <span className="text-[8.5px] font-mono px-1.5 py-0.2 rounded bg-[#131d2e] text-[#38bdf8] border border-[#38bdf8]/30 shrink-0">
+                          <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#ffffff] text-[#2563eb] border border-[#bfdbfe] font-semibold shrink-0">
                             {getDimensionSummary()}
                           </span>
                           {curCustom.color && (
@@ -3769,9 +3784,9 @@ export default function OfficeDesigner({
 
                   {/* State B: Expanded Studio Customizer Panel */}
                   return (
-                    <div className="mx-2.5 my-1.5 rounded-xl bg-[#090e1a] border border-[#1c283f] overflow-hidden shadow-lg transition-all shrink-0">
+                    <div className="mx-2.5 my-1.5 rounded-xl bg-[#ffffff] border border-[#E5E4DE] overflow-hidden shadow-sm transition-all shrink-0">
                       {/* Subpanel Header */}
-                      <div className="px-2.5 py-1.5 bg-[#0d1424] border-b border-[#172238] flex items-center justify-between">
+                      <div className="px-3 py-2 bg-[#FAF9F5] border-b border-[#E5E4DE] flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <div
                             className="w-5 h-5 rounded flex items-center justify-center shrink-0"
@@ -3785,10 +3800,10 @@ export default function OfficeDesigner({
                               {armedToolDetails.icon}
                             </span>
                           </div>
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-white truncate">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-[#1c1b1b] truncate">
                             {armedToolDetails.label}
                           </span>
-                          <span className="text-[8px] font-mono font-bold px-1.5 py-0.2 rounded bg-sky-950/60 text-[#38bdf8] border border-sky-700/40 shrink-0">
+                          <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#eff6ff] text-[#2563eb] border border-[#bfdbfe] shrink-0">
                             ARMED
                           </span>
                         </div>
@@ -3847,7 +3862,7 @@ export default function OfficeDesigner({
                                   className={`p-1 rounded-md border text-left transition-all flex items-center gap-1.5 ${
                                     isSelected
                                       ? 'bg-[#142238] border-[#38bdf8] text-white shadow-sm'
-                                      : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white hover:border-[#22334f]'
+                                      : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                   }`}
                                   title={model.desc}
                                 >
@@ -3895,8 +3910,8 @@ export default function OfficeDesigner({
                                     onClick={() => setToolCustomization((p) => ({ ...p, wall: { ...p.wall, length: len } }))}
                                     className={`py-0.5 text-[8.5px] font-mono rounded border transition-colors ${
                                       curCustom.length === len
-                                        ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] font-bold'
-                                        : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white'
+                                        ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-bold'
+                                        : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                     }`}
                                   >
                                     {len}px
@@ -3915,8 +3930,8 @@ export default function OfficeDesigner({
                                     onClick={() => setToolCustomization((p) => ({ ...p, wall: { ...p.wall, thickness: t.val } }))}
                                     className={`px-1.5 py-0.2 text-[8px] rounded border transition-colors ${
                                       curCustom.thickness === t.val
-                                        ? 'bg-[#18253a] border-[#38bdf8] text-white font-semibold'
-                                        : 'bg-[#0b101c] border-[#162136] text-[#64748b] hover:text-[#94a3b8]'
+                                        ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-semibold'
+                                        : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                     }`}
                                   >
                                     {t.label}
@@ -3940,8 +3955,8 @@ export default function OfficeDesigner({
                                   onClick={() => setToolCustomization((p) => ({ ...p, door: { ...p.door, width: d.val } }))}
                                   className={`py-0.5 text-[8.5px] font-mono rounded border transition-colors ${
                                     curCustom.width === d.val
-                                      ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] font-bold'
-                                      : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white'
+                                      ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-bold'
+                                      : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                   }`}
                                 >
                                   {d.label}
@@ -3963,8 +3978,8 @@ export default function OfficeDesigner({
                                   onClick={() => setToolCustomization((p) => ({ ...p, zone: { ...p.zone, width: pre.w, height: pre.h } }))}
                                   className={`py-0.5 text-[8px] font-medium rounded border transition-colors ${
                                     curCustom.width === pre.w && curCustom.height === pre.h
-                                      ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] font-bold'
-                                      : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white'
+                                      ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-bold'
+                                      : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                   }`}
                                 >
                                   {pre.label}
@@ -3986,8 +4001,8 @@ export default function OfficeDesigner({
                                   onClick={() => setToolCustomization((p) => ({ ...p, conf_table: { ...p.conf_table, w: pre.w, h: pre.h, seats: pre.seats } }))}
                                   className={`py-0.5 text-[8px] font-medium rounded border transition-colors ${
                                     curCustom.w === pre.w && curCustom.h === pre.h
-                                      ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] font-bold'
-                                      : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white'
+                                      ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-bold'
+                                      : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                   }`}
                                 >
                                   {pre.label}
@@ -4009,8 +4024,8 @@ export default function OfficeDesigner({
                                   onClick={() => setToolCustomization((p) => ({ ...p, desk: { ...p.desk, w: pre.w, h: pre.h } }))}
                                   className={`py-0.5 text-[8px] font-medium rounded border transition-colors ${
                                     curCustom.w === pre.w && curCustom.h === pre.h
-                                      ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] font-bold'
-                                      : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white'
+                                      ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-bold'
+                                      : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                   }`}
                                 >
                                   {pre.label}
@@ -4032,8 +4047,8 @@ export default function OfficeDesigner({
                                   onClick={() => setToolCustomization((p) => ({ ...p, sofa: { ...p.sofa, w: pre.w, h: pre.h } }))}
                                   className={`py-0.5 text-[8px] font-medium rounded border transition-colors ${
                                     curCustom.w === pre.w && curCustom.h === pre.h
-                                      ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] font-bold'
-                                      : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white'
+                                      ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-bold'
+                                      : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                   }`}
                                 >
                                   {pre.label}
@@ -4055,8 +4070,8 @@ export default function OfficeDesigner({
                                   onClick={() => setToolCustomization((p) => ({ ...p, server_rack: { ...p.server_rack, w: pre.w, h: pre.h } }))}
                                   className={`py-0.5 text-[8px] font-medium rounded border transition-colors ${
                                     curCustom.w === pre.w && curCustom.h === pre.h
-                                      ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] font-bold'
-                                      : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white'
+                                      ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-bold'
+                                      : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                   }`}
                                 >
                                   {pre.label}
@@ -4078,8 +4093,8 @@ export default function OfficeDesigner({
                                   onClick={() => setToolCustomization((p) => ({ ...p, plant: { ...p.plant, r: pre.r } }))}
                                   className={`py-0.5 text-[8px] font-medium rounded border transition-colors ${
                                     curCustom.r === pre.r
-                                      ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] font-bold'
-                                      : 'bg-[#0b101c] border-[#162136] text-[#818ea3] hover:text-white'
+                                      ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-bold'
+                                      : 'bg-[#F4F3EF] border-[#D9D7D0] text-[#5e5f5c] hover:text-[#1c1b1b] hover:bg-[#E9E8E4]'
                                   }`}
                                 >
                                   {pre.label}
@@ -4147,11 +4162,11 @@ export default function OfficeDesigner({
 
                         {/* Section Header */}
 
-                        <div className="px-1 pt-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                        <div className="px-1 pt-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#5e5f5c]">
 
                           <span className="flex items-center gap-1.5">
 
-                            <span className="material-symbols-outlined text-[13px] text-[#38bdf8]">
+                            <span className="material-symbols-outlined text-[14px] text-[#2563eb]">
 
                               {section.icon}
 
@@ -4196,9 +4211,9 @@ export default function OfficeDesigner({
 
                                   isActive
 
-                                    ? 'bg-[#152033] border-[#38bdf8] shadow-[0_0_12px_rgba(56,189,248,0.18)]'
+                                    ? 'bg-[#eff6ff] border-2 border-[#2563eb] shadow-xs'
 
-                                    : 'bg-[#0f1524] border-[#182133] hover:border-[#263550] hover:bg-[#131b2e]'
+                                    : 'bg-[#ffffff] border border-[#EBEAE5] hover:border-[#D9D7D0] hover:bg-[#FAF9F5] shadow-xs'
 
                                 }`}
 
@@ -4236,7 +4251,7 @@ export default function OfficeDesigner({
 
                                     <div className="flex items-center gap-1.5">
 
-                                      <span className="text-[12px] font-semibold text-slate-100 truncate group-hover:text-white">
+                                      <span className="text-[12px] font-semibold text-[#1c1b1b] truncate">
 
                                         {tool.label}
 
@@ -4377,11 +4392,11 @@ export default function OfficeDesigner({
 
                     {/* Spatial Geometry Matrix */}
 
-                    <div className="p-2.5 rounded-lg bg-[#0c121e] border border-[#172133] space-y-1.5">
+                    <div className="p-3 rounded-xl bg-[#ffffff] border border-[#E5E4DE] shadow-xs space-y-1.5">
 
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8] flex items-center gap-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#5e5f5c] flex items-center gap-1">
 
-                        <span className="material-symbols-outlined text-[13px] text-[#38bdf8]">
+                        <span className="material-symbols-outlined text-[14px] text-[#2563eb]">
 
                           straighten
 
@@ -4431,13 +4446,13 @@ export default function OfficeDesigner({
 
                     {/* Rotation & Orientation Controls */}
 
-                    <div className="p-2.5 rounded-lg bg-[#0c121e] border border-[#172133] space-y-2">
+                    <div className="p-3 rounded-xl bg-[#ffffff] border border-[#E5E4DE] shadow-xs space-y-2">
 
-                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#5e5f5c]">
 
                         <span className="flex items-center gap-1">
 
-                          <span className="material-symbols-outlined text-[13px] text-[#38bdf8]">rotate_right</span>
+                          <span className="material-symbols-outlined text-[14px] text-[#2563eb]">rotate_right</span>
 
                           <span>Orientation Angle</span>
 
@@ -4499,13 +4514,13 @@ export default function OfficeDesigner({
 
                     {['wall', 'door', 'zone', 'furniture'].includes(selectedItem.type) && (
 
-                      <div className="p-2.5 rounded-lg bg-[#0c121e] border border-[#172133] space-y-2">
+                      <div className="p-3 rounded-xl bg-[#ffffff] border border-[#E5E4DE] shadow-xs space-y-2">
 
-                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#5e5f5c]">
 
                           <span className="flex items-center gap-1">
 
-                            <span className="material-symbols-outlined text-[13px] text-[#38bdf8]">style</span>
+                            <span className="material-symbols-outlined text-[14px] text-[#2563eb]">style</span>
 
                             <span>Model Variation</span>
 
@@ -4553,9 +4568,9 @@ export default function OfficeDesigner({
 
                                   isCur
 
-                                    ? 'bg-[#152238] border-[#38bdf8] text-white font-semibold'
+                                    ? 'bg-[#eff6ff] border-2 border-[#2563eb] text-[#1e40af] font-semibold'
 
-                                    : 'bg-[#101726] border-[#1a2538] text-[#818ea3] hover:text-white'
+                                    : 'bg-[#FAF9F5] border-[#E5E4DE] text-[#1c1b1b] hover:bg-[#F4F3EF]'
 
                                 }`}
 
@@ -4581,9 +4596,9 @@ export default function OfficeDesigner({
 
                         {/* Color Swatches for Placed Entity */}
 
-                        <div className="pt-1.5 border-t border-[#172133] space-y-1">
+                        <div className="pt-1.5 border-t border-[#E5E4DE] space-y-1">
 
-                          <span className="text-[9.5px] font-semibold text-[#818ea3] block uppercase tracking-wider">
+                          <span className="text-[9.5px] font-semibold text-[#5e5f5c] block uppercase tracking-wider">
 
                             Material Color
 
@@ -4680,9 +4695,9 @@ export default function OfficeDesigner({
 
                     {/* ProxiSpeak Acoustic Audio Profile */}
 
-                    <div className="p-2.5 rounded-lg bg-[#0c121e] border border-[#172133] space-y-1">
+                    <div className="p-3 rounded-xl bg-[#ffffff] border border-[#E5E4DE] shadow-xs space-y-1">
 
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8] flex items-center gap-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#5e5f5c] flex items-center gap-1">
 
                         <span className="material-symbols-outlined text-[13px] text-[#10b981]">
 
@@ -4760,7 +4775,7 @@ export default function OfficeDesigner({
 
                         onClick={() => setSelectedItem(null)}
 
-                        className="w-full py-1 px-2.5 rounded-md bg-[#121927] hover:bg-[#182338] border border-[#1b263b] text-[#94a3b8] text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                        className="w-full py-1 px-2.5 rounded-md bg-[#121927] hover:bg-[#182338] border border-[#1b263b] text-[#5e5f5c] text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
 
                       >
 
@@ -4834,7 +4849,7 @@ export default function OfficeDesigner({
 
                           </div>
 
-                          <div className="text-[10px] text-[#94a3b8]">
+                          <div className="text-[10px] text-[#5e5f5c]">
 
                             {armedToolDetails.badge}
 
@@ -4854,13 +4869,13 @@ export default function OfficeDesigner({
 
                     {/* Armed Tool Rotation Controls */}
 
-                    <div className="p-2.5 rounded-lg bg-[#0c121e] border border-[#172133] space-y-2">
+                    <div className="p-3 rounded-xl bg-[#ffffff] border border-[#E5E4DE] shadow-xs space-y-2">
 
-                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#5e5f5c]">
 
                         <span className="flex items-center gap-1">
 
-                          <span className="material-symbols-outlined text-[13px] text-[#38bdf8]">rotate_right</span>
+                          <span className="material-symbols-outlined text-[14px] text-[#2563eb]">rotate_right</span>
 
                           <span>Deployment Angle</span>
 
@@ -4912,7 +4927,7 @@ export default function OfficeDesigner({
 
                     {/* How to Plot & Use */}
 
-                    <div className="p-2.5 rounded-lg bg-[#0c121e] border border-[#172133] space-y-1.5 text-xs text-[#94a3b8]">
+                    <div className="p-3 rounded-xl bg-[#ffffff] border border-[#E5E4DE] shadow-xs space-y-1.5 text-xs text-[#5e5f5c]">
 
                       <div className="text-[10px] font-bold uppercase tracking-wider text-[#38bdf8] flex items-center gap-1">
 
@@ -4938,11 +4953,11 @@ export default function OfficeDesigner({
 
                     {/* Floor Blueprint Telemetry */}
 
-                    <div className="p-2.5 rounded-lg bg-[#0c121e] border border-[#172133] space-y-2">
+                    <div className="p-3 rounded-xl bg-[#ffffff] border border-[#E5E4DE] shadow-xs space-y-2">
 
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8] flex items-center gap-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#5e5f5c] flex items-center gap-1">
 
-                        <span className="material-symbols-outlined text-[13px] text-[#38bdf8]">
+                        <span className="material-symbols-outlined text-[14px] text-[#2563eb]">
 
                           analytics
 
@@ -5004,7 +5019,7 @@ export default function OfficeDesigner({
 
               <div className="flex-1 overflow-y-auto studio-scrollbar p-3 space-y-2 min-h-0">
 
-                <div className="text-[11px] text-[#94a3b8] pb-1">
+                <div className="text-[11px] text-[#5e5f5c] pb-1">
 
                   Load ready-made architectural layouts:
 
@@ -5038,7 +5053,7 @@ export default function OfficeDesigner({
 
                     </div>
 
-                    <p className="text-[10.5px] text-[#818ea3] leading-snug">
+                    <p className="text-[10.5px] text-[#5e5f5c] leading-snug">
 
                       {preset.description}
 
@@ -5054,11 +5069,11 @@ export default function OfficeDesigner({
 
             {/* Drawer Bottom Status Pill */}
 
-            <div className="p-2 border-t border-[#171f2e] bg-[#090d16] shrink-0 text-[10px] text-[#64748b] flex items-center justify-between">
+            <div className="p-2.5 border-t border-[#E5E4DE] bg-[#FAF9F5] shrink-0 text-[10px] text-[#5e5f5c] flex items-center justify-between">
 
               <span>Tool: <strong className="text-white font-mono uppercase">{activeTool}</strong></span>
 
-              <span className="font-mono text-[#818ea3]">Angle: {rotationAngle}° · [R] Rotate</span>
+              <span className="font-mono text-[#5e5f5c]">Angle: {rotationAngle}° · [R] Rotate</span>
 
             </div>
 
@@ -5068,13 +5083,13 @@ export default function OfficeDesigner({
 
         {/* Dynamic Studio Canvas Viewport (Automatically takes remaining space) */}
 
-        <main ref={containerRef} className="flex-1 h-full relative overflow-hidden bg-[#070b12] min-w-0">
+        <main ref={containerRef} className="flex-1 h-full relative overflow-hidden bg-[#FAF9F5] min-w-0">
 
           {/* Toast Notification */}
 
           {saveToast && (
 
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-lg bg-[#0f172a] border border-[#23334d] text-white text-xs font-medium shadow-2xl flex items-center gap-2.5">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-full bg-white border border-[#fecaca] text-[#dc2626] text-xs font-semibold shadow-xl flex items-center gap-2.5">
 
               <span className="material-symbols-outlined text-[#10b981] text-[16px]">
 
@@ -5144,19 +5159,17 @@ export default function OfficeDesigner({
 
             onPointerLeave={handlePointerLeave}
 
-            onWheel={handleWheel}
-
             className={`w-full h-full block ${canvasCursor}`}
 
           />
 
           {/* Bottom Floating Helper Bar with Rotation HUD */}
 
-          <footer className="absolute bottom-2.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-[#0a0f1c]/85 backdrop-blur-md border border-[#172133] text-[10.5px] text-[#818ea3] flex items-center gap-3 z-10 shadow-lg pointer-events-none">
+          <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/95 backdrop-blur-md border border-[#D9D7D0] text-[11px] text-[#1c1b1b] flex items-center gap-3.5 z-10 shadow-lg pointer-events-none">
 
             <span className="flex items-center gap-1">
 
-              <span className="material-symbols-outlined text-[13px] text-[#38bdf8]">mouse</span>
+              <span className="material-symbols-outlined text-[14px] text-[#2563eb]">mouse</span>
 
               <span>Click to place</span>
 
@@ -5164,7 +5177,7 @@ export default function OfficeDesigner({
 
             <span>•</span>
 
-            <span className="flex items-center gap-1 text-[#38bdf8] font-medium">
+            <span className="flex items-center gap-1 text-[#2563eb] font-semibold">
 
               <span className="material-symbols-outlined text-[13px]">rotate_right</span>
 
@@ -5176,7 +5189,7 @@ export default function OfficeDesigner({
 
             <span className="flex items-center gap-1">
 
-              <span className="material-symbols-outlined text-[13px] text-[#38bdf8]">pan_tool</span>
+              <span className="material-symbols-outlined text-[14px] text-[#2563eb]">pan_tool</span>
 
               <span>Shift + Drag to pan</span>
 
