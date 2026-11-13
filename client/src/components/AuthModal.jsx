@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { SERVER_URL, AVATAR_COLORS } from '../config';
+import { getInitials } from '../utils/avatar';
 
 export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
   const [isLogin, setIsLogin] = useState(true);
   const [identifier, setIdentifier] = useState('');
   const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,11 +33,16 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
     setSuggestSwitch(null);
     if (identifier.includes('@')) {
       setEmail(identifier.trim());
-      if (!username) {
-        setUsername(identifier.split('@')[0]);
+      if (!firstName && !lastName) {
+        const raw = identifier.split('@')[0];
+        const parts = raw.split(/[._-]/);
+        setFirstName(parts[0] || '');
+        setLastName(parts[1] || '');
       }
     } else {
-      setUsername(identifier.trim());
+      const parts = identifier.trim().split(/\s+/);
+      setFirstName(parts[0] || '');
+      setLastName(parts.slice(1).join(' ') || '');
     }
   };
 
@@ -44,6 +52,8 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
     setSuggestSwitch(null);
     if (email) {
       setIdentifier(email.trim());
+    } else if (firstName || lastName) {
+      setIdentifier(`${firstName.trim()} ${lastName.trim()}`.trim());
     } else if (username) {
       setIdentifier(username.trim());
     }
@@ -60,8 +70,12 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
         return;
       }
     } else {
-      if (!username.trim() || username.trim().length < 2) {
-        setError('Display name must be at least 2 characters long.');
+      if (!firstName.trim()) {
+        setError('Please enter your first name.');
+        return;
+      }
+      if (!lastName.trim()) {
+        setError('Please enter your surname / last name.');
         return;
       }
       if (!email.trim() || !email.includes('@')) {
@@ -81,7 +95,9 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
       const payload = isLogin
         ? { identifier: identifier.trim(), password }
         : {
-            username: username.trim(),
+            username: `${firstName.trim()} ${lastName.trim()}`,
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
             email: email.trim().toLowerCase(),
             password,
             avatarColor: selectedColor || '#FF4B2B',
@@ -455,25 +471,68 @@ export default function AuthModal({ onAuthSuccess, onClose, defaultRoomName }) {
               ) : (
                 /* ── Registration Form ── */
                 <>
-                  <div>
-                    <label className="block text-xs font-medium text-[#5e5f5c] mb-1.5">
-                      Display name
-                    </label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8880] text-[18px]">
-                        person
-                      </span>
-                      <input
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="Alex Rivera"
-                        autoComplete="name"
-                        maxLength={30}
-                        required
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#F4F3EF] border border-[#D9D7D0] text-sm text-[#1c1b1b] placeholder:text-[#BDBAB2] focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#1c1b1b] focus:border-[#1c1b1b] transition-all font-sans"
-                      />
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-xs font-medium text-[#5e5f5c] mb-1.5">
+                        First name
+                      </label>
+                      <div className="relative">
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8C8880] text-[17px]">
+                          badge
+                        </span>
+                        <input
+                          type="text"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="Dvij"
+                          autoComplete="given-name"
+                          required
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#F4F3EF] border border-[#D9D7D0] text-sm text-[#1c1b1b] placeholder:text-[#BDBAB2] focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#1c1b1b] focus:border-[#1c1b1b] transition-all font-sans"
+                        />
+                      </div>
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[#5e5f5c] mb-1.5">
+                        Surname
+                      </label>
+                      <div className="relative">
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8C8880] text-[17px]">
+                          person
+                        </span>
+                        <input
+                          type="text"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="Joshi"
+                          autoComplete="family-name"
+                          required
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#F4F3EF] border border-[#D9D7D0] text-sm text-[#1c1b1b] placeholder:text-[#BDBAB2] focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#1c1b1b] focus:border-[#1c1b1b] transition-all font-sans"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Avatar Initials Box Preview */}
+                  <div className="p-3 rounded-xl bg-[#F4F3EF] border border-[#E5E4DE] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        style={{ backgroundColor: selectedColor || '#3b82f6' }}
+                        className="w-10 h-10 rounded-xl flex items-center justify-center font-mono font-bold text-white text-sm shadow-sm border border-white/30 transition-all select-none"
+                      >
+                        {getInitials(`${firstName} ${lastName}`)}
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-[#8C8880] font-semibold">
+                          Spatial Avatar Box
+                        </div>
+                        <div className="text-xs font-semibold text-[#1c1b1b]">
+                          {firstName || lastName ? `${firstName} ${lastName}`.trim() : 'Your Name'}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-[#8C8880] bg-white border border-[#E5E4DE] px-2 py-0.5 rounded-md font-semibold">
+                      Box: {getInitials(`${firstName} ${lastName}`)}
+                    </span>
                   </div>
 
                   <div>

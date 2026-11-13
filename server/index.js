@@ -2431,6 +2431,35 @@ io.on('connection', (socket) => {
     console.log(`[Chat] "${sender}" in "${rId}": ${trimmed.slice(0, 60)}`);
   });
 
+  // ── Private Direct Message (Anti-Spam Throttled) ────────────────────────────
+  socket.on('private:chat:send', ({ toSocketId, message, toUsername }) => {
+    if (!checkThrottle('private:chat:send', 10, 5000)) {
+      console.warn(`[Anti-Spam] Throttled private chat from socket ${socket.id}`);
+      return;
+    }
+    if (!toSocketId || !message || typeof message !== 'string') return;
+    const trimmed = message.trim().slice(0, 500);
+    if (!trimmed) return;
+    const sender = socket.data.username || 'Anonymous';
+    const rId = socket.data.roomId;
+    const senderColor = (rId && getRoomUsers(rId).get(socket.id) || {}).avatarColor || '#3b82f6';
+    const payload = {
+      from: socket.id,
+      to: toSocketId,
+      username: sender,
+      toUsername: toUsername || 'Peer',
+      avatarColor: senderColor,
+      message: trimmed,
+      timestamp: Date.now(),
+      isPrivate: true,
+    };
+    // Direct relay to recipient socket
+    io.to(toSocketId).emit('private:chat:message', payload);
+    // Echo back to sender
+    socket.emit('private:chat:message', payload);
+    console.log(`[PrivateChat] "${sender}" -> "${toUsername || toSocketId}": ${trimmed.slice(0, 60)}`);
+  });
+
   // ── leave-room (End Call) ───────────────────────────────────────────────────
   socket.on('leave-room', async ({ roomId } = {}) => {
     try {
