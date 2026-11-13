@@ -1458,7 +1458,14 @@ export default function WorldCanvas({
 
     socket.on('connect', () => {
       console.log('[Socket] connected:', socket.id);
-      socket.emit('join-room', { username, avatarColor, roomId, isMuted: isMutedRef.current });
+      socket.emit('join-room', {
+        username,
+        avatarColor,
+        roomId,
+        isMuted: isMutedRef.current,
+        x: stateRef.current.x,
+        y: stateRef.current.y,
+      });
     });
 
     // Populate existing peers and initiate WebRTC connections

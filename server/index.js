@@ -2002,15 +2002,20 @@ io.on('connection', (socket) => {
   const checkThrottle = createSocketEventThrottler();
 
   // ── join-room (Anti-Spam Throttled) ─────────────────────────────────────────
-  socket.on('join-room', async ({ username, avatarColor, roomId = 'main-office', isMuted = true }) => {
+  socket.on('join-room', async ({ username, avatarColor, roomId = 'main-office', isMuted = true, x, y }) => {
     try {
       if (!checkThrottle('join-room', 4, 5000)) {
         console.warn(`[Anti-Spam] Throttled join-room from socket ${socket.id}`);
         return;
       }
 
-      const spawnX = 560 + Math.floor(Math.random() * 120);
-      const spawnY = 340 + Math.floor(Math.random() * 100);
+      // Respect client's layout spawn coordinates, otherwise default to V2 2200x1300 center (1100, 720) with slight jitter
+      const spawnX = (typeof x === 'number' && Number.isFinite(x) && x > 0)
+        ? x
+        : 1100 + Math.floor((Math.random() - 0.5) * 60);
+      const spawnY = (typeof y === 'number' && Number.isFinite(y) && y > 0)
+        ? y
+        : 720 + Math.floor((Math.random() - 0.5) * 60);
       const userMuted = typeof isMuted === 'boolean' ? isMuted : true;
 
       const roomUsers = getRoomUsers(roomId);

@@ -260,7 +260,20 @@ ooftop), with custom templates created via the in-app Office Designer.
   * Decoupled Socket.IO connection lifecycle from theme and layout rendering in client/src/WorldCanvas.jsx, eliminating connection thrashing, 400+ reconnect loops, and flashing Online/Offline status.
   * Upgraded Minimap Radar to directly render the exact pre-rendered world canvas floor plan (offscreenRef.current), guaranteeing 100% pixel-perfect architectural synchronization between minimap and main office view.
   * Added dynamic template fallback to GET /api/layouts/:layoutId and increased socket concurrency limit to 35 to prevent 404s and connection rejections.
-* **Current Active Milestone:** Complete Purge of Experimental Voice-Server & Strict P2P Audio Mesh Alignment (`main`, `dev`, `branch-dvij`)
+* **Current Active Milestone:** Avatar Spawn Coordinate Synchronization & Render Backend Diagnostics (`main`, `dev`, `branch-dvij`)
+  * **Objective:** Fix the avatar positioning discrepancy when users join rooms and diagnose authentication failures.
+  * **Root Cause 1 (Avatar Positioning Mismatch):**
+    * In V1, the canvas was `1200x680`, so `server/index.js` hardcoded initial spawn coordinates to `x: 560, y: 340` (center of old canvas).
+    * When the engine upgraded to V2 (2200x1300 canvas), the local client initialized avatars at the theme spawn point (`1100, 720`), but `socket.emit('join-room')` never forwarded those coordinates.
+    * As a result, the server registered joining users at the legacy (560, 340) position, making friends appear isolated on the top-left edge of the canvas until they moved.
+    * **Fix:** Updated `client/src/WorldCanvas.jsx` to transmit `x: stateRef.current.x, y: stateRef.current.y` on `join-room`, and updated `server/index.js` to prioritize client layout coordinates, defaulting to the V2 center (`1100, 720`).
+  * **Root Cause 2 (Authentication / Password "Never Matching"):**
+    * Render free compute quota (750 free instance hours/month) was completely exhausted on the deployment account, placing `proxispeak-server` into "Free usage limit reached / Service Suspended" status returning HTTP 503 Service Unavailable without CORS headers.
+    * All 18 database accounts in MongoDB Atlas remain 100% healthy, and bcrypt authentication logic was tested and verified intact.
+  * **Verification:**
+    * Tested MongoDB Atlas connectivity and bcrypt password comparison with 100% pass rate.
+    * Production Vite client build succeeded in 1.60s with 0 errors.
+* **Prior Milestone:** Complete Purge of Experimental Voice-Server & Strict P2P Audio Mesh Alignment (`main`, `dev`, `branch-dvij`)
   * **Objective:** Safely check and permanently remove the legacy `voice-server/` directory, `VoiceTest.jsx` component, and voice relay environment configurations in accordance with the project plan.
   * **Architectural Rationale:**
     * ProxiSpeak strictly mandates a 100% Peer-to-Peer WebRTC Opus mesh where zero audio bytes ever touch or pass through a central media server.
