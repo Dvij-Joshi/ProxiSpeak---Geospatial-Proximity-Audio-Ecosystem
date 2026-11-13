@@ -383,6 +383,25 @@ ooftop), with custom templates created via the in-app Office Designer.
     * **Universal Component Dimensions & Presets:** Integrated tailored size/scale presets across all 9 components (wall length/core thickness, door width, zone dimensions, table seat sizes, desk configurations, sofa lengths, rack bays, plant radii).
     * **Authentic Material Color Palettes:** Dynamic palette mapping for every model with active ring highlight (warm woods, anodized slate, frosted cyan, obsidian, biophilic greens).
     * **Updated Presets & Inspector:** Updated `Startup Loft` and `Executive Suite` layout presets to instantly deploy architectural workstations, boardroom tables, and breakout sofas. Placed furniture in Object Inspector now loads authentic model-specific color palettes.
+* **Latest Milestone:** Meeting Room Redesign — Studio Side Panel, Initials Squircle Avatar & Private Messaging
+  * **Meeting Room Page Redesign & Edge-to-Edge Responsive Layout:**
+    * Completely overhauled client/src/WorldCanvas.jsx from a centered, fixed-width card layout with dead margins to a full-viewport Studio Workspace (100vw x 100vh).
+    * Integrated a dynamic ResizeObserver on the canvas container that continuously synchronizes canvas.width and canvas.height to 100% of the available area, completely eliminating misaligned empty spaces and letterboxing on wide displays.
+    * Integrated a docked Studio Multi-Tool Side Panel (360px width) with responsive header toggles, expandable/collapsible view, and three tabs:
+      * **People (Participants):** Live searchable directory of connected participants. Displays local user status, each peer's initials squircle box, display name, current acoustic room zone, real-time earshot distance (Math.hypot), proximity status (In Earshot / Out of Range), and a 1-click Chat Privately action button.
+      * **Chat & Direct Messages:** Unified dual-channel messaging engine. Supports both broadcast Room Chat (to all floor participants) and targeted Private DMs (1-on-1 direct conversations with peer picker, private badges, and end-to-end socket relay).
+      * **Settings & Soundstage:** Audio input device selector (webrtc.switchAudioInputDevice), spatial audio engine telemetry (AudioContext state, unlock/resume controls, mic re-acquisition, peer reconnect), soundstage acoustics specs (-14 dB wall attenuation, -18 dB closed door isolation, 320px earshot), and complete keyboard hotkeys reference (WASD, M, D, Space PTT, mouse scroll zoom, door clicks).
+  * **First Name, Surname Registration & Live Avatar Box Preview:**
+    * Redesigned client/src/components/AuthModal.jsx registration form to capture First Name and Surname as dedicated fields (e.g., 'Dvij' and 'Joshi').
+    * Built a live interactive Avatar Preview Box on the registration modal that dynamically updates 2-letter uppercase initials (e.g., 'DJ') and real-time palette color selection.
+    * Saves composite full name username = "${firstName.trim()} ${lastName.trim()}" while preserving backwards compatibility for login credentials.
+  * **Initials Squircle Box Avatar Engine:**
+    * Created client/src/utils/avatar.js exporting getInitials(name) with edge-case handling for multi-word, single-word, and empty strings.
+    * Replaced legacy circle geometry in drawAvatar (client/src/WorldCanvas.jsx) with a modern 36x36px rounded squircle box (drawRoundRect with 9px radius) filled with the user's chosen avatarColor, white highlight border, drop shadow, speaking aura wave, and centered bold white initials (e.g. 'DJ').
+    * Updated renderMinimap (HQ RADAR) to render mini squircle boxes for all peers and local player instead of raw circular blips.
+    * Updated top navigation User Badge and chat message avatars to render matching squircle initials boxes.
+  * **Private Direct Messaging Server Relay:**
+    * Implemented private:chat:send event listener and private:chat:message targeted relay in server/index.js with anti-spam rate limiting and sender echo.
 * **Prior Milestone:** Custom Office Designer — Live Cursor Preview & Component Rotation Control
   * **Live Cursor Ghost Preview:** 20px grid-snapped translucent ghost geometry directly attached to the mouse cursor across all 10 tools (walls, doors, workstation pods, boardroom tables, breakout sofas, server racks, plants, acoustic zones, spawn points).
   * **Interactive Component Rotation Control:** Mouse scroll wheel and [R] hotkey rotate components in 45° increments with real-time HUD angle pill feedback; scrolling with an object selected rotates that placed entity.
