@@ -260,7 +260,17 @@ ooftop), with custom templates created via the in-app Office Designer.
   * Decoupled Socket.IO connection lifecycle from theme and layout rendering in client/src/WorldCanvas.jsx, eliminating connection thrashing, 400+ reconnect loops, and flashing Online/Offline status.
   * Upgraded Minimap Radar to directly render the exact pre-rendered world canvas floor plan (offscreenRef.current), guaranteeing 100% pixel-perfect architectural synchronization between minimap and main office view.
   * Added dynamic template fallback to GET /api/layouts/:layoutId and increased socket concurrency limit to 35 to prevent 404s and connection rejections.
-* **Current Active Milestone:** Avatar Spawn Coordinate Synchronization & Render Backend Diagnostics (`main`, `dev`, `branch-dvij`)
+* **Current Active Milestone:** Live Backend Migration to New Render Instance (`https://proxispeak-server-sgwp.onrender.com`)
+  * **Objective:** Restore production backend connectivity following suspension of the legacy instance due to free tier compute limit exhaustion.
+  * **Deployment Verification:**
+    * Live health check against `https://proxispeak-server-sgwp.onrender.com/health` returned HTTP 200 OK with active MongoDB connection (`dbReadyState: 1`).
+  * **Configuration Updates:**
+    * Updated `PRODUCTION_SERVER_URL` in `client/src/config.js`.
+    * Updated Vercel API proxy rewrites in `client/vercel.json` and `vercel.json`.
+    * Updated service discovery definitions in `render.yaml` and documentation examples in `.env.example`.
+  * **Verification:**
+    * Production Vite client build succeeded in 1.27s with 0 errors.
+* **Prior Milestone:** Avatar Spawn Coordinate Synchronization & Render Backend Diagnostics (`main`, `dev`, `branch-dvij`)
   * **Objective:** Fix the avatar positioning discrepancy when users join rooms and diagnose authentication failures.
   * **Root Cause 1 (Avatar Positioning Mismatch):**
     * In V1, the canvas was `1200x680`, so `server/index.js` hardcoded initial spawn coordinates to `x: 560, y: 340` (center of old canvas).

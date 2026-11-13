@@ -14,7 +14,7 @@ services:
       - key: CLIENT_URL
         value: https://proxi-speak-geospatial-proximity-au-kappa.vercel.app
       - key: SERVER_URL
-        value: https://proxispeak-geospatial-proximity-audio-2i7g.onrender.com
+        value: https://proxispeak-server-sgwp.onrender.com
       - key: MONGODB_URI
         sync: false
 
