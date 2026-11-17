@@ -329,13 +329,18 @@ class WebRTCManager {
     }
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      return devices
-        .filter((d) => d.kind === 'audioinput')
-        .map((d, index) => ({
-          deviceId: d.deviceId,
-          label: d.label || `Microphone ${index + 1}`,
-          groupId: d.groupId,
-        }));
+      const audioInputs = devices.filter((d) => d.kind === 'audioinput' && d.deviceId !== 'communications');
+      // If there are specific hardware devices with names, exclude duplicate generic 'default' alias
+      const hasNamedDevices = audioInputs.some((d) => d.deviceId && d.deviceId !== 'default' && d.label);
+      const targetList = hasNamedDevices
+        ? audioInputs.filter((d) => d.deviceId && d.deviceId !== 'default')
+        : audioInputs;
+
+      return targetList.map((d, index) => ({
+        deviceId: d.deviceId,
+        label: d.label || `Microphone ${index + 1}`,
+        groupId: d.groupId,
+      }));
     } catch (err) {
       console.warn('[WebRTC] Error enumerating audio devices:', err.message);
       return [];
@@ -621,6 +626,9 @@ class WebRTCManager {
 
       event.track.onunmute = () => {
         console.log(`[WebRTC] Remote track unmuted for ${peerId}`);
+        if (this.onRemoteTrackCallback) {
+          this.onRemoteTrackCallback(peerId, remoteStream);
+        }
       };
 
       event.track.onmute = () => {

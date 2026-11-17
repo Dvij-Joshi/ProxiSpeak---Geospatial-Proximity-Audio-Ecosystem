@@ -398,7 +398,17 @@ ooftop), with custom templates created via the in-app Office Designer.
     * Generated brand geometric spatial soundwave favicon in SVG and binary ICO formats, linked in `index.html` with `image/svg+xml` and `alternate icon`, eliminating 404 console errors.
   * **Render Cold-Start Room Fetch Auto-Retry (`client/src/components/MeetingLobby.jsx`):**
     * Added automatic 3-second retry logic to `fetchRooms()` so network disruptions or connection resets during Render free-tier container cold starts recover automatically without requiring user page reload.
-* **Latest Milestone:** Runtime Stability & Blank Screen Bug Resolution (TDZ Hoisting Fix)
+* **Latest Milestone:** Microphone Hardware Picker, Device Enumeration & 320px Earshot Range Resolution
+  * **Root Cause Diagnosis:**
+    * In client/src/WorldCanvas.jsx, micDevices was only populated inside a conditional check guarded by showDiagnostics (an old hidden modal). When users opened the new Studio Side Panel Settings tab, webrtc.getAudioInputDevices() was never called, leaving the dropdown showing only the single hardcoded "Default System Microphone" option.
+    * Under W3C browser security specifications (Chrome/Edge/Safari), hardware device names and IDs are anonymized until getUserMedia microphone permission is granted. Since users joined with microphone inactive by default, the browser only exposed a placeholder device.
+    * In client/src/services/spatialAudio.js, MAX_DISTANCE was hardcoded to 100px from legacy 800x600 testing. On the V2 2200x1300 office floor, avatars standing more than 100px apart (such as across desks) had their audio gain set to 0.0 (total silence), contradicting the Settings UI specification which advertised 320 px max earshot radius.
+  * **Architectural Resolution:**
+    * **Device Enumeration Lifecycle (client/src/WorldCanvas.jsx):** Added a dedicated refreshAudioInputDevices() callback called on mount, on navigator.mediaDevices.devicechange, on selecting activeSideTab === "settings", and immediately after microphone activation or hardware switching.
+    * **Settings Tab Microphone UX Overhaul:** Added a live microphone status pill (Active, Muted, or Inactive), a Rescan / Refresh button, an inline permission unlock alert with a 1-click [Enable Microphone & Unlock Devices] action, and a live input level meter (Live Mic Input Level: [====  ] XX%) that gives immediate visual proof of microphone audio pickup.
+    * **320px Earshot Proximity Harmonization (client/src/services/spatialAudio.js):** Updated MAX_DISTANCE to 320px (and doorwayMaxD to 240px), aligning the physics engine with the UI telemetry and allowing natural vocal communication across realistic office distances.
+    * **WebRTC Live Unmute Re-Binding (client/src/services/webrtc.js):** Added onRemoteTrackCallback invocation on event.track.onunmute and improved device list deduplication so remote streams immediately connect and output clear audio when a participant unmutes.
+* **Prior Milestone:** Runtime Stability & Blank Screen Bug Resolution (TDZ Hoisting Fix)
   * **Root Cause Diagnosis:**
     * In client/src/components/OfficeDesigner.jsx, the canvas ResizeObserver useEffect hook registered a non-passive wheel event listener and referenced handleWheel inside its dependency array.
     * Because handleWheel was declared with const lower down in the component function body, evaluating it in the useEffect call triggered JavaScript's Temporal Dead Zone (TDZ).

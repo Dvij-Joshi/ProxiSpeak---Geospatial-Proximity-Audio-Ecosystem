@@ -10,7 +10,7 @@
  */
 
 export const MIN_DISTANCE = 25;
-export const MAX_DISTANCE = 100; // 100px hearing range
+export const MAX_DISTANCE = 320; // 320px hearing range (matches UI telemetry & 2200x1300 scale)
 
 export const W = 2200;
 export const H = 1300;
@@ -254,7 +254,7 @@ export function calculateAcoustics(localPos, remotePos, doorStates = {}, theme =
         filterFreq = 300;
         status = isDoorClosed ? 'door-closed' : 'blocked-wall';
       } else {
-        const doorwayMaxD = 100;
+        const doorwayMaxD = 240;
         if (distance < doorwayMaxD) {
           const ratio = distance / doorwayMaxD;
           targetGain = Math.pow(1 - ratio, 1.25) * 0.75;

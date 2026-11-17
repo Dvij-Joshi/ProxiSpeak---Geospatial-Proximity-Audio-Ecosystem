@@ -982,6 +982,39 @@ export default function WorldCanvas({
   const [micDevices, setMicDevices] = useState([]);
   const [selectedMicId, setSelectedMicId] = useState('');
 
+  const refreshAudioInputDevices = useCallback(async () => {
+    try {
+      const devs = await webrtc.getAudioInputDevices();
+      if (devs && devs.length > 0) {
+        setMicDevices(devs);
+        if (webrtc.selectedMicDeviceId) {
+          setSelectedMicId(webrtc.selectedMicDeviceId);
+        }
+      }
+    } catch (_err) {
+      console.warn('[WorldCanvas] Failed to enumerate audio devices:', _err);
+    }
+  }, []);
+
+  // Listen to device changes and enumerate on mount
+  useEffect(() => {
+    refreshAudioInputDevices();
+    const handleDeviceChange = () => {
+      refreshAudioInputDevices();
+    };
+    if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+      return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    }
+  }, [refreshAudioInputDevices]);
+
+  // Refresh audio devices whenever settings tab is selected
+  useEffect(() => {
+    if (activeSideTab === 'settings') {
+      refreshAudioInputDevices();
+    }
+  }, [activeSideTab, refreshAudioInputDevices]);
+
   // Studio Multi-Tool Side Panel State (People, Chat & DMs, Settings)
   const [showSidePanel, setShowSidePanel] = useState(true);
   const [activeSideTab, setActiveSideTab] = useState('people'); // 'people' | 'chat' | 'settings'
@@ -1010,6 +1043,7 @@ export default function WorldCanvas({
   const isMutedRef = useRef(true);
   const isSpeakingRef = useRef(false);
   const voiceMeterBarRef = useRef(null);
+  const settingsVoiceMeterRef = useRef(null);
   const renderRef = useRef(null);
   const offscreenRef = useRef(null);
   const prevInEarshotRef = useRef(0);
@@ -1375,6 +1409,7 @@ export default function WorldCanvas({
         isMutedRef.current = false;
         setIsMuted(false);
         playUiChime('unmute');
+        await refreshAudioInputDevices();
         showToast('Microphone active. Connected to meeting voice.', 'success');
       } catch (err) {
         showToast(`${err.message || 'Microphone access failed'}`, 'alert');
@@ -1403,12 +1438,16 @@ export default function WorldCanvas({
     const timer = setInterval(() => {
       const v = webrtc.getLocalVoiceIntensity();
       localIntensityRef.current = v;
+      const pct = Math.round(v * 100);
       if (voiceMeterBarRef.current) {
-        const pct = Math.round(v * 100);
         voiceMeterBarRef.current.style.width = `${pct}%`;
         voiceMeterBarRef.current.style.minWidth = v > 0.02 ? '4px' : '0px';
         voiceMeterBarRef.current.style.background = v > 0.6 ? '#f59e0b' : '#22c55e';
         voiceMeterBarRef.current.style.boxShadow = v > 0.1 ? '0 0 8px rgba(34, 197, 94, 0.7)' : 'none';
+      }
+      if (settingsVoiceMeterRef.current) {
+        settingsVoiceMeterRef.current.style.width = `${pct}%`;
+        settingsVoiceMeterRef.current.style.background = v > 0.6 ? '#f59e0b' : '#22c55e';
       }
       const now = Date.now();
       if (v > 0.05 && now - lastLog > 1500) {
@@ -3751,27 +3790,123 @@ export default function WorldCanvas({
               >
                 {/* Microphone hardware picker */}
                 <div>
-                  <label
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: '#8C8880',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      display: 'block',
-                      marginBottom: '6px',
-                    }}
-                  >
-                    Audio Input Device
-                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <label
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#8C8880',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      Audio Input Device
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          padding: '2px 7px',
+                          borderRadius: '10px',
+                          backgroundColor: micActive && !isMuted ? '#dcfce7' : micActive && isMuted ? '#fef3c7' : '#f1f5f9',
+                          color: micActive && !isMuted ? '#15803d' : micActive && isMuted ? '#b45309' : '#64748b',
+                          border: `1px solid ${micActive && !isMuted ? '#86efac' : micActive && isMuted ? '#fde68a' : '#cbd5e1'}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: '5px',
+                            height: '5px',
+                            borderRadius: '50%',
+                            backgroundColor: micActive && !isMuted ? '#16a34a' : micActive && isMuted ? '#d97706' : '#94a3b8',
+                          }}
+                        />
+                        {micActive && !isMuted ? 'Active' : micActive && isMuted ? 'Muted' : 'Inactive'}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          await refreshAudioInputDevices();
+                          showToast('Refreshed audio devices', 'info');
+                        }}
+                        title="Rescan audio devices"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#8C8880',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '2px',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>refresh</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {!micActive && (
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        background: '#FFFBEB',
+                        border: '1px solid #FDE68A',
+                        marginBottom: '8px',
+                        fontSize: '11px',
+                        color: '#92400E',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#D97706' }}>info</span>
+                        <span>Microphone permission required</span>
+                      </div>
+                      <p style={{ margin: 0, lineHeight: 1.4, color: '#B45309' }}>
+                        Browsers hide specific microphone names until microphone access is granted. Click below to enable your mic and detect all audio devices.
+                      </p>
+                      <button
+                        onClick={handleToggleMic}
+                        style={{
+                          alignSelf: 'flex-start',
+                          marginTop: '2px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #D97706',
+                          background: '#D97706',
+                          color: '#ffffff',
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>mic</span>
+                        <span>Enable Microphone & Unlock Devices</span>
+                      </button>
+                    </div>
+                  )}
+
                   <select
                     value={selectedMicId}
                     onChange={async (e) => {
                       const devId = e.target.value;
                       setSelectedMicId(devId);
                       try {
+                        const audioCtx = spatialAudio.ensureContext();
                         await webrtc.switchAudioInputDevice(devId);
+                        setMicActive(true);
+                        isMutedRef.current = false;
+                        setIsMuted(false);
                         showToast('Switched microphone device', 'success');
+                        await refreshAudioInputDevices();
                         refreshDiagnostics();
                       } catch (err) {
                         showToast(`Could not switch mic: ${err.message}`, 'alert');
@@ -3796,6 +3931,28 @@ export default function WorldCanvas({
                       </option>
                     ))}
                   </select>
+
+                  {/* Real-time Voice Input Level Meter */}
+                  <div style={{ marginTop: '8px', padding: '6px 8px', borderRadius: '6px', background: '#F4F3EF', border: '1px solid #E5E4DE' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 600, color: '#5e5f5c', marginBottom: '3px' }}>
+                      <span>Live Mic Input Level</span>
+                      <span style={{ color: micActive && !isMuted ? '#15803d' : '#8C8880' }}>
+                        {micActive && !isMuted ? 'Live' : 'Muted / Inactive'}
+                      </span>
+                    </div>
+                    <div style={{ height: '6px', background: '#E5E4DE', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div
+                        ref={settingsVoiceMeterRef}
+                        style={{
+                          width: '0%',
+                          height: '100%',
+                          background: '#22c55e',
+                          borderRadius: '3px',
+                          transition: 'width 60ms ease-out',
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Spatial Audio Quick Actions */}
@@ -3814,6 +3971,30 @@ export default function WorldCanvas({
                     Audio Engine Actions
                   </label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {micActive && (
+                      <button
+                        onClick={handleToggleMic}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          border: isMuted ? '1px solid #86efac' : '1px solid #D9D7D0',
+                          background: isMuted ? '#f0fdf4' : '#FAF9F5',
+                          color: isMuted ? '#166534' : '#1c1b1b',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                          {isMuted ? 'mic' : 'mic_off'}
+                        </span>
+                        <span>{isMuted ? 'Unmute Microphone' : 'Mute Microphone'}</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         spatialAudio.resumeAll();
@@ -3847,6 +4028,7 @@ export default function WorldCanvas({
                           setMicActive(true);
                           isMutedRef.current = false;
                           setIsMuted(false);
+                          await refreshAudioInputDevices();
                           refreshDiagnostics();
                           showToast('Microphone re-acquired and unmuted', 'success');
                         } catch (e) {
@@ -3874,9 +4056,8 @@ export default function WorldCanvas({
                     <button
                       onClick={() => {
                         webrtc.reconnectAllPeers();
-                        spatialAudio.resumeAll();
                         refreshDiagnostics();
-                        showToast('Reconnecting all peer connections...', 'info');
+                        showToast('Reconnecting all peer streams...', 'info');
                       }}
                       style={{
                         padding: '8px 12px',
