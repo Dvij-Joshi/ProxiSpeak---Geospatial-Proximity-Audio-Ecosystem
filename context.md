@@ -408,6 +408,7 @@ ooftop), with custom templates created via the in-app Office Designer.
     * **Settings Tab Microphone UX Overhaul:** Added a live microphone status pill (Active, Muted, or Inactive), a Rescan / Refresh button, an inline permission unlock alert with a 1-click [Enable Microphone & Unlock Devices] action, and a live input level meter (Live Mic Input Level: [====  ] XX%) that gives immediate visual proof of microphone audio pickup.
     * **320px Earshot Proximity Harmonization (client/src/services/spatialAudio.js):** Updated MAX_DISTANCE to 320px (and doorwayMaxD to 240px), aligning the physics engine with the UI telemetry and allowing natural vocal communication across realistic office distances.
     * **WebRTC Live Unmute Re-Binding (client/src/services/webrtc.js):** Added onRemoteTrackCallback invocation on event.track.onunmute and improved device list deduplication so remote streams immediately connect and output clear audio when a participant unmutes.
+    * **Temporal Dead Zone Hook Ordering Fix (client/src/WorldCanvas.jsx):** Reordered activeSideTab === 'settings' useEffect hook below all state declarations in WorldCanvas.jsx, eliminating the runtime crash ReferenceError: Cannot access 'Re' before initialization.
 * **Prior Milestone:** Runtime Stability & Blank Screen Bug Resolution (TDZ Hoisting Fix)
   * **Root Cause Diagnosis:**
     * In client/src/components/OfficeDesigner.jsx, the canvas ResizeObserver useEffect hook registered a non-passive wheel event listener and referenced handleWheel inside its dependency array.

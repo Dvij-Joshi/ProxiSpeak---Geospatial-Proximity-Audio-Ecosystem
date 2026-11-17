@@ -996,25 +996,6 @@ export default function WorldCanvas({
     }
   }, []);
 
-  // Listen to device changes and enumerate on mount
-  useEffect(() => {
-    refreshAudioInputDevices();
-    const handleDeviceChange = () => {
-      refreshAudioInputDevices();
-    };
-    if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
-      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
-      return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-    }
-  }, [refreshAudioInputDevices]);
-
-  // Refresh audio devices whenever settings tab is selected
-  useEffect(() => {
-    if (activeSideTab === 'settings') {
-      refreshAudioInputDevices();
-    }
-  }, [activeSideTab, refreshAudioInputDevices]);
-
   // Studio Multi-Tool Side Panel State (People, Chat & DMs, Settings)
   const [showSidePanel, setShowSidePanel] = useState(true);
   const [activeSideTab, setActiveSideTab] = useState('people'); // 'people' | 'chat' | 'settings'
@@ -1071,6 +1052,25 @@ export default function WorldCanvas({
     }, 1500);
     return () => clearInterval(timer);
   }, [showDiagnostics, refreshDiagnostics]);
+
+  // Listen to device changes and enumerate on mount
+  useEffect(() => {
+    refreshAudioInputDevices();
+    const handleDeviceChange = () => {
+      refreshAudioInputDevices();
+    };
+    if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+      return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    }
+  }, [refreshAudioInputDevices]);
+
+  // Refresh audio devices whenever settings tab is selected
+  useEffect(() => {
+    if (activeSideTab === 'settings') {
+      refreshAudioInputDevices();
+    }
+  }, [activeSideTab, refreshAudioInputDevices]);
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
