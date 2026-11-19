@@ -77,35 +77,35 @@ export const ROOMS = [
     name: 'Meeting Room',
     bounds: { x1: 18, y1: 18, x2: 606, y2: 506 },
     isIsolated: true,
-    maxDistance: 100,
+    maxDistance: 850, // 850px room acoustic coverage across full boardroom table and diagonal
   },
   {
     id: 'manager-office',
     name: "Manager's Office",
     bounds: { x1: 670, y1: 18, x2: 1136, y2: 446 },
     isIsolated: true,
-    maxDistance: 100,
+    maxDistance: 750,
   },
   {
     id: 'tech-server',
     name: 'Tech / Server',
     bounds: { x1: 1612, y1: 18, x2: 2182, y2: 466 },
     isIsolated: false,
-    maxDistance: 100,
+    maxDistance: 800,
   },
   {
     id: 'lounge-break',
     name: 'Lounge & Break',
     bounds: { x1: 18, y1: 912, x2: 586, y2: 1282 },
     isIsolated: false,
-    maxDistance: 100,
+    maxDistance: 800,
   },
   {
     id: 'print-copy',
     name: 'Print / Copy',
     bounds: { x1: 1712, y1: 912, x2: 2182, y2: 1282 },
     isIsolated: false,
-    maxDistance: 100,
+    maxDistance: 700,
   },
 ];
 
@@ -227,14 +227,15 @@ export function calculateAcoustics(localPos, remotePos, doorStates = {}, theme =
   // Same enclosed room
   const sameRoom = localRoom.id === remoteRoom.id && localRoom.id !== 'open-workspace';
   if (sameRoom) {
-    const maxD = localRoom.maxDistance || 360;
+    const maxD = localRoom.maxDistance || 850;
     if (distance <= MIN_DISTANCE) {
       targetGain = 1.0;
     } else if (distance >= maxD) {
       targetGain = 0.0;
     } else {
       const ratio = (distance - MIN_DISTANCE) / (maxD - MIN_DISTANCE);
-      targetGain = Math.max(0.25, Math.pow(1 - ratio, 1.15));
+      // Natural enclosed room acoustic: smooth presence falloff ensuring all members across the table hear clearly (45%-100%)
+      targetGain = Math.max(0.45, Math.pow(1 - ratio, 0.75));
     }
     filterFreq = 20000;
     status = 'in-room';
@@ -515,7 +516,7 @@ class SpatialAudioManager {
     if (existing && existing.stream) {
       const existingTrack = existing.stream.getAudioTracks()[0];
       const newTrack = mediaStream.getAudioTracks()[0];
-      if (existingTrack && newTrack && existingTrack.id === newTrack.id) {
+      if (existingTrack && newTrack && existingTrack.id === newTrack.id && existingTrack.readyState === 'live') {
         console.log(`[SpatialAudio] Track ${newTrack.id} already active for ${peerId}`);
         if (existing.audioEl && existing.audioEl.paused) {
           existing.audioEl.play().catch(() => {});

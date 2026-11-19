@@ -88,11 +88,9 @@ ProxiSpeak strictly separates the **Control Plane** from the **Media Plane**:
 ### Mathematical Formulations
 1. **Euclidean Distance:**
    $$d = \sqrt{(x_{\text{peer}} - x_{\text{local}})^2 + (y_{\text{peer}} - y_{\text{local}})^2}$$
-2. **100px Earshot Volume Falloff:**
-   * Intimate zone ($d \le 25\text{ px}$): $\text{Gain} = 1.0$ (100% volume)
-   * Gradual decay ($25 < d < 100\text{ px}$):
-     $$\text{Gain} = \left(1 - \frac{d - 25}{75}\right)^{0.75}$$
-   * Beyond earshot ($d \ge 100\text{ px}$): $\text{Gain} = 0.0$ (complete silence)
+2. **Spatial Earshot & In-Room Volume Falloff:**
+   * Open Workspace: $320\text{px}$ earshot perimeter ($d \le 25\text{px} \rightarrow 1.0$, $25 < d < 320\text{px} \rightarrow \max(0.04, (1 - \frac{d - 25}{295})^{0.75})$, $d \ge 320\text{px} \rightarrow 0.0$).
+   * Enclosed Meeting Rooms: $850\text{px}$ room acoustic perimeter ($d \le 25\text{px} \rightarrow 1.0$, $25 < d < 850\text{px} \rightarrow \max(0.45, (1 - \frac{d - 25}{825})^{0.75})$) ensuring crisp, high-presence audio across all 10 boardroom chairs.
    * Smoothing: `gainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.03)` prevents pops/clicks.
 3. **Dynamic Stereo Panning:**
    $$\text{pan} = \max\left(-1.0, \min\left(1.0, \frac{x_{\text{peer}} - x_{\text{local}}}{75}\right)\right)$$

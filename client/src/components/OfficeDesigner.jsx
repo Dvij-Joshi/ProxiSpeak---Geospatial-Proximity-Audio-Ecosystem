@@ -411,7 +411,7 @@ export default function OfficeDesigner({
 
       color: '#0284c7',
 
-      maxDistance: 100,
+      maxDistance: 850,
 
       name: 'Meeting Suite',
 
@@ -679,7 +679,7 @@ export default function OfficeDesigner({
 
       isIsolated: true,
 
-      maxDistance: 100,
+      maxDistance: 850,
 
       rotation: 0,
 
@@ -843,9 +843,9 @@ export default function OfficeDesigner({
 
       setSoundZones([
 
-        { id: 'pod-a', name: 'Focus Pod A', bounds: { x1: 18, y1: 18, x2: 428, y2: 386 }, isIsolated: true, maxDistance: 100, rotation: 0 },
+        { id: 'pod-a', name: 'Focus Pod A', bounds: { x1: 18, y1: 18, x2: 428, y2: 386 }, isIsolated: true, maxDistance: 600, rotation: 0 },
 
-        { id: 'pod-b', name: 'Focus Pod B', bounds: { x1: 1780, y1: 18, x2: WORLD_W - 18, y2: 386 }, isIsolated: true, maxDistance: 100, rotation: 0 },
+        { id: 'pod-b', name: 'Focus Pod B', bounds: { x1: 1780, y1: 18, x2: WORLD_W - 18, y2: 386 }, isIsolated: true, maxDistance: 600, rotation: 0 },
 
       ]);
 
@@ -901,7 +901,7 @@ export default function OfficeDesigner({
 
       setSoundZones([
 
-        { id: 'boardroom', name: 'Boardroom Sanctuary', bounds: { x1: 658, y1: 18, x2: 1542, y2: 538 }, isIsolated: true, maxDistance: 110, rotation: 0 },
+        { id: 'boardroom', name: 'Boardroom Sanctuary', bounds: { x1: 658, y1: 18, x2: 1542, y2: 538 }, isIsolated: true, maxDistance: 1000, rotation: 0 },
 
       ]);
 
@@ -1865,7 +1865,7 @@ export default function OfficeDesigner({
 
         isIsolated: true,
 
-        maxDistance: zCust.maxDistance || (zCust.variation === 'focus_pod' ? 60 : zCust.variation === 'boardroom_vault' ? 120 : 100),
+        maxDistance: zCust.maxDistance || (zCust.variation === 'focus_pod' ? 600 : zCust.variation === 'boardroom_vault' ? 1000 : 850),
 
         rotation: rotationAngle,
 

@@ -99,7 +99,7 @@ const OfficeLayoutSchema = new mongoose.Schema({
       color: { type: String, default: '#0284c7' },
       isIsolated: { type: Boolean, default: false },
       isStage: { type: Boolean, default: false },
-      maxDistance: { type: Number, default: 100 },
+      maxDistance: { type: Number, default: 850 },
       _id: false,
     },
   ],

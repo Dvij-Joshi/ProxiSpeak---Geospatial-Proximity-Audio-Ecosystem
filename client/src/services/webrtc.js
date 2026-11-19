@@ -464,11 +464,29 @@ class WebRTCManager {
         if (this.socket) {
           this.socket.emit('user-mute-status', { isMuted: false, roomId: this.currentRoomId });
         }
-        this.peers.forEach((pc) => {
+        this.peers.forEach((pc, peerId) => {
           const senders = pc.getSenders();
-          const audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
+          let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
           if (audioSender) {
             audioSender.replaceTrack(existingTrack).catch(() => {});
+          } else {
+            try {
+              pc.addTrack(existingTrack, this.localStream);
+              if (pc.signalingState === 'stable') {
+                this.initiateOffer(peerId, pc);
+              }
+            } catch (_e) {}
+          }
+          const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
+          const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
+          if (audioTransceiver) {
+            const currentDir = audioTransceiver.currentDirection;
+            if (audioTransceiver.direction !== 'sendrecv' || (currentDir && currentDir !== 'sendrecv')) {
+              audioTransceiver.direction = 'sendrecv';
+              if (pc.signalingState === 'stable') {
+                this.initiateOffer(peerId, pc);
+              }
+            }
           }
         });
         return this.localStream;
@@ -530,10 +548,13 @@ class WebRTCManager {
         // Ensure transceiver direction is sendrecv
         const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
         const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
-        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
-          console.log(`[WebRTC] Upgrading transceiver direction to sendrecv for ${peerId}`);
-          audioTransceiver.direction = 'sendrecv';
-          needsRenegotiation = true;
+        if (audioTransceiver) {
+          const currentDir = audioTransceiver.currentDirection;
+          if (audioTransceiver.direction !== 'sendrecv' || (currentDir && currentDir !== 'sendrecv')) {
+            console.log(`[WebRTC] Upgrading transceiver direction to sendrecv for ${peerId} (currentDirection: ${currentDir})`);
+            audioTransceiver.direction = 'sendrecv';
+            needsRenegotiation = true;
+          }
         }
 
         // Only renegotiate if transceiver direction actually changed or new track added

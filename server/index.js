@@ -318,11 +318,11 @@ const roomDoors = new Map();
 
 // Room bounding box definitions matching client layout
 const ROOM_AREAS = {
-  'meeting-room':   { x1: 18,  y1: 18,  x2: 320,  y2: 268, name: 'Meeting Room' },
-  'manager-office': { x1: 350, y1: 18,  x2: 590,  y2: 235, name: "Manager's Office" },
-  'tech-server':    { x1: 860, y1: 18,  x2: 1182, y2: 245, name: 'Tech / Server' },
-  'lounge-break':   { x1: 18,  y1: 485, x2: 300,  y2: 670, name: 'Lounge & Break' },
-  'print-copy':     { x1: 935, y1: 480, x2: 1182, y2: 670, name: 'Print / Copy' },
+  'meeting-room':   { x1: 18,   y1: 18,  x2: 606,  y2: 506,  name: 'Meeting Room' },
+  'manager-office': { x1: 670,  y1: 18,  x2: 1136, y2: 446,  name: "Manager's Office" },
+  'tech-server':    { x1: 1612, y1: 18,  x2: 2182, y2: 466,  name: 'Tech / Server' },
+  'lounge-break':   { x1: 18,   y1: 912, x2: 586,  y2: 1282, name: 'Lounge & Break' },
+  'print-copy':     { x1: 1712, y1: 912, x2: 2182, y2: 1282, name: 'Print / Copy' },
 };
 
 function getRoomKeyAt(x, y) {
