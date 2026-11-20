@@ -396,7 +396,27 @@ ooftop), with custom templates created via the in-app Office Designer.
     * Generated brand geometric spatial soundwave favicon in SVG and binary ICO formats, linked in `index.html` with `image/svg+xml` and `alternate icon`, eliminating 404 console errors.
   * **Render Cold-Start Room Fetch Auto-Retry (`client/src/components/MeetingLobby.jsx`):**
     * Added automatic 3-second retry logic to `fetchRooms()` so network disruptions or connection resets during Render free-tier container cold starts recover automatically without requiring user page reload.
-* **Latest Milestone:** Microphone Hardware Picker, Device Enumeration & 320px Earshot Range Resolution
+* **Latest Milestone:** Upstream Ecosystem Synchronization — Visual Styling, Modular World Scenes, Model Catalog & Room Geometry Integration (Commit `5076775`)
+  * **Synchronization Across Branches:**
+    * Synchronized and fast-forward merged `origin/main` commits `7de8fe2` and `5076775` into `branch-dvij`, `dev`, and local `main`.
+    * Upstream branches `origin/main`, `origin/dev`, and `origin/branch-dvij` are now in 100% parity at commit `5076775`.
+  * **Modular World Scenes Architecture (`client/src/world/`):**
+    * Extracted static geometry constants out of `client/src/WorldCanvas.jsx` into modular engines:
+      * [`client/src/world/scenes.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/world/scenes.js): Theme definitions and scene generator (`makeScene`).
+      * [`client/src/world/renderScene.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/world/renderScene.js): Collision detection (`blocked`, `touchesModel`), scene preparation (`prepareScene`), and rendering pipeline (`paintScene`).
+      * [`client/src/world/models.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/world/models.js): Model drawing routines and spatial geometry.
+      * [`client/src/world/character.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/world/character.js): Player character rendering and avatar aesthetics.
+      * [`client/src/world/roomGeometry.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/world/roomGeometry.js): Room bounding boxes, acoustic perimeters, and door spatial coordinates.
+  * **Interactive Model Catalog & Layout Models:**
+    * Added [`client/src/components/modelCatalog.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/components/modelCatalog.js) and [`client/src/components/layoutModels.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/components/layoutModels.js), providing structured 3D/isometric-style 2D models for desks, meeting pods, lounge couches, servers, screens, and biophilic decor.
+    * Added unit test suite [`client/tests/world.test.js`](file:///e:/portfolio-projects/ProxiSpeak/client/tests/world.test.js) verifying spawn connectivity across Corporate Office, Auditorium, and Sky Rooftop scenes (all 4 tests passing).
+  * **Tailwind & Typography Integration:**
+    * Integrated Tailwind CSS v3 with PostCSS configuration, bundled subset Material Symbols fonts, and Barlow Condensed / DM Sans typography.
+  * **Build & Bundle Verification:**
+    * Code-split production chunks: `WorldCanvas` (132 kB), `OfficeDesigner` (87 kB), and main vendor bundle (307 kB) building cleanly in ~2.6s.
+  * **Runtime TDZ Resolution (Historical Fix Verified):**
+    * Confirmed that `activeSideTab` state declaration precedes all `useEffect` hooks in [`client/src/WorldCanvas.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/WorldCanvas.jsx), preventing minified production bundle Temporal Dead Zone errors (`ReferenceError: Cannot access 'Re' before initialization`).
+* **Prior Milestone:** Microphone Hardware Picker, Device Enumeration & 320px Earshot Range Resolution
   * **Root Cause Diagnosis:**
     * In client/src/WorldCanvas.jsx, micDevices was only populated inside a conditional check guarded by showDiagnostics (an old hidden modal). When users opened the new Studio Side Panel Settings tab, webrtc.getAudioInputDevices() was never called, leaving the dropdown showing only the single hardcoded "Default System Microphone" option.
     * Under W3C browser security specifications (Chrome/Edge/Safari), hardware device names and IDs are anonymized until getUserMedia microphone permission is granted. Since users joined with microphone inactive by default, the browser only exposed a placeholder device.
