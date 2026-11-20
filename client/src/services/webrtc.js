@@ -22,33 +22,13 @@ const DEFAULT_ICE_SERVERS = [
   { urls: ['stun:stun.cloudflare.com:3478'] },
   { urls: ['stun:stun.services.mozilla.com'] },
   { urls: ['stun:stun.sipgate.net:3478'] },
-  // ── Free TURN relay servers (Metered OpenRelay) ──────────────────────────────
-  // REQUIRED for cross-network audio: relays media when direct peer-to-peer
-  // fails due to symmetric NAT, carrier-grade NAT, or corporate firewalls.
-  // Without TURN, ~70-80% of real-world internet connections cannot exchange audio.
-  {
-    urls: 'stun:stun.relay.metered.ca:80',
-  },
-  {
-    urls: 'turn:global.relay.metered.ca:80',
-    username: 'e807ee00a9e595672ca2e743',
-    credential: '5pDLthFiAoEBV+gf',
-  },
-  {
-    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-    username: 'e807ee00a9e595672ca2e743',
-    credential: '5pDLthFiAoEBV+gf',
-  },
-  {
-    urls: 'turn:global.relay.metered.ca:443',
-    username: 'e807ee00a9e595672ca2e743',
-    credential: '5pDLthFiAoEBV+gf',
-  },
-  {
-    urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-    username: 'e807ee00a9e595672ca2e743',
-    credential: '5pDLthFiAoEBV+gf',
-  },
+  { urls: ['stun:stun.relay.metered.ca:80'] },
+  { urls: ['stun:stun.ekiga.net'] },
+  { urls: ['stun:stun.ideasip.com'] },
+  { urls: ['stun:stun.schlund.de'] },
+  { urls: ['stun:stun.voiparound.com'] },
+  { urls: ['stun:stun.voipbuster.com'] },
+  { urls: ['stun:stun.voipstunt.com'] },
 ];
 
 // Detect iOS for audio session workarounds

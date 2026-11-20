@@ -894,10 +894,9 @@ export default function WorldCanvas({
         }
       }
 
-      // Update Web Audio distance attenuation, room isolation & wall raycasting
-      const themeKey = activeTheme.isCustom ? activeTheme : activeTheme.id;
+      // Update spatial distance attenuation, room isolation & wall raycasting
       const { inEarshotCount: currentInEarshot, peerVolumes, peerIntensities, peerAcoustics, localRoom } =
-        spatialAudio.updatePositions(s, peersRef.current, doorsRef.current, themeKey);
+        spatialAudio.updatePositions(s, peersRef.current, doorsRef.current, activeTheme);
       peerVolumesRef.current = peerVolumes;
       peerIntensitiesRef.current = peerIntensities || {};
       if (prevInEarshotRef.current === 0 && currentInEarshot > 0) {
@@ -1030,7 +1029,7 @@ export default function WorldCanvas({
   let nearbyDoorOccupants = 0;
   if (nearbyDoor) {
     for (const peer of Object.values(peersRef.current)) {
-      const peerRoom = getRoomAt(peer.x, peer.y, activeTheme.isCustom ? activeTheme : activeTheme.id);
+      const peerRoom = getRoomAt(peer.x, peer.y, activeTheme);
       if ((peerRoom?.doorKey || peerRoom?.id) === nearbyDoor) {
         nearbyDoorOccupants++;
       }
@@ -1097,7 +1096,7 @@ export default function WorldCanvas({
     const px = p.renderX ?? p.x;
     const py = p.renderY ?? p.y;
     const dist = Math.round(Math.hypot(px - stateRef.current.x, py - stateRef.current.y));
-    const pRoom = getRoomAt(px, py, activeTheme.isCustom ? activeTheme : activeTheme.id);
+    const pRoom = getRoomAt(px, py, activeTheme);
     return {
       id,
       ...p,

@@ -488,6 +488,13 @@ app.get('/api/ice-servers', async (_req, res) => {
     { urls: ['stun:stun.cloudflare.com:3478'] },
     { urls: ['stun:stun.services.mozilla.com'] },
     { urls: ['stun:stun.sipgate.net:3478'] },
+    { urls: ['stun:stun.relay.metered.ca:80'] },
+    { urls: ['stun:stun.ekiga.net'] },
+    { urls: ['stun:stun.ideasip.com'] },
+    { urls: ['stun:stun.schlund.de'] },
+    { urls: ['stun:stun.voiparound.com'] },
+    { urls: ['stun:stun.voipbuster.com'] },
+    { urls: ['stun:stun.voipstunt.com'] },
   ];
 
   if (process.env.METERED_API_KEY) {
@@ -507,16 +514,6 @@ app.get('/api/ice-servers', async (_req, res) => {
     iceServers.push(turnConfig);
     return res.json({ iceServers });
   }
-
-  // Fallback: free OpenRelay TURN servers for cross-network audio relay
-  // Without TURN, peers behind symmetric NAT / firewalls cannot exchange media
-  iceServers.push(
-    { urls: 'stun:stun.relay.metered.ca:80' },
-    { urls: 'turn:global.relay.metered.ca:80', username: 'e807ee00a9e595672ca2e743', credential: '5pDLthFiAoEBV+gf' },
-    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'e807ee00a9e595672ca2e743', credential: '5pDLthFiAoEBV+gf' },
-    { urls: 'turn:global.relay.metered.ca:443', username: 'e807ee00a9e595672ca2e743', credential: '5pDLthFiAoEBV+gf' },
-    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'e807ee00a9e595672ca2e743', credential: '5pDLthFiAoEBV+gf' },
-  );
 
   res.json({ iceServers });
 });
