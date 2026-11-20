@@ -396,7 +396,23 @@ ooftop), with custom templates created via the in-app Office Designer.
     * Generated brand geometric spatial soundwave favicon in SVG and binary ICO formats, linked in `index.html` with `image/svg+xml` and `alternate icon`, eliminating 404 console errors.
   * **Render Cold-Start Room Fetch Auto-Retry (`client/src/components/MeetingLobby.jsx`):**
     * Added automatic 3-second retry logic to `fetchRooms()` so network disruptions or connection resets during Render free-tier container cold starts recover automatically without requiring user page reload.
-* **Latest Milestone:** Upstream Ecosystem Synchronization — Visual Styling, Modular World Scenes, Model Catalog & Room Geometry Integration (Commit `5076775`)
+* **Latest Milestone:** WebRTC Per-Peer SDP Serialization, Glare Resolution & Meeting Room Acoustics (Commit `ccfe3b0`)
+  * **SDP Negotiation Serialization (`client/src/services/webrtc.js`):**
+    * Implemented `_queueNegotiation(peerId, operation)` queueing mechanism across `webrtc-offer`, `webrtc-answer`, and `initiateOffer`.
+    * Eliminates race conditions and WebRTC negotiation glare when simultaneous offers are exchanged across peers during audio startup or mic unmuting.
+    * Added automated test suite [`client/tests/negotiation.test.js`](file:///e:/portfolio-projects/ProxiSpeak/client/tests/negotiation.test.js) verifying operations serialize cleanly across async boundaries.
+  * **Transceiver Glare & Dynamic TURN Application (`client/src/services/webrtc.js`):**
+    * Addressed transceiver glare on the answering peer: prevented answers from competing with offers during microphone initialization when the answerer receives its transceiver section.
+    * Dynamically applies fetched Metered TURN `iceServers` directly to active peer connections via `setConfiguration()`, preventing ICE restarts from failing when credentials load asynchronously after connection initiation.
+  * **Scene Room Acoustics Restoration (`client/src/world/scenes.js`, `client/src/services/spatialAudio.js`):**
+    * Restored proper room acoustics (`id`, `isStage`, `isIsolated`, `maxDistance`) on all theme zones (Keynote stage, Auditorium, Breakouts, Rooftop booths).
+    * Restored `calculateAcoustics` in-room gain calculation ensuring participants sitting across boardroom tables hear each other at full presence (`>= 0.45` target gain).
+    * Verified with automated unit test in [`client/tests/world.test.js`](file:///e:/portfolio-projects/ProxiSpeak/client/tests/world.test.js).
+  * **Expanded STUN Fallback Redundancy (`server/index.js`):**
+    * Added backup STUN endpoints (`stun2-4.l.google.com:19302`, `stun.services.mozilla.com`, `stun.sipgate.net:3478`) alongside Cloudflare and Metered TURN.
+  * **Multi-Branch Synchronization:**
+    * Synchronized commits `f3b7233`, `9b1039a`, and `ccfe3b0` across `branch-dvij`, `dev`, and `main`.
+* **Prior Milestone:** Upstream Ecosystem Synchronization — Visual Styling, Modular World Scenes, Model Catalog & Room Geometry Integration (Commit `5076775`)
   * **Synchronization Across Branches:**
     * Synchronized and fast-forward merged `origin/main` commits `7de8fe2` and `5076775` into `branch-dvij`, `dev`, and local `main`.
     * Upstream branches `origin/main`, `origin/dev`, and `origin/branch-dvij` are now in 100% parity at commit `5076775`.
