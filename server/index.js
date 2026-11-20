@@ -484,8 +484,10 @@ async function fetchMeteredIceServers() {
 
 app.get('/api/ice-servers', async (_req, res) => {
   const iceServers = [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302', 'stun:stun4.l.google.com:19302'] },
     { urls: ['stun:stun.cloudflare.com:3478'] },
+    { urls: ['stun:stun.services.mozilla.com'] },
+    { urls: ['stun:stun.sipgate.net:3478'] },
   ];
 
   if (process.env.METERED_API_KEY) {

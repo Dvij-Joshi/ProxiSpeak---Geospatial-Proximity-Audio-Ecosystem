@@ -106,8 +106,18 @@ export const ROOMS = [
 
 export function getRoomAt(x, y, theme = 'office') {
   if (theme && typeof theme === 'object') {
-    const zone = theme.zones.find(z => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h);
-    return zone || { id: 'open-workspace', name: 'Open Workspace', maxDistance: MAX_DISTANCE };
+    const zone = theme.zones?.find(z => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h);
+    if (zone) {
+      return {
+        id: zone.id || zone.key || zone.name?.toLowerCase().replace(/\s+/g, '-') || 'zone',
+        name: zone.name,
+        isIsolated: Boolean(zone.isIsolated),
+        isStage: Boolean(zone.isStage),
+        maxDistance: zone.maxDistance || (zone.isIsolated ? 850 : MAX_DISTANCE),
+        doorKey: zone.doorKey,
+      };
+    }
+    return { id: 'open-workspace', name: 'Open Workspace', maxDistance: MAX_DISTANCE };
   }
   if (theme === 'conference') {
     if (x >= 500 && x <= 1700 && y <= 300) {

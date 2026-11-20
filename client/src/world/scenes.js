@@ -6,7 +6,7 @@ import { layoutWallSegments,toSceneModel,toSceneZone } from '../components/layou
 const model=(kind,x,y,w,h,color,variation)=>({kind,x,y,w,h,color,variation});
 const plant=(x,y,size=32)=>model('plant',x,y,size,size);
 const wall=(x,y,w,h)=>model('wall',x,y,w,h);
-const zone=(name,x,y,w,h,color)=>({name,x,y,w,h,color});
+const zone=(name,x,y,w,h,color,extra={})=>({name,x,y,w,h,color,...extra});
 const chairs=(xs,ys,rotation=0)=>ys.flatMap(y=>xs.map(x=>({...model('chair',x,y,28,26),rotation})));
 const tableChairs=(xs,back,front)=>[...chairs(xs,[back]),...chairs(xs,[front],180)];
 const desk=(x,y)=>model('desk',x,y,144,56);
@@ -30,9 +30,11 @@ function bay(x,y) {
 const office={
   id:'office',name:'Corporate Office',icon:'apartment',badgeColor:'#399c92',spawn:{x:1100,y:720},
   doors:doorModels,
-  zones:ROOMS.map(({name,bounds:b},i)=>zone(name,b.x1,b.y1,b.x2-b.x1,b.y2-b.y1,['#9fc2b5','#d8bc98','#aabfc0','#debd9e','#bfb8c5'][i])).concat([
-    zone('Studio west',112,560,784,280,'#c1c8af'),zone('Studio east',1280,560,784,280,'#c1c8af'),
-    zone('Project floor',680,920,920,312,'#b6c9be'),zone('Dispatch',1192,48,368,336,'#c5bba6')
+  zones:ROOMS.map(({id,name,bounds:b,isIsolated,maxDistance},i)=>zone(name,b.x1,b.y1,b.x2-b.x1,b.y2-b.y1,['#9fc2b5','#d8bc98','#aabfc0','#debd9e','#bfb8c5'][i],{id,isIsolated,maxDistance:maxDistance||850,doorKey:id})).concat([
+    zone('Studio west',112,560,784,280,'#c1c8af',{id:'studio-west',maxDistance:600}),
+    zone('Studio east',1280,560,784,280,'#c1c8af',{id:'studio-east',maxDistance:600}),
+    zone('Project floor',680,920,920,312,'#b6c9be',{id:'project-floor',maxDistance:700}),
+    zone('Dispatch',1192,48,368,336,'#c5bba6',{id:'dispatch',maxDistance:600})
   ]),
   models:[...glazed(WALLS),
     model('table',164,202,272,100,'#b88862','racetrack_oval'),...tableChairs([184,260,336,400],154,322),
@@ -49,9 +51,11 @@ const office={
 };
 const conference={
   id:'conference',name:'Conference & Auditorium',icon:'account_balance',badgeColor:'#c58a69',spawn:{x:1100,y:1050},doors:[],
-  zones:[zone('Keynote stage',500,18,1200,282,'#b4c6b7'),zone('Auditorium',500,302,1200,648,'#d1bf9e'),
-    zone('West breakout',18,18,474,932,'#c6b5ad'),zone('East breakout',1708,18,474,932,'#a7c4bb'),
-    zone('Networking foyer',18,976,2164,306,'#d7c9ab')],
+  zones:[zone('Keynote stage',500,18,1200,282,'#b4c6b7',{id:'keynote-stage',isStage:true,maxDistance:1600}),
+    zone('Auditorium',500,302,1200,648,'#d1bf9e',{id:'auditorium',maxDistance:1200}),
+    zone('West breakout',18,18,474,932,'#c6b5ad',{id:'west-breakout',isIsolated:true,maxDistance:800}),
+    zone('East breakout',1708,18,474,932,'#a7c4bb',{id:'east-breakout',isIsolated:true,maxDistance:800}),
+    zone('Networking foyer',18,976,2164,306,'#d7c9ab',{id:'networking-foyer',maxDistance:600})],
   models:[...glazed([...perimeter,wall(492,18,8,400),wall(492,580,8,370),wall(1700,18,8,400),wall(1700,580,8,370),
     wall(500,300,390,8),wall(1310,300,390,8),wall(18,950,830,8),wall(1352,950,830,8)]),
     model('screen',928,100,344,30),model('counter',1040,188,92,48),
@@ -62,8 +66,10 @@ const conference={
 };
 const lounge={
   id:'lounge',name:'Executive Sky Rooftop',icon:'deck',badgeColor:'#60967e',spawn:{x:1100,y:650},doors:[],
-  zones:[zone('Fireside booths',18,18,522,882,'#d2b39b'),zone('Espresso bar',548,18,1104,882,'#bccab7'),
-    zone('Games room',1668,18,514,882,'#b2c1ba'),zone('Sunset terrace',18,908,2164,374,'#d5bb96')],
+  zones:[zone('Fireside booths',18,18,522,882,'#d2b39b',{id:'fireside-booths',maxDistance:700}),
+    zone('Espresso bar',548,18,1104,882,'#bccab7',{id:'espresso-bar',maxDistance:750}),
+    zone('Games room',1668,18,514,882,'#b2c1ba',{id:'games-room',maxDistance:700}),
+    zone('Sunset terrace',18,908,2164,374,'#d5bb96',{id:'sunset-terrace',maxDistance:800})],
   models:[...glazed([...perimeter,wall(540,18,8,350),wall(540,520,8,380),wall(1652,18,8,350),wall(1652,520,8,380),
     wall(18,900,858,8),wall(1324,900,858,8)]),
     ...[172,508].flatMap(y=>[model('sofa',100,y,224,58),model('table',136,y+94,140,62),plant(380,y)]),
@@ -82,14 +88,17 @@ export function makeScene(base,layout,name) {
     zones:(layout.soundZones||[]).filter(z=>z?.bounds).map(toSceneZone),
     models:[...layoutWallSegments(layout.walls||[],layout.doors||[]),...(layout.furniture||[]).map(f=>toSceneModel(f))],
     doors:(layout.doors||[]).map(d=>({...toSceneModel(d,'door'),key:d.key||d.id,name:d.name||d.key}))
-  }:base;
-  if(custom) {
-    scene.barriers=scene.models.filter(m=>m.kind==='wall'||m.kind==='window');
-    scene.zones=scene.zones.map(z=>{
-      const door=scene.doors.find(d=>zoneForDoor(scene.zones,d)===z);
-      return {...z,doorKey:door?.key};
-    });
-  }
+  }:{
+    ...base,
+    zones:base.zones.map(z=>({...z})),
+    doors:base.doors.map(d=>({...d})),
+    models:base.models.map(m=>({...m})),
+  };
+  scene.barriers=scene.models.filter(m=>m.kind==='wall'||m.kind==='window');
+  scene.zones=scene.zones.map(z=>{
+    const door=scene.doors.find(d=>zoneForDoor(scene.zones,d)===z);
+    return {...z,doorKey:door?.key||z.doorKey||z.id};
+  });
   return {...scene,isCustom:!!custom,name:layout?.name||name||scene.name,hasDoors:scene.doors.length>0,
     doorLookup:Object.fromEntries(scene.doors.map(d=>[d.key,{name:d.name,wall:d}]))};
 }

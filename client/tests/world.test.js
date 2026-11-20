@@ -67,3 +67,13 @@ test('a rotated object and embedded door use their saved geometry', () => {
   assert.equal(calculateAcoustics(listener,speaker,{entry:false},scene).targetGain,0);
 });
 
+test('members sitting across the meeting room table hear each other with clear in-room gain', () => {
+  const scene = makeScene(THEMES.office);
+  // Two members sitting on opposite sides of the meeting room conference table (168px apart)
+  const memberA = { x: 260, y: 154 };
+  const memberB = { x: 260, y: 322 };
+  const acoustics = calculateAcoustics(memberA, memberB, { 'meeting-room': false }, scene);
+  assert.equal(acoustics.status, 'in-room');
+  assert.ok(acoustics.targetGain >= 0.45, `Expected in-room gain >= 0.45, got ${acoustics.targetGain}`);
+});
+
