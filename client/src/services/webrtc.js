@@ -22,6 +22,33 @@ const DEFAULT_ICE_SERVERS = [
   { urls: ['stun:stun.cloudflare.com:3478'] },
   { urls: ['stun:stun.services.mozilla.com'] },
   { urls: ['stun:stun.sipgate.net:3478'] },
+  // ── Free TURN relay servers (Metered OpenRelay) ──────────────────────────────
+  // REQUIRED for cross-network audio: relays media when direct peer-to-peer
+  // fails due to symmetric NAT, carrier-grade NAT, or corporate firewalls.
+  // Without TURN, ~70-80% of real-world internet connections cannot exchange audio.
+  {
+    urls: 'stun:stun.relay.metered.ca:80',
+  },
+  {
+    urls: 'turn:global.relay.metered.ca:80',
+    username: 'e807ee00a9e595672ca2e743',
+    credential: '5pDLthFiAoEBV+gf',
+  },
+  {
+    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+    username: 'e807ee00a9e595672ca2e743',
+    credential: '5pDLthFiAoEBV+gf',
+  },
+  {
+    urls: 'turn:global.relay.metered.ca:443',
+    username: 'e807ee00a9e595672ca2e743',
+    credential: '5pDLthFiAoEBV+gf',
+  },
+  {
+    urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+    username: 'e807ee00a9e595672ca2e743',
+    credential: '5pDLthFiAoEBV+gf',
+  },
 ];
 
 // Detect iOS for audio session workarounds
@@ -196,6 +223,11 @@ class WebRTCManager {
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        // Guard: if the PC was replaced during the async setRemoteDescription, bail out
+        if (this.peers.get(from) !== pc) {
+          console.warn(`[WebRTC] Peer ${from} replaced during offer handling, aborting stale answer`);
+          return;
+        }
         await this.flushIceCandidateQueue(from, pc);
 
         // Cancel any pending offer retry since we successfully received and processed remote offer
@@ -217,6 +249,11 @@ class WebRTCManager {
           }
         }
 
+        // Guard again before creating answer — PC may have been reset during track attachment
+        if (this.peers.get(from) !== pc || pc.signalingState !== 'have-remote-offer') {
+          console.warn(`[WebRTC] Peer ${from} state changed before answer (state: ${pc.signalingState}), aborting`);
+          return;
+        }
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         this.socket.emit('webrtc-answer', { to: from, answer });
@@ -807,6 +844,8 @@ class WebRTCManager {
       this._offerRetryTimers.delete(peerId);
     }
     this._clearOfferWatchdog(peerId);
+    // Invalidate queued negotiations so stale async ops don't run on a new PC
+    this.negotiations.delete(peerId);
   }
 
   /**

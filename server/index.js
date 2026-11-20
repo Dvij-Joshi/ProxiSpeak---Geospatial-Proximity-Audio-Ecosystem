@@ -508,6 +508,16 @@ app.get('/api/ice-servers', async (_req, res) => {
     return res.json({ iceServers });
   }
 
+  // Fallback: free OpenRelay TURN servers for cross-network audio relay
+  // Without TURN, peers behind symmetric NAT / firewalls cannot exchange media
+  iceServers.push(
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    { urls: 'turn:global.relay.metered.ca:80', username: 'e807ee00a9e595672ca2e743', credential: '5pDLthFiAoEBV+gf' },
+    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'e807ee00a9e595672ca2e743', credential: '5pDLthFiAoEBV+gf' },
+    { urls: 'turn:global.relay.metered.ca:443', username: 'e807ee00a9e595672ca2e743', credential: '5pDLthFiAoEBV+gf' },
+    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'e807ee00a9e595672ca2e743', credential: '5pDLthFiAoEBV+gf' },
+  );
+
   res.json({ iceServers });
 });
 
