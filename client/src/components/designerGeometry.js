@@ -1,3 +1,5 @@
+import { toSceneModel } from './layoutModels.js';
+
 // =============================================================================
 // ProxiSpeak Custom Office Designer - 2D Geometric Collision & Wall Expansion Engine
 // Implements Separating Axis Theorem (SAT) for oriented bounding boxes & circles,
@@ -27,23 +29,11 @@ export function getRotatedBoxCorners(cx, cy, w, h, rotationDeg = 0) {
  * Walls are axis-aligned rectangles whose width and height already represent their true dimensions.
  */
 export function getWallBoxCorners(wall) {
-  const x1 = wall.x;
-  const y1 = wall.y;
-  const x2 = wall.x + (wall.w || 10);
-  const y2 = wall.y + (wall.h || 120);
+  return modelCorners(toSceneModel(wall, 'wall'));
+}
 
-  // If orthogonal, use exact axis-aligned corners without rotation distortions
-  if (!wall.rotation || wall.rotation === 0 || wall.rotation === 90 || wall.rotation === 180 || wall.rotation === 270) {
-    return [
-      { x: x1, y: y1 },
-      { x: x2, y: y1 },
-      { x: x2, y: y2 },
-      { x: x1, y: y2 },
-    ];
-  }
-  const cx = x1 + (wall.w || 10) / 2;
-  const cy = y1 + (wall.h || 120) / 2;
-  return getRotatedBoxCorners(cx, cy, wall.w || 10, wall.h || 120, wall.rotation);
+function modelCorners(model) {
+  return getRotatedBoxCorners(model.x + model.w / 2, model.y + model.h / 2, model.w, model.h, model.rotation);
 }
 
 /**
@@ -150,10 +140,17 @@ export function checkPlacementCollision(candidate, worldState, options = {}) {
   const { walls = [], doors = [], furniture = [], spawnPoint = null } = worldState;
   const { ignoreIndex = null, ignoreType = null } = options;
 
-  if (!candidate || candidate.type === 'zone') return { isCollision: false };
+  if (!candidate) return { isCollision: false };
+  if (candidate.type === 'zone') {
+    const b=candidate.bounds;
+    if (b.x1<0 || b.y1<0 || b.x2>2200 || b.y2>1300) {
+      return {isCollision:true,collidingType:'Boundary',reason:'Keep the entire zone inside the floor.'};
+    }
+    return {isCollision:false};
+  }
 
-  const cType = candidate.furnitureType || candidate.type;
-  const isCircularCandidate = cType === 'plant' || cType === 'spawn';
+  const cType = candidate.furnitureType || candidate.type || 'wall';
+  const isCircularCandidate = (cType === 'plant' && candidate.variation !== 'planter_partition_box') || cType === 'spawn';
 
   let candPoly = null;
   let candCircle = null;
@@ -167,10 +164,14 @@ export function checkPlacementCollision(candidate, worldState, options = {}) {
   } else if (cType === 'wall') {
     candPoly = getWallBoxCorners(candidate);
   } else {
-    const cx = candidate.x + (candidate.w || 100) / 2;
-    const cy = candidate.y + (candidate.h || 80) / 2;
-    candPoly = getRotatedBoxCorners(cx, cy, candidate.w || 100, candidate.h || 80, candidate.rotation || 0);
+    candPoly = modelCorners(toSceneModel(candidate, cType === 'door' ? 'door' : 'furniture'));
   }
+
+  const outOfBounds = isCircularCandidate
+    ? candCircle.x - candCircle.r < 0 || candCircle.x + candCircle.r > 2200 ||
+      candCircle.y - candCircle.r < 0 || candCircle.y + candCircle.r > 1300
+    : candPoly.some(p => p.x < 0 || p.y < 0 || p.x > 2200 || p.y > 1300);
+  if (outOfBounds) return { isCollision: true, collidingType: 'Boundary', reason: 'Keep the entire object inside the floor.' };
 
   // 1. Check against Walls
   // Rule: Doors CAN overlap walls (doors belong on walls).
@@ -210,7 +211,7 @@ export function checkPlacementCollision(candidate, worldState, options = {}) {
     const d = doors[i];
     const dcx = d.x + d.w / 2;
     const dcy = d.y + d.h / 2;
-    const dPoly = getRotatedBoxCorners(dcx, dcy, d.w, d.h, d.rotation || 0);
+    const dPoly = modelCorners(toSceneModel(d, 'door'));
 
     if (cType === 'door') {
       // Duplicate door
@@ -245,7 +246,7 @@ export function checkPlacementCollision(candidate, worldState, options = {}) {
     if (ignoreType === 'furniture' && ignoreIndex === i) continue;
     const f = furniture[i];
 
-    const isPlant = f.type === 'plant' || f.furnitureType === 'plant';
+    const isPlant = (f.type === 'plant' || f.furnitureType === 'plant') && f.variation !== 'planter_partition_box';
     if (isPlant) {
       const fCircle = { x: f.x, y: f.y, r: f.r || 20 };
       if (isCircularCandidate) {
@@ -259,11 +260,7 @@ export function checkPlacementCollision(candidate, worldState, options = {}) {
       }
     } else {
       // Rectangular furniture (desk, table, sofa, server_rack)
-      const fw = f.w || 100;
-      const fh = f.h || 80;
-      const fcx = f.x + fw / 2;
-      const fcy = f.y + fh / 2;
-      const fPoly = getRotatedBoxCorners(fcx, fcy, fw, fh, f.rotation || 0);
+      const fPoly = modelCorners(toSceneModel(f));
 
       if (isCircularCandidate) {
         if (doPolygonCircleIntersect(fPoly, candCircle.x, candCircle.y, candCircle.r, 2)) {
@@ -697,76 +694,17 @@ export function drawExpansionArrow(ctx, arrow, isHovered = false, zoom = 1) {
   ctx.save();
   ctx.translate(arrow.x, arrow.y);
 
-  // Outer ambient glow ring
-  ctx.beginPath();
-  ctx.arc(0, 0, radius + (isHovered ? 6 : 3), 0, Math.PI * 2);
-  ctx.fillStyle = isHovered ? 'rgba(56, 189, 248, 0.45)' : 'rgba(56, 189, 248, 0.15)';
-  ctx.fill();
-
-  // Button background
-  ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, Math.PI * 2);
-  ctx.fillStyle = isHovered ? '#0284c7' : '#080d1a';
-  ctx.fill();
-  ctx.strokeStyle = isHovered ? '#ffffff' : '#38bdf8';
-  ctx.lineWidth = isHovered ? 2.5 : 1.8;
-  ctx.stroke();
-
-  // Vector Arrow Glyph
-  ctx.fillStyle = isHovered ? '#ffffff' : '#38bdf8';
-  ctx.strokeStyle = isHovered ? '#ffffff' : '#38bdf8';
+  ctx.fillStyle = isHovered ? '#f8be50' : '#fff2d7';
+  ctx.strokeStyle = '#182c31';
   ctx.lineWidth = 2;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  const s = radius * 0.45;
+  ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+  ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
+  const angle = { right: 0, down: 90, left: 180, up: 270 }[arrow.direction];
+  ctx.rotate(angle * Math.PI / 180);
+  const s = radius * 0.55;
   ctx.beginPath();
-  if (arrow.direction === 'right') {
-    ctx.moveTo(-s, 0); ctx.lineTo(s, 0);
-    ctx.moveTo(s * 0.3, -s * 0.7); ctx.lineTo(s, 0); ctx.lineTo(s * 0.3, s * 0.7);
-  } else if (arrow.direction === 'left') {
-    ctx.moveTo(s, 0); ctx.lineTo(-s, 0);
-    ctx.moveTo(-s * 0.3, -s * 0.7); ctx.lineTo(-s, 0); ctx.lineTo(-s * 0.3, s * 0.7);
-  } else if (arrow.direction === 'down') {
-    ctx.moveTo(0, -s); ctx.lineTo(0, s);
-    ctx.moveTo(-s * 0.7, s * 0.3); ctx.lineTo(0, s); ctx.lineTo(s * 0.7, s * 0.3);
-  } else if (arrow.direction === 'up') {
-    ctx.moveTo(0, s); ctx.lineTo(0, -s);
-    ctx.moveTo(-s * 0.7, -s * 0.3); ctx.lineTo(0, -s); ctx.lineTo(s * 0.7, -s * 0.3);
-  }
+  ctx.moveTo(-s, 0); ctx.lineTo(s, 0);
+  ctx.moveTo(0, -s); ctx.lineTo(s, 0); ctx.lineTo(0, s);
   ctx.stroke();
-
-  // Subtle '+' tag indicating addition
-  ctx.font = `700 ${Math.round(radius * 0.55)}px Inter, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  ctx.restore();
-}
-
-/**
- * Draws a translucent dashed ghost preview of the next wall segment on hover.
- */
-export function drawExpansionPreview(ctx, arrow) {
-  if (!arrow || !arrow.targetWall) return;
-  const tw = arrow.targetWall;
-
-  ctx.save();
-  ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
-  ctx.strokeStyle = '#38bdf8';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4, 4]);
-
-  ctx.fillRect(tw.x, tw.y, tw.w, tw.h);
-  ctx.strokeRect(tw.x, tw.y, tw.w, tw.h);
-
-  // Directional guide indicator
-  ctx.setLineDash([]);
-  ctx.font = '700 9px monospace';
-  ctx.fillStyle = '#38bdf8';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('+ CONNECT', tw.x + tw.w / 2, tw.y + tw.h / 2);
-
   ctx.restore();
 }

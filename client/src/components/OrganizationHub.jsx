@@ -1,3 +1,4 @@
+import { AvatarPortrait } from './WorkspaceArt';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { SERVER_URL } from '../config';
 
@@ -10,8 +11,8 @@ const DEFAULT_TEMPLATES = [
     description: 'Executive suites, private soundproof meeting rooms, and team desk pods.',
     icon: 'corporate_fare',
     badge: 'Standard HQ',
-    badgeColor: '#2563eb',
-    badgeBg: '#eff6ff',
+    badgeColor: '#277970',
+    badgeBg: '#e2efdf',
     acoustics: 'Wall attenuation · Soundproof knock-to-enter doors · 60 FPS LERP radar',
     capacity: 'Up to 50 members',
   },
@@ -64,7 +65,7 @@ export default function OrganizationHub({
   const [showCreateOrgModal, setShowCreateOrgModal] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgDesc, setNewOrgDesc] = useState('');
-  const [newOrgColor, setNewOrgColor] = useState('#2563eb');
+  const [newOrgColor, setNewOrgColor] = useState('#277970');
   const [adminFullName, setAdminFullName] = useState(user?.username || '');
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPass, setShowAdminPass] = useState(false);
@@ -88,7 +89,7 @@ export default function OrganizationHub({
     }
     setNewOrgName('');
     setNewOrgDesc('');
-    setNewOrgColor('#2563eb');
+    setNewOrgColor('#277970');
     setAdminFullName(user?.username || '');
     setAdminPassword(generateSecurePassword('Admin#'));
     setShowCreateOrgModal(true);
@@ -552,33 +553,33 @@ export default function OrganizationHub({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-3 md:p-6 select-none animate-in fade-in duration-200">
-      <div className="w-full max-w-6xl bg-[#FAF9F5] rounded-[28px] border border-[#E5E4DE] shadow-[0_32px_80px_-16px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col h-[90vh] max-h-[920px]">
+      <div className="org-panel w-full max-w-6xl bg-[#f4edda] rounded-[28px] border border-[#9bab99] shadow-[0_32px_80px_-16px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col h-[90vh] max-h-[920px]">
         {/* ─── Top Main Navigation Bar ────────────────────────────────────────── */}
-        <div className="px-6 py-4 border-b border-[#EBEAE5] flex items-center justify-between bg-[#FAF9F5] shrink-0">
+        <div className="px-6 py-4 border-b border-[#EBEAE5] flex items-center justify-between bg-[#f4edda] shrink-0">
           <div className="flex items-center gap-3.5">
             <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm shadow-xs border border-black/5"
-              style={{ backgroundColor: selectedOrg?.logoColor || '#141413' }}
+              className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-xs border border-black/5"
+              style={{ backgroundColor: selectedOrg?.logoColor || '#203334' }}
             >
               {selectedOrg?.name?.slice(0, 2).toUpperCase() || 'OG'}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-[#141413] tracking-tight">{selectedOrg?.name || 'Organization Workspace'}</h1>
-                <span className="font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-white border border-[#E5E4DE] text-[#5e5f5c]">
+                <h1 className="text-base font-bold text-[#203334] tracking-tight">{selectedOrg?.name || 'Organization Workspace'}</h1>
+                <span className="font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-white border border-[#9bab99] text-[#475950]">
                   @{selectedOrg?.slug || 'workspace'}.com
                 </span>
                 {isAdmin ? (
-                  <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#141413] text-[#FAF9F5] font-semibold">
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#203334] text-[#f4edda] font-semibold">
                     Administrator
                   </span>
                 ) : (
-                  <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white text-[#5e5f5c] border border-[#E5E4DE] font-semibold">
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white text-[#475950] border border-[#9bab99] font-semibold">
                     Team Member
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#8C8880] mt-0.5 line-clamp-1">
+              <p className="text-xs text-[#55675e] mt-0.5 line-clamp-1">
                 {selectedOrg?.description || 'Enterprise spatial audio workspace and virtual headquarters.'}
               </p>
             </div>
@@ -587,7 +588,7 @@ export default function OrganizationHub({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowStartMeetingModal(true)}
-              className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold shadow-sm transition-all active:scale-[0.99] cursor-pointer"
+              className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold shadow-sm transition-all active:scale-[0.99] cursor-pointer"
             >
               <span className="material-symbols-outlined text-[16px]">video_call</span>
               <span>Start Instant Call</span>
@@ -596,7 +597,7 @@ export default function OrganizationHub({
             {isAdmin && (
               <button
                 onClick={() => setShowScheduleModal(true)}
-                className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#F5F4EE] border border-[#E5E4DE] text-[#141413] text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#F5F4EE] border border-[#9bab99] text-[#203334] text-xs font-semibold shadow-2xs transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px]">calendar_month</span>
                 <span>Schedule Meeting</span>
@@ -605,7 +606,7 @@ export default function OrganizationHub({
 
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors ml-1 flex items-center justify-center cursor-pointer"
+              className="w-9 h-9 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors ml-1 flex items-center justify-center cursor-pointer"
               title="Close Workspace"
             >
               <span className="material-symbols-outlined text-[18px]">close</span>
@@ -637,17 +638,17 @@ export default function OrganizationHub({
         )}
 
         {/* ─── Body Layout: Organizations Sidebar + Content Dashboard ─────────── */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="org-body flex-1 flex overflow-hidden">
           {/* ─── Left Sidebar: Organizations Selector & Profile ───────────────── */}
-          <div className="w-64 border-r border-[#E9E8E4] bg-[#F7F6F2] p-4 flex flex-col justify-between shrink-0 overflow-y-auto">
+          <div className="org-sidebar w-64 border-r border-[#e2dcc5] bg-[#F7F6F2] p-4 flex flex-col justify-between shrink-0 overflow-y-auto">
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between px-2 py-1">
-                <span className="text-[11px] font-bold text-[#8C8880] uppercase tracking-wider">Organizations</span>
-                <span className="text-[10px] text-[#8C8880] font-mono">{organizations.length}</span>
+                <span className="text-[11px] font-bold text-[#55675e] uppercase tracking-wider">Organizations</span>
+                <span className="text-[10px] text-[#55675e] font-mono">{organizations.length}</span>
               </div>
 
               {loading ? (
-                <div className="p-4 text-xs text-[#8C8880] text-center">Loading workspaces...</div>
+                <div className="p-4 text-xs text-[#55675e] text-center">Loading workspaces...</div>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {organizations.map((org) => {
@@ -659,21 +660,21 @@ export default function OrganizationHub({
                           setSelectedOrg(org);
                           if (onSelectOrg) onSelectOrg(org);
                         }}
-                        className={`w-full text-left p-3 rounded-2xl transition-all flex items-center gap-3 border ${
+                        className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 border ${
                           isSelected
-                            ? 'bg-white border-[#2563eb] shadow-sm text-[#1c1b1b]'
-                            : 'border-transparent hover:bg-white/60 text-[#5e5f5c]'
+                            ? 'bg-white border-[#277970] shadow-sm text-[#203334]'
+                            : 'border-transparent hover:bg-white/60 text-[#475950]'
                         }`}
                       >
                         <div
                           className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0"
-                          style={{ backgroundColor: org.logoColor || '#2563eb' }}
+                          style={{ backgroundColor: org.logoColor || '#277970' }}
                         >
                           {org.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-xs truncate text-[#1c1b1b]">{org.name}</div>
-                          <div className="text-[10px] text-[#8C8880] truncate font-mono">@{org.slug}.com</div>
+                          <div className="font-semibold text-xs truncate text-[#203334]">{org.name}</div>
+                          <div className="text-[10px] text-[#55675e] truncate font-mono">@{org.slug}.com</div>
                         </div>
                       </button>
                     );
@@ -684,13 +685,13 @@ export default function OrganizationHub({
               {organizations.length === 0 ? (
                 <button
                   onClick={handleOpenCreateOrg}
-                  className="mt-2 w-full py-2.5 px-3 rounded-2xl border border-dashed border-[#E5E4DE] hover:border-[#141413] text-xs font-semibold text-[#141413] hover:bg-white transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="mt-2 w-full py-2.5 px-3 rounded-lg border border-dashed border-[#9bab99] hover:border-[#203334] text-xs font-semibold text-[#203334] hover:bg-white transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <span className="material-symbols-outlined text-[16px]">add_business</span>
                   <span>Create Organization</span>
                 </button>
               ) : (
-                <div className="mt-2 px-3 py-2.5 rounded-2xl bg-white border border-[#E5E4DE] text-[11px] font-mono text-[#5e5f5c] text-center shadow-2xs flex items-center justify-center gap-2">
+                <div className="mt-2 px-3 py-2.5 rounded-lg bg-white border border-[#9bab99] text-[11px] font-mono text-[#475950] text-center shadow-2xs flex items-center justify-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="truncate font-semibold">Enrolled: {selectedOrg?.name || 'Workspace'}</span>
                 </div>
@@ -698,16 +699,16 @@ export default function OrganizationHub({
             </div>
 
             {/* Signed-in Account Footer */}
-            <div className="pt-4 border-t border-[#E9E8E4] flex items-center gap-3">
+            <div className="pt-4 border-t border-[#e2dcc5] flex items-center gap-3">
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
                 style={{ backgroundColor: user?.avatarColor || '#3b82f6' }}
               >
-                {(user?.username || 'A').slice(0, 1).toUpperCase()}
+                <AvatarPortrait name={user?.username} color={user?.avatarColor} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-[#1c1b1b] truncate">{user?.username || 'Anonymous'}</div>
-                <div className="text-[10px] text-[#8C8880] truncate font-mono">
+                <div className="text-xs font-semibold text-[#203334] truncate">{user?.username || 'Anonymous'}</div>
+                <div className="text-[10px] text-[#55675e] truncate font-mono">
                   {myMemberRecord?.email || `${user?.username || 'user'}@${selectedOrg?.slug || 'proxispeak'}.com`}
                 </div>
               </div>
@@ -717,18 +718,18 @@ export default function OrganizationHub({
           {/* ─── Right Content Dashboard ──────────────────────────────────────── */}
           <div className="flex-1 flex flex-col overflow-hidden bg-white">
             {organizations.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#FAF9F5]/40 select-none">
-                <div className="w-16 h-16 rounded-3xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#2563eb] mb-4 shadow-sm">
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#f4edda]/40 select-none">
+                <div className="w-16 h-16 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-[#277970] mb-4 shadow-sm">
                   <span className="material-symbols-outlined text-[32px]">apartment</span>
                 </div>
-                <h2 className="text-base font-bold text-[#1c1b1b] tracking-tight">No Organizations Found</h2>
-                <p className="text-xs text-[#5e5f5c] max-w-md mt-1.5 leading-relaxed">
+                <h2 className="text-base font-bold text-[#203334] tracking-tight">No Organizations Found</h2>
+                <p className="text-xs text-[#475950] max-w-md mt-1.5 leading-relaxed">
                   Organizations in ProxiSpeak are strictly private to verified company members. Create your organization to become the primary administrator, or sign in with your corporate credentials.
                 </p>
                 <div className="flex items-center gap-3 mt-6">
                   <button
                     onClick={handleOpenCreateOrg}
-                    className="px-5 py-2.5 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-2"
+                    className="px-5 py-2.5 rounded-xl bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-2"
                   >
                     <span className="material-symbols-outlined text-[16px]">add_business</span>
                     <span>Create Organization</span>
@@ -736,7 +737,7 @@ export default function OrganizationHub({
                   {!user && onRequestAuth && (
                     <button
                       onClick={onRequestAuth}
-                      className="px-4 py-2.5 rounded-xl bg-white hover:bg-[#F4F3EF] border border-[#D9D7D0] text-[#1c1b1b] text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+                      className="px-4 py-2.5 rounded-xl bg-white hover:bg-[#eae4cc] border border-[#849388] text-[#203334] text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
                     >
                       <span className="material-symbols-outlined text-[16px]">login</span>
                       <span>Sign In to Account</span>
@@ -747,7 +748,7 @@ export default function OrganizationHub({
             ) : (
               <>
             {/* Dashboard Navigation Tabs */}
-            <div className="px-6 pt-3 border-b border-[#E9E8E4] flex items-center gap-1 bg-[#FAF9F5] overflow-x-auto shrink-0">
+            <div className="px-6 pt-3 border-b border-[#e2dcc5] flex items-center gap-1 bg-[#f4edda] overflow-x-auto shrink-0">
               {[
                 { id: 'overview', label: 'Overview', icon: 'dashboard' },
                 { id: 'meetings', label: 'Meetings & Schedule', icon: 'calendar_month', count: meetings.upcoming?.length || 0 },
@@ -761,8 +762,8 @@ export default function OrganizationHub({
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-semibold transition-all border-b-2 -mb-px whitespace-nowrap ${
                       isActive
-                        ? 'border-[#2563eb] text-[#2563eb] bg-white shadow-sm'
-                        : 'border-transparent text-[#8C8880] hover:text-[#1c1b1b] hover:bg-white/50'
+                        ? 'border-[#277970] text-[#277970] bg-white shadow-sm'
+                        : 'border-transparent text-[#55675e] hover:text-[#203334] hover:bg-white/50'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
@@ -770,7 +771,7 @@ export default function OrganizationHub({
                     {tab.count !== undefined && tab.count > 0 && (
                       <span
                         className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                          isActive ? 'bg-blue-100 text-blue-700' : 'bg-[#E9E8E4] text-[#5e5f5c]'
+                          isActive ? 'bg-blue-100 text-blue-700' : 'bg-[#e2dcc5] text-[#475950]'
                         }`}
                       >
                         {tab.count}
@@ -788,9 +789,9 @@ export default function OrganizationHub({
                 <div className="flex flex-col gap-6">
                   {/* Hero Metric Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E9E8E4]">
-                      <div className="text-[11px] font-bold text-[#8C8880] uppercase tracking-wider">Team Members</div>
-                      <div className="text-2xl font-bold text-[#1c1b1b] mt-1">
+                    <div className="p-4 rounded-lg bg-[#f4edda] border border-[#e2dcc5]">
+                      <div className="text-[11px] font-bold text-[#55675e] uppercase tracking-wider">Team Members</div>
+                      <div className="text-2xl font-bold text-[#203334] mt-1">
                         {selectedOrg?.members?.length || 1}
                       </div>
                       <div className="text-[11px] text-[#059669] mt-1 flex items-center justify-between font-medium">
@@ -805,7 +806,7 @@ export default function OrganizationHub({
                               setNewUserPassword(generateSecurePassword('User#'));
                               setShowAddUserModal(true);
                             }}
-                            className="text-[10px] text-[#2563eb] hover:underline font-bold flex items-center gap-0.5"
+                            className="text-[10px] text-[#277970] hover:underline font-bold flex items-center gap-0.5"
                           >
                             <span className="material-symbols-outlined text-[12px]">person_add</span>
                             <span>Add</span>
@@ -814,53 +815,53 @@ export default function OrganizationHub({
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E9E8E4]">
-                      <div className="text-[11px] font-bold text-[#8C8880] uppercase tracking-wider">Upcoming Calls</div>
-                      <div className="text-2xl font-bold text-[#1c1b1b] mt-1">
+                    <div className="p-4 rounded-lg bg-[#f4edda] border border-[#e2dcc5]">
+                      <div className="text-[11px] font-bold text-[#55675e] uppercase tracking-wider">Upcoming Calls</div>
+                      <div className="text-2xl font-bold text-[#203334] mt-1">
                         {meetings.upcoming?.length || 0}
                       </div>
-                      <div className="text-[11px] text-[#8C8880] mt-1 flex items-center gap-1">
+                      <div className="text-[11px] text-[#55675e] mt-1 flex items-center gap-1">
                         <span className="material-symbols-outlined text-[14px]">event</span>
                         <span>Scheduled calendar</span>
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E9E8E4]">
-                      <div className="text-[11px] font-bold text-[#8C8880] uppercase tracking-wider">Office Templates</div>
-                      <div className="text-2xl font-bold text-[#1c1b1b] mt-1">
+                    <div className="p-4 rounded-lg bg-[#f4edda] border border-[#e2dcc5]">
+                      <div className="text-[11px] font-bold text-[#55675e] uppercase tracking-wider">Office Templates</div>
+                      <div className="text-2xl font-bold text-[#203334] mt-1">
                         {DEFAULT_TEMPLATES.length + layouts.length}
                       </div>
-                      <div className="text-[11px] text-[#2563eb] mt-1 flex items-center gap-1 font-medium">
+                      <div className="text-[11px] text-[#277970] mt-1 flex items-center gap-1 font-medium">
                         <span className="material-symbols-outlined text-[14px]">layers</span>
                         <span>3 Standard + {layouts.length} Custom</span>
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E9E8E4]">
-                      <div className="text-[11px] font-bold text-[#8C8880] uppercase tracking-wider">Company Domain</div>
-                      <div className="text-sm font-mono font-bold text-[#1c1b1b] mt-2 truncate">
+                    <div className="p-4 rounded-lg bg-[#f4edda] border border-[#e2dcc5]">
+                      <div className="text-[11px] font-bold text-[#55675e] uppercase tracking-wider">Company Domain</div>
+                      <div className="text-sm font-mono font-bold text-[#203334] mt-2 truncate">
                         @{selectedOrg?.slug || 'workspace'}.com
                       </div>
-                      <div className="text-[10px] text-[#8C8880] mt-1">Auto-generated accounts</div>
+                      <div className="text-[10px] text-[#55675e] mt-1">Auto-generated accounts</div>
                     </div>
                   </div>
 
                   {/* Instant Meeting Quick Launcher */}
-                  <div className="p-6 rounded-3xl bg-gradient-to-r from-[#FAF9F5] via-[#F4F3EF] to-[#FAF9F5] border border-[#D9D7D0] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="p-6 rounded-lg bg-gradient-to-r from-[#f4edda] via-[#eae4cc] to-[#f4edda] border border-[#849388] flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider mb-1.5">
                         <span className="material-symbols-outlined text-[12px]">bolt</span>
                         <span>Spatial Meeting Engine</span>
                       </div>
-                      <h3 className="text-lg font-bold text-[#1c1b1b]">Instant Team Collaboration</h3>
-                      <p className="text-xs text-[#5e5f5c] max-w-xl mt-1">
+                      <h3 className="text-lg font-bold text-[#203334]">Instant Team Collaboration</h3>
+                      <p className="text-xs text-[#475950] max-w-xl mt-1">
                         Jump immediately into a spatial audio workspace. Choose between Corporate Office, Keynote Auditorium, or Sky Lounge.
                       </p>
                     </div>
 
                     <button
                       onClick={() => setShowStartMeetingModal(true)}
-                      className="px-5 py-3 rounded-2xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+                      className="px-5 py-3 rounded-lg bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                       <span className="material-symbols-outlined text-[18px]">meeting_room</span>
                       <span>Launch Instant Call</span>
@@ -871,15 +872,15 @@ export default function OrganizationHub({
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <h3 className="text-sm font-bold text-[#1c1b1b] uppercase tracking-wider">
+                        <h3 className="text-sm font-bold text-[#203334] uppercase tracking-wider">
                           Ready-to-Use Architectural Templates
                         </h3>
-                        <p className="text-xs text-[#8C8880]">Default physics-aware spatial rooms calibrated for team sizes</p>
+                        <p className="text-xs text-[#55675e]">Default physics-aware spatial rooms calibrated for team sizes</p>
                       </div>
 
                       <button
                         onClick={() => onOpenDesigner && onOpenDesigner(selectedOrg)}
-                        className="text-xs font-semibold text-[#2563eb] hover:underline flex items-center gap-1"
+                        className="text-xs font-semibold text-[#277970] hover:underline flex items-center gap-1"
                       >
                         <span className="material-symbols-outlined text-[16px]">draw</span>
                         <span>Design Custom Template</span>
@@ -890,7 +891,7 @@ export default function OrganizationHub({
                       {DEFAULT_TEMPLATES.map((tmpl) => (
                         <div
                           key={tmpl.id}
-                          className="p-5 rounded-2xl border border-[#E9E8E4] hover:border-[#2563eb] hover:shadow-md transition-all bg-[#FAF9F5] flex flex-col justify-between gap-4"
+                          className="p-5 rounded-lg border border-[#e2dcc5] hover:border-[#277970] hover:shadow-[3px_3px_0_#203334] transition-all bg-[#f4edda] flex flex-col justify-between gap-4"
                         >
                           <div>
                             <div className="flex items-center justify-between mb-2">
@@ -900,11 +901,11 @@ export default function OrganizationHub({
                               >
                                 {tmpl.badge}
                               </span>
-                              <span className="material-symbols-outlined text-[#8C8880] text-[20px]">{tmpl.icon}</span>
+                              <span className="material-symbols-outlined text-[#55675e] text-[20px]">{tmpl.icon}</span>
                             </div>
-                            <h4 className="font-bold text-sm text-[#1c1b1b]">{tmpl.name}</h4>
-                            <p className="text-xs text-[#5e5f5c] mt-1 leading-relaxed">{tmpl.description}</p>
-                            <div className="mt-3 text-[10px] font-mono text-[#8C8880] flex items-center gap-1">
+                            <h4 className="font-bold text-sm text-[#203334]">{tmpl.name}</h4>
+                            <p className="text-xs text-[#475950] mt-1 leading-relaxed">{tmpl.description}</p>
+                            <div className="mt-3 text-[10px] font-mono text-[#55675e] flex items-center gap-1">
                               <span className="material-symbols-outlined text-[14px]">surround_sound</span>
                               <span>{tmpl.acoustics}</span>
                             </div>
@@ -914,7 +915,7 @@ export default function OrganizationHub({
                             onClick={() => {
                               handleStartInstantMeeting(tmpl.id);
                             }}
-                            className="w-full py-2 px-3 rounded-xl bg-white hover:bg-[#2563eb] hover:text-white border border-[#D9D7D0] text-xs font-semibold text-[#1c1b1b] transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                            className="w-full py-2 px-3 rounded-xl bg-white hover:bg-[#277970] hover:text-white border border-[#849388] text-xs font-semibold text-[#203334] transition-all flex items-center justify-center gap-1.5 shadow-sm"
                           >
                             <span className="material-symbols-outlined text-[16px]">play_arrow</span>
                             <span>Enter {tmpl.name.split(' ')[0]}</span>
@@ -930,16 +931,16 @@ export default function OrganizationHub({
               {activeTab === 'meetings' && (
                 <div className="flex flex-col gap-6">
                   {/* Action Bar */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#E9E8E4]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#e2dcc5]">
                     <div>
-                      <h3 className="text-base font-bold text-[#1c1b1b]">Meetings & Audio Sessions</h3>
-                      <p className="text-xs text-[#8C8880]">Schedule upcoming calls or review past session audio logs</p>
+                      <h3 className="text-base font-bold text-[#203334]">Meetings & Audio Sessions</h3>
+                      <p className="text-xs text-[#55675e]">Schedule upcoming calls or review past session audio logs</p>
                     </div>
 
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setShowStartMeetingModal(true)}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold shadow-sm transition-all"
                       >
                         <span className="material-symbols-outlined text-[16px]">video_call</span>
                         <span>Start Instant Meeting</span>
@@ -948,7 +949,7 @@ export default function OrganizationHub({
                       {isAdmin && (
                         <button
                           onClick={() => setShowScheduleModal(true)}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#F4F3EF] border border-[#D9D7D0] text-[#1c1b1b] text-xs font-semibold shadow-sm transition-all"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#eae4cc] border border-[#849388] text-[#203334] text-xs font-semibold shadow-sm transition-all"
                         >
                           <span className="material-symbols-outlined text-[16px]">calendar_month</span>
                           <span>Schedule Meeting</span>
@@ -959,16 +960,16 @@ export default function OrganizationHub({
 
                   {/* Upcoming Scheduled Meetings */}
                   <div>
-                    <h4 className="text-xs font-bold text-[#1c1b1b] uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <h4 className="text-xs font-bold text-[#203334] uppercase tracking-wider mb-3 flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-blue-600"></span>
                       <span>Upcoming Meetings ({meetings.upcoming?.length || 0})</span>
                     </h4>
 
                     {(!meetings.upcoming || meetings.upcoming.length === 0) ? (
-                      <div className="p-8 rounded-2xl border border-dashed border-[#D9D7D0] bg-[#FAF9F5] text-center flex flex-col items-center justify-center">
-                        <span className="material-symbols-outlined text-[#8C8880] text-[32px] mb-2">event_available</span>
-                        <p className="text-xs font-semibold text-[#1c1b1b]">No upcoming meetings scheduled</p>
-                        <p className="text-[11px] text-[#8C8880] mt-0.5">
+                      <div className="p-8 rounded-lg border border-dashed border-[#849388] bg-[#f4edda] text-center flex flex-col items-center justify-center">
+                        <span className="material-symbols-outlined text-[#55675e] text-[32px] mb-2">event_available</span>
+                        <p className="text-xs font-semibold text-[#203334]">No upcoming meetings scheduled</p>
+                        <p className="text-[11px] text-[#55675e] mt-0.5">
                           {isAdmin ? 'Click "Schedule Meeting" to create calendar events for your team.' : 'Your team admin has not scheduled any upcoming calls yet.'}
                         </p>
                       </div>
@@ -979,7 +980,7 @@ export default function OrganizationHub({
                           return (
                             <div
                               key={m.meetingId}
-                              className="p-4 rounded-2xl border border-[#E9E8E4] hover:border-[#2563eb] bg-[#FAF9F5] flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all"
+                              className="p-4 rounded-lg border border-[#e2dcc5] hover:border-[#277970] bg-[#f4edda] flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all"
                             >
                               <div className="flex items-start gap-3">
                                 <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center shrink-0">
@@ -987,13 +988,13 @@ export default function OrganizationHub({
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <h5 className="font-bold text-xs text-[#1c1b1b]">{m.title}</h5>
+                                    <h5 className="font-bold text-xs text-[#203334]">{m.title}</h5>
                                     <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-700">
                                       {m.template}
                                     </span>
                                   </div>
-                                  <p className="text-[11px] text-[#8C8880] mt-0.5">
-                                    Hosted by <span className="font-medium text-[#1c1b1b]">{m.host}</span> · {schedTimeStr}
+                                  <p className="text-[11px] text-[#55675e] mt-0.5">
+                                    Hosted by <span className="font-medium text-[#203334]">{m.host}</span> · {schedTimeStr}
                                   </p>
                                 </div>
                               </div>
@@ -1001,7 +1002,7 @@ export default function OrganizationHub({
                               <div className="flex items-center gap-2 self-end sm:self-auto">
                                 <button
                                   onClick={() => copyText(`${window.location.origin}/?room=${encodeURIComponent(m.roomId)}`, 'Meeting link copied')}
-                                  className="p-2 rounded-xl bg-white hover:bg-[#E9E8E4] border border-[#D9D7D0] text-[#5e5f5c] transition-all text-xs"
+                                  className="p-2 rounded-xl bg-white hover:bg-[#e2dcc5] border border-[#849388] text-[#475950] transition-all text-xs"
                                   title="Copy invite link"
                                 >
                                   <span className="material-symbols-outlined text-[16px]">share</span>
@@ -1018,7 +1019,7 @@ export default function OrganizationHub({
                                       });
                                     }
                                   }}
-                                  className="px-3.5 py-1.5 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+                                  className="px-3.5 py-1.5 rounded-xl bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
                                 >
                                   <span className="material-symbols-outlined text-[16px]">login</span>
                                   <span>Join Call</span>
@@ -1033,19 +1034,19 @@ export default function OrganizationHub({
 
                   {/* Previous Meeting Logs */}
                   <div>
-                    <h4 className="text-xs font-bold text-[#1c1b1b] uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <h4 className="text-xs font-bold text-[#203334] uppercase tracking-wider mb-3 flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-slate-400"></span>
                       <span>Previous Meeting Logs & Session History</span>
                     </h4>
 
                     {(!meetings.history || meetings.history.length === 0) ? (
-                      <div className="p-6 rounded-2xl border border-[#E9E8E4] bg-[#FAF9F5] text-center text-xs text-[#8C8880]">
+                      <div className="p-6 rounded-lg border border-[#e2dcc5] bg-[#f4edda] text-center text-xs text-[#55675e]">
                         No completed sessions logged yet.
                       </div>
                     ) : (
-                      <div className="overflow-x-auto rounded-2xl border border-[#E9E8E4]">
+                      <div className="overflow-x-auto rounded-lg border border-[#e2dcc5]">
                         <table className="w-full text-left text-xs">
-                          <thead className="bg-[#FAF9F5] border-b border-[#E9E8E4] text-[#8C8880] uppercase text-[10px]">
+                          <thead className="bg-[#f4edda] border-b border-[#e2dcc5] text-[#55675e] uppercase text-[10px]">
                             <tr>
                               <th className="py-3 px-4 font-semibold">Meeting Title</th>
                               <th className="py-3 px-4 font-semibold">Template</th>
@@ -1055,20 +1056,20 @@ export default function OrganizationHub({
                               <th className="py-3 px-4 font-semibold text-right">Action</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-[#E9E8E4]">
+                          <tbody className="divide-y divide-[#e2dcc5]">
                             {meetings.history.map((m) => (
-                              <tr key={m.meetingId} className="hover:bg-[#FAF9F5] transition-colors">
-                                <td className="py-3 px-4 font-semibold text-[#1c1b1b]">{m.title}</td>
+                              <tr key={m.meetingId} className="hover:bg-[#f4edda] transition-colors">
+                                <td className="py-3 px-4 font-semibold text-[#203334]">{m.title}</td>
                                 <td className="py-3 px-4">
-                                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#F4F3EF] border border-[#D9D7D0] text-[#5e5f5c]">
+                                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#eae4cc] border border-[#849388] text-[#475950]">
                                     {m.template}
                                   </span>
                                 </td>
-                                <td className="py-3 px-4 text-[#5e5f5c]">{m.host}</td>
-                                <td className="py-3 px-4 text-[#8C8880]">
+                                <td className="py-3 px-4 text-[#475950]">{m.host}</td>
+                                <td className="py-3 px-4 text-[#55675e]">
                                   {m.startedAt ? new Date(m.startedAt).toLocaleDateString() : (m.createdAt ? new Date(m.createdAt).toLocaleDateString() : 'Recent')}
                                 </td>
-                                <td className="py-3 px-4 text-[#5e5f5c] font-mono">
+                                <td className="py-3 px-4 text-[#475950] font-mono">
                                   {m.durationMinutes ? `${m.durationMinutes} mins` : 'Completed'}
                                 </td>
                                 <td className="py-3 px-4 text-right">
@@ -1083,7 +1084,7 @@ export default function OrganizationHub({
                                         });
                                       }
                                     }}
-                                    className="text-xs font-semibold text-[#2563eb] hover:underline"
+                                    className="text-xs font-semibold text-[#277970] hover:underline"
                                   >
                                     Re-enter
                                   </button>
@@ -1102,10 +1103,10 @@ export default function OrganizationHub({
               {activeTab === 'members' && (
                 <div className="flex flex-col gap-6">
                   {/* Member Management Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#E9E8E4]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#e2dcc5]">
                     <div>
-                      <h3 className="text-base font-bold text-[#1c1b1b]">Colleague Directory & Roles</h3>
-                      <p className="text-xs text-[#8C8880]">
+                      <h3 className="text-base font-bold text-[#203334]">Colleague Directory & Roles</h3>
+                      <p className="text-xs text-[#55675e]">
                         Manage user accounts, assign admin roles, and generate official @{selectedOrg?.slug}.com credentials
                       </p>
                     </div>
@@ -1117,7 +1118,7 @@ export default function OrganizationHub({
                           setNewUserPassword(generateSecurePassword('User#'));
                           setShowAddUserModal(true);
                         }}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all shrink-0"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold shadow-sm transition-all shrink-0"
                       >
                         <span className="material-symbols-outlined text-[16px]">person_add</span>
                         <span>Add Team Member</span>
@@ -1127,7 +1128,7 @@ export default function OrganizationHub({
 
                   {/* Search Bar */}
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3.5 top-2.5 text-[#8C8880] text-[18px]">
+                    <span className="material-symbols-outlined absolute left-3.5 top-2.5 text-[#55675e] text-[18px]">
                       search
                     </span>
                     <input
@@ -1135,14 +1136,14 @@ export default function OrganizationHub({
                       placeholder="Search colleagues by name, handle, or role..."
                       value={memberSearch}
                       onChange={(e) => setMemberSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 text-xs rounded-xl border border-[#D9D7D0] bg-[#FAF9F5] focus:bg-white focus:outline-none focus:border-[#2563eb] transition-all"
+                      className="w-full pl-10 pr-4 py-2 text-xs rounded-xl border border-[#849388] bg-[#f4edda] focus:bg-white focus:outline-none focus:border-[#277970] transition-all"
                     />
                   </div>
 
                   {/* Members Table */}
-                  <div className="overflow-x-auto rounded-2xl border border-[#E9E8E4]">
+                  <div className="overflow-x-auto rounded-lg border border-[#e2dcc5]">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-[#FAF9F5] border-b border-[#E9E8E4] text-[#8C8880] uppercase text-[10px]">
+                      <thead className="bg-[#f4edda] border-b border-[#e2dcc5] text-[#55675e] uppercase text-[10px]">
                         <tr>
                           <th className="py-3 px-4 font-semibold">User / Colleague</th>
                           <th className="py-3 px-4 font-semibold">Role</th>
@@ -1151,23 +1152,23 @@ export default function OrganizationHub({
                           {isAdmin && <th className="py-3 px-4 font-semibold text-right">Admin Actions</th>}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#E9E8E4]">
+                      <tbody className="divide-y divide-[#e2dcc5]">
                         {filteredMembers.map((m) => {
                           const isMemberOwner = m.role === 'owner' || m.username === selectedOrg.owner;
                           const email = m.email || `${m.username}@${selectedOrg.slug}.com`;
                           return (
-                            <tr key={m.username} className="hover:bg-[#FAF9F5] transition-colors">
+                            <tr key={m.username} className="hover:bg-[#f4edda] transition-colors">
                               <td className="py-3.5 px-4">
                                 <div className="flex items-center gap-3">
                                   <div
                                     className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0"
                                     style={{ backgroundColor: m.avatarColor || '#3b82f6' }}
                                   >
-                                    {(m.displayName || m.username).slice(0, 1).toUpperCase()}
+                                    <AvatarPortrait name={m.displayName || m.username} color={m.avatarColor} />
                                   </div>
                                   <div>
-                                    <div className="font-semibold text-[#1c1b1b]">{m.displayName || m.username}</div>
-                                    <div className="text-[10px] text-[#8C8880] font-mono">@{m.username}</div>
+                                    <div className="font-semibold text-[#203334]">{m.displayName || m.username}</div>
+                                    <div className="text-[10px] text-[#55675e] font-mono">@{m.username}</div>
                                   </div>
                                 </div>
                               </td>
@@ -1179,19 +1180,19 @@ export default function OrganizationHub({
                                       ? 'bg-purple-100 text-purple-700 border border-purple-200'
                                       : m.role === 'admin'
                                       ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                      : 'bg-[#F4F3EF] text-[#5e5f5c] border border-[#D9D7D0]'
+                                      : 'bg-[#eae4cc] text-[#475950] border border-[#849388]'
                                   }`}
                                 >
                                   {m.role || 'member'}
                                 </span>
                               </td>
 
-                              <td className="py-3.5 px-4 font-mono text-[11px] text-[#1c1b1b]">
+                              <td className="py-3.5 px-4 font-mono text-[11px] text-[#203334]">
                                 <div className="flex items-center gap-1.5">
                                   <span>{email}</span>
                                   <button
                                     onClick={() => copyText(email, 'Email copied')}
-                                    className="p-1 rounded text-[#8C8880] hover:text-[#1c1b1b] transition-colors"
+                                    className="p-1 rounded text-[#55675e] hover:text-[#203334] transition-colors"
                                     title="Copy email"
                                   >
                                     <span className="material-symbols-outlined text-[14px]">content_copy</span>
@@ -1199,7 +1200,7 @@ export default function OrganizationHub({
                                 </div>
                               </td>
 
-                              <td className="py-3.5 px-4 text-[#8C8880]">
+                              <td className="py-3.5 px-4 text-[#55675e]">
                                 {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : 'Active'}
                               </td>
 
@@ -1213,7 +1214,7 @@ export default function OrganizationHub({
                                         setEditRole(m.role || 'member');
                                         setEditPassword('');
                                       }}
-                                      className="p-1.5 rounded-lg border border-[#D9D7D0] hover:border-[#2563eb] text-[#5e5f5c] hover:text-[#2563eb] bg-white transition-all text-xs"
+                                      className="p-1.5 rounded-lg border border-[#849388] hover:border-[#277970] text-[#475950] hover:text-[#277970] bg-white transition-all text-xs"
                                       title="Edit member details & role"
                                     >
                                       <span className="material-symbols-outlined text-[15px]">edit</span>
@@ -1222,7 +1223,7 @@ export default function OrganizationHub({
                                     {!isMemberOwner && (
                                       <button
                                         onClick={() => setDeletingMember(m)}
-                                        className="p-1.5 rounded-lg border border-[#D9D7D0] hover:border-red-500 text-[#5e5f5c] hover:text-red-600 bg-white transition-all text-xs"
+                                        className="p-1.5 rounded-lg border border-[#849388] hover:border-red-500 text-[#475950] hover:text-red-600 bg-white transition-all text-xs"
                                         title="Remove member"
                                       >
                                         <span className="material-symbols-outlined text-[15px]">delete</span>
@@ -1243,17 +1244,17 @@ export default function OrganizationHub({
               {/* ─── TAB 4: OFFICE TEMPLATES ─────────────────────────────────── */}
               {activeTab === 'templates' && (
                 <div className="flex flex-col gap-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#E9E8E4]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#e2dcc5]">
                     <div>
-                      <h3 className="text-base font-bold text-[#1c1b1b]">Architectural Templates & Custom Floor Plans</h3>
-                      <p className="text-xs text-[#8C8880]">
+                      <h3 className="text-base font-bold text-[#203334]">Architectural Templates & Custom Floor Plans</h3>
+                      <p className="text-xs text-[#55675e]">
                         Select built-in physical room models or draft bespoke office designs in the interactive studio
                       </p>
                     </div>
 
                     <button
                       onClick={() => onOpenDesigner && onOpenDesigner(selectedOrg)}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition-all"
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold shadow-sm transition-all"
                     >
                       <span className="material-symbols-outlined text-[16px]">draw</span>
                       <span>Open Office Designer</span>
@@ -1262,14 +1263,14 @@ export default function OrganizationHub({
 
                   {/* Standard Templates Grid */}
                   <div>
-                    <h4 className="text-xs font-bold text-[#1c1b1b] uppercase tracking-wider mb-3">
+                    <h4 className="text-xs font-bold text-[#203334] uppercase tracking-wider mb-3">
                       Built-in Default Templates (3)
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {DEFAULT_TEMPLATES.map((tmpl) => (
                         <div
                           key={tmpl.id}
-                          className="p-5 rounded-2xl border border-[#D9D7D0] bg-[#FAF9F5] flex flex-col justify-between gap-4"
+                          className="p-5 rounded-lg border border-[#849388] bg-[#f4edda] flex flex-col justify-between gap-4"
                         >
                           <div>
                             <div className="flex items-center justify-between mb-2">
@@ -1279,16 +1280,16 @@ export default function OrganizationHub({
                               >
                                 {tmpl.badge}
                               </span>
-                              <span className="material-symbols-outlined text-[#8C8880] text-[20px]">{tmpl.icon}</span>
+                              <span className="material-symbols-outlined text-[#55675e] text-[20px]">{tmpl.icon}</span>
                             </div>
-                            <h5 className="font-bold text-sm text-[#1c1b1b]">{tmpl.name}</h5>
-                            <p className="text-xs text-[#5e5f5c] mt-1">{tmpl.description}</p>
-                            <div className="mt-2 text-[10px] text-[#8C8880] font-mono">{tmpl.acoustics}</div>
+                            <h5 className="font-bold text-sm text-[#203334]">{tmpl.name}</h5>
+                            <p className="text-xs text-[#475950] mt-1">{tmpl.description}</p>
+                            <div className="mt-2 text-[10px] text-[#55675e] font-mono">{tmpl.acoustics}</div>
                           </div>
 
                           <button
                             onClick={() => handleStartInstantMeeting(tmpl.id)}
-                            className="w-full py-2 px-3 rounded-xl bg-white hover:bg-[#2563eb] hover:text-white border border-[#D9D7D0] text-xs font-semibold text-[#1c1b1b] transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                            className="w-full py-2 px-3 rounded-xl bg-white hover:bg-[#277970] hover:text-white border border-[#849388] text-xs font-semibold text-[#203334] transition-all flex items-center justify-center gap-1.5 shadow-sm"
                           >
                             <span className="material-symbols-outlined text-[16px]">login</span>
                             <span>Launch {tmpl.name.split(' ')[0]}</span>
@@ -1300,20 +1301,20 @@ export default function OrganizationHub({
 
                   {/* Custom Layouts Section */}
                   <div>
-                    <h4 className="text-xs font-bold text-[#1c1b1b] uppercase tracking-wider mb-3">
+                    <h4 className="text-xs font-bold text-[#203334] uppercase tracking-wider mb-3">
                       Custom Office Layouts ({layouts.length})
                     </h4>
 
                     {layouts.length === 0 ? (
-                      <div className="p-8 rounded-2xl border border-dashed border-[#D9D7D0] bg-[#FAF9F5] text-center flex flex-col items-center justify-center">
-                        <span className="material-symbols-outlined text-[#8C8880] text-[32px] mb-2">draw</span>
-                        <p className="text-xs font-semibold text-[#1c1b1b]">No custom layouts created yet</p>
-                        <p className="text-[11px] text-[#8C8880] mt-0.5">
+                      <div className="p-8 rounded-lg border border-dashed border-[#849388] bg-[#f4edda] text-center flex flex-col items-center justify-center">
+                        <span className="material-symbols-outlined text-[#55675e] text-[32px] mb-2">draw</span>
+                        <p className="text-xs font-semibold text-[#203334]">No custom layouts created yet</p>
+                        <p className="text-[11px] text-[#55675e] mt-0.5">
                           Use the visual drag-and-drop Office Designer to build custom rooms, sound zones, and doors.
                         </p>
                         <button
                           onClick={() => onOpenDesigner && onOpenDesigner(selectedOrg)}
-                          className="mt-3 px-4 py-1.5 rounded-xl bg-white border border-[#D9D7D0] hover:border-[#2563eb] text-xs font-semibold text-[#2563eb] transition-all"
+                          className="mt-3 px-4 py-1.5 rounded-xl bg-white border border-[#849388] hover:border-[#277970] text-xs font-semibold text-[#277970] transition-all"
                         >
                           Design Floor Plan
                         </button>
@@ -1323,22 +1324,22 @@ export default function OrganizationHub({
                         {layouts.map((l) => (
                           <div
                             key={l.layoutId}
-                            className="p-5 rounded-2xl border border-[#D9D7D0] bg-[#FAF9F5] flex flex-col justify-between gap-4"
+                            className="p-5 rounded-lg border border-[#849388] bg-[#f4edda] flex flex-col justify-between gap-4"
                           >
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <h5 className="font-bold text-sm text-[#1c1b1b]">{l.name}</h5>
+                                <h5 className="font-bold text-sm text-[#203334]">{l.name}</h5>
                                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-700">
                                   Custom
                                 </span>
                               </div>
-                              <p className="text-xs text-[#8C8880] line-clamp-2">{l.description || 'Custom spatial layout with acoustic boundaries.'}</p>
-                              <div className="mt-2 text-[10px] text-[#8C8880] font-mono">
+                              <p className="text-xs text-[#55675e] line-clamp-2">{l.description || 'Custom spatial layout with acoustic boundaries.'}</p>
+                              <div className="mt-2 text-[10px] text-[#55675e] font-mono">
                                 {l.walls?.length || 0} walls · {l.doors?.length || 0} doors · {l.furniture?.length || 0} furniture
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 pt-2 border-t border-[#E9E8E4]">
+                            <div className="flex items-center gap-2 pt-2 border-t border-[#e2dcc5]">
                               <button
                                 onClick={() => {
                                   if (onLaunchOffice) {
@@ -1350,14 +1351,14 @@ export default function OrganizationHub({
                                     });
                                   }
                                 }}
-                                className="flex-1 py-1.5 px-3 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold transition-all flex items-center justify-center gap-1"
+                                className="flex-1 py-1.5 px-3 rounded-xl bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold transition-all flex items-center justify-center gap-1"
                               >
                                 <span className="material-symbols-outlined text-[14px]">login</span>
                                 <span>Launch</span>
                               </button>
                               <button
                                 onClick={() => onOpenDesigner && onOpenDesigner(selectedOrg, l)}
-                                className="py-1.5 px-3 rounded-xl bg-white border border-[#D9D7D0] hover:border-[#2563eb] text-xs font-semibold text-[#5e5f5c] transition-all"
+                                className="py-1.5 px-3 rounded-xl bg-white border border-[#849388] hover:border-[#277970] text-xs font-semibold text-[#475950] transition-all"
                               >
                                 Edit
                               </button>
@@ -1379,24 +1380,24 @@ export default function OrganizationHub({
       {/* ─── MODAL 1: CREATE NEW ORGANIZATION & PROVISION ADMIN ─────────────── */}
       {showCreateOrgModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+          <div className="w-full max-w-lg bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
             {/* Studio Header */}
-            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+            <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-white border border-[#9bab99] shadow-2xs text-[#203334] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">add_business</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Organization Setup</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#55675e]">Organization Setup</span>
                   </div>
-                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Create New Organization</h3>
+                  <h3 className="text-base font-bold text-[#203334] tracking-tight">Create New Organization</h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCreateOrgModal(false)}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 title="Close"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -1405,7 +1406,7 @@ export default function OrganizationHub({
 
             <form onSubmit={handleCreateOrg} className="p-6 flex flex-col gap-4 bg-white/50">
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Organization Name
                 </label>
                 <input
@@ -1414,15 +1415,15 @@ export default function OrganizationHub({
                   value={newOrgName}
                   onChange={(e) => setNewOrgName(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                 />
-                <p className="text-[10px] font-mono text-[#8C8880] mt-1.5">
+                <p className="text-[10px] font-mono text-[#55675e] mt-1.5">
                   Unique case-insensitive name · Domain: @{derivedNewOrgSlug || 'org'}.com
                 </p>
               </div>
 
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Description
                 </label>
                 <textarea
@@ -1430,13 +1431,13 @@ export default function OrganizationHub({
                   value={newOrgDesc}
                   onChange={(e) => setNewOrgDesc(e.target.value)}
                   rows={2}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans resize-none"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans resize-none"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                     Admin Full Name
                   </label>
                   <input
@@ -1445,19 +1446,19 @@ export default function OrganizationHub({
                     value={adminFullName}
                     onChange={(e) => setAdminFullName(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] font-semibold">
+                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] font-semibold">
                       Admin Password
                     </label>
                     <button
                       type="button"
                       onClick={() => setAdminPassword(generateSecurePassword('Admin#'))}
-                      className="text-[10px] font-mono text-[#141413] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[10px] font-mono text-[#203334] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[13px]">autorenew</span>
                       <span>Regenerate</span>
@@ -1470,12 +1471,12 @@ export default function OrganizationHub({
                       value={adminPassword}
                       onChange={(e) => setAdminPassword(e.target.value)}
                       required
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-mono pr-9"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-mono pr-9"
                     />
                     <button
                       type="button"
                       onClick={() => setShowAdminPass(!showAdminPass)}
-                      className="absolute right-2.5 top-2.5 text-[#8C8880] hover:text-[#141413] transition-colors cursor-pointer"
+                      className="absolute right-2.5 top-2.5 text-[#55675e] hover:text-[#203334] transition-colors cursor-pointer"
                       title={showAdminPass ? 'Hide password' : 'Show password'}
                     >
                       <span className="material-symbols-outlined text-[16px]">
@@ -1487,37 +1488,37 @@ export default function OrganizationHub({
               </div>
 
               {/* Live Technical Admin Preview Card */}
-              <div className="p-3.5 rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] text-xs flex flex-col gap-2 shadow-2xs">
+              <div className="p-3.5 rounded-lg bg-[#f4edda] border border-[#9bab99] text-xs flex flex-col gap-2 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#5e5f5c] font-semibold">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#475950] font-semibold">
                       Generated Admin Email
                     </span>
                   </div>
-                  <span className="font-mono font-bold text-xs text-[#141413]">{derivedAdminEmail}</span>
+                  <span className="font-mono font-bold text-xs text-[#203334]">{derivedAdminEmail}</span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-[#EBEAE5]">
-                  <span className="font-mono text-[#8C8880]">Login Handle:</span>
-                  <span className="font-mono font-semibold text-[#141413]">@{derivedAdminHandle}</span>
+                  <span className="font-mono text-[#55675e]">Login Handle:</span>
+                  <span className="font-mono font-semibold text-[#203334]">@{derivedAdminHandle}</span>
                 </div>
-                <div className="text-[10px] text-[#8C8880] leading-relaxed pt-1 border-t border-[#EBEAE5]/60">
+                <div className="text-[10px] text-[#55675e] leading-relaxed pt-1 border-t border-[#EBEAE5]/60">
                   Creating this organization automatically provisions dedicated Administrator credentials and signs you in securely.
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-2 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-2 font-semibold">
                   Brand Identity Accent
                 </label>
                 <div className="flex items-center gap-2.5">
-                  {['#141413', '#2563eb', '#7c3aed', '#059669', '#ea580c', '#db2777'].map((c) => (
+                  {['#203334', '#277970', '#7c3aed', '#059669', '#ea580c', '#db2777'].map((c) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setNewOrgColor(c)}
                       className={`w-7 h-7 rounded-full transition-all border-2 cursor-pointer ${
-                        newOrgColor === c ? 'border-[#141413] scale-110 shadow-sm ring-2 ring-[#141413]/20' : 'border-white hover:scale-105'
+                        newOrgColor === c ? 'border-[#203334] scale-110 shadow-sm ring-2 ring-[#203334]/20' : 'border-white hover:scale-105'
                       }`}
                       style={{ backgroundColor: c }}
                       title={`Select ${c}`}
@@ -1530,14 +1531,14 @@ export default function OrganizationHub({
                 <button
                   type="button"
                   onClick={() => setShowCreateOrgModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#475950] hover:text-[#203334] hover:bg-[#f4edda] border border-[#9bab99] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isCreatingOrg || !newOrgName.trim() || !adminFullName.trim() || !adminPassword}
-                  className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold shadow-sm transition-all disabled:opacity-40 flex items-center gap-2 cursor-pointer active:scale-[0.99]"
+                  className="px-5 py-2.5 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold shadow-sm transition-all disabled:opacity-40 flex items-center gap-2 cursor-pointer active:scale-[0.99]"
                 >
                   <span className="material-symbols-outlined text-[16px]">verified_user</span>
                   <span>{isCreatingOrg ? 'Provisioning...' : 'Create Organization & Admin'}</span>
@@ -1551,10 +1552,10 @@ export default function OrganizationHub({
       {/* ─── MODAL 1.5: ADMIN CREDENTIALS GENERATED (1-CLICK ADMIN LOGIN) ───── */}
       {createdAdminCredentials && (
         <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
-            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+          <div className="w-full max-w-lg bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-white border border-[#9bab99] shadow-2xs text-[#203334] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
                 </div>
                 <div>
@@ -1564,13 +1565,13 @@ export default function OrganizationHub({
                       Provisioned Successfully
                     </span>
                   </div>
-                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Organization & Admin Provisioned</h3>
+                  <h3 className="text-base font-bold text-[#203334] tracking-tight">Organization & Admin Provisioned</h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setCreatedAdminCredentials(null)}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 title="Close"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -1578,23 +1579,23 @@ export default function OrganizationHub({
             </div>
 
             <div className="p-6 flex flex-col gap-4 bg-white/50">
-              <p className="text-xs text-[#5e5f5c] leading-relaxed">
-                Your new organization <strong className="text-[#141413]">{selectedOrg?.name}</strong> has been provisioned. Your prior normal session was logged out. Save these primary administrator credentials securely:
+              <p className="text-xs text-[#475950] leading-relaxed">
+                Your new organization <strong className="text-[#203334]">{selectedOrg?.name}</strong> has been provisioned. Your prior normal session was logged out. Save these primary administrator credentials securely:
               </p>
 
-              <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-xs flex flex-col gap-2.5 shadow-2xs">
+              <div className="p-4 rounded-lg bg-[#f4edda] border border-[#9bab99] font-mono text-xs flex flex-col gap-2.5 shadow-2xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#8C8880]">Administrator:</span>
-                  <span className="font-bold text-[#141413]">{createdAdminCredentials.fullName}</span>
+                  <span className="text-[#55675e]">Administrator:</span>
+                  <span className="font-bold text-[#203334]">{createdAdminCredentials.fullName}</span>
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-[#EBEAE5]">
-                  <span className="text-[#8C8880]">Login Email:</span>
+                  <span className="text-[#55675e]">Login Email:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-[#141413] select-all">{createdAdminCredentials.email}</span>
+                    <span className="font-bold text-[#203334] select-all">{createdAdminCredentials.email}</span>
                     <button
                       type="button"
                       onClick={() => copyText(createdAdminCredentials.email, 'Email copied')}
-                      className="w-6 h-6 rounded-lg border border-[#E5E4DE] bg-white hover:bg-[#FAF9F5] text-[#5e5f5c] hover:text-[#141413] flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-6 h-6 rounded-lg border border-[#9bab99] bg-white hover:bg-[#f4edda] text-[#475950] hover:text-[#203334] flex items-center justify-center transition-colors cursor-pointer"
                       title="Copy email"
                     >
                       <span className="material-symbols-outlined text-[13px]">content_copy</span>
@@ -1602,19 +1603,19 @@ export default function OrganizationHub({
                   </div>
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-[#EBEAE5]">
-                  <span className="text-[#8C8880]">Handle:</span>
-                  <span className="font-bold text-[#141413] select-all">@{createdAdminCredentials.username}</span>
+                  <span className="text-[#55675e]">Handle:</span>
+                  <span className="font-bold text-[#203334] select-all">@{createdAdminCredentials.username}</span>
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-[#EBEAE5]">
-                  <span className="text-[#8C8880]">Initial Password:</span>
+                  <span className="text-[#55675e]">Initial Password:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-[#141413] select-all">
+                    <span className="font-bold text-[#203334] select-all">
                       {showAdminPass ? createdAdminCredentials.password : '••••••••••••'}
                     </span>
                     <button
                       type="button"
                       onClick={() => setShowAdminPass(!showAdminPass)}
-                      className="w-6 h-6 rounded-lg border border-[#E5E4DE] bg-white hover:bg-[#FAF9F5] text-[#5e5f5c] hover:text-[#141413] flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-6 h-6 rounded-lg border border-[#9bab99] bg-white hover:bg-[#f4edda] text-[#475950] hover:text-[#203334] flex items-center justify-center transition-colors cursor-pointer"
                       title={showAdminPass ? 'Hide password' : 'Show password'}
                     >
                       <span className="material-symbols-outlined text-[13px]">
@@ -1624,7 +1625,7 @@ export default function OrganizationHub({
                     <button
                       type="button"
                       onClick={() => copyText(createdAdminCredentials.password, 'Password copied')}
-                      className="w-6 h-6 rounded-lg border border-[#E5E4DE] bg-white hover:bg-[#FAF9F5] text-[#5e5f5c] hover:text-[#141413] flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-6 h-6 rounded-lg border border-[#9bab99] bg-white hover:bg-[#f4edda] text-[#475950] hover:text-[#203334] flex items-center justify-center transition-colors cursor-pointer"
                       title="Copy password"
                     >
                       <span className="material-symbols-outlined text-[13px]">content_copy</span>
@@ -1632,8 +1633,8 @@ export default function OrganizationHub({
                   </div>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-[#EBEAE5]">
-                  <span className="text-[#8C8880]">Role:</span>
-                  <span className="font-mono text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-[#141413] text-[#FAF9F5]">
+                  <span className="text-[#55675e]">Role:</span>
+                  <span className="font-mono text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-[#203334] text-[#f4edda]">
                     Administrator (Owner)
                   </span>
                 </div>
@@ -1652,7 +1653,7 @@ export default function OrganizationHub({
                     setCreatedAdminCredentials(null);
                     showToast(`Signed in as Administrator: ${createdAdminCredentials.fullName}`, 'success');
                   }}
-                  className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                  className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                 >
                   <span className="material-symbols-outlined text-[16px]">login</span>
                   <span>Sign In as Admin Now</span>
@@ -1665,7 +1666,7 @@ export default function OrganizationHub({
                     setCreatedAdminCredentials(null);
                     if (onRequestAuth) onRequestAuth();
                   }}
-                  className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-white border border-[#E5E4DE] text-[#141413] text-xs font-semibold hover:bg-[#FAF9F5] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-white border border-[#9bab99] text-[#203334] text-xs font-semibold hover:bg-[#f4edda] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <span className="material-symbols-outlined text-[16px]">content_copy</span>
                   <span>Copy & Sign In Manually</span>
@@ -1679,17 +1680,17 @@ export default function OrganizationHub({
       {/* ─── MODAL 2: ADD USER (ADMIN ONLY) ─────────────────────────────────── */}
       {showAddUserModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
-            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+          <div className="w-full max-w-lg bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-white border border-[#9bab99] shadow-2xs text-[#203334] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">person_add</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Team Enrollment</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#55675e]">Team Enrollment</span>
                   </div>
-                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Add Colleague to {selectedOrg?.name}</h3>
+                  <h3 className="text-base font-bold text-[#203334] tracking-tight">Add Colleague to {selectedOrg?.name}</h3>
                 </div>
               </div>
               <button
@@ -1698,7 +1699,7 @@ export default function OrganizationHub({
                   setShowAddUserModal(false);
                   setCreatedCredentials(null);
                 }}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 title="Close"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -1711,26 +1712,26 @@ export default function OrganizationHub({
                   <span className="material-symbols-outlined text-[18px]">check_circle</span>
                   <span>User Account Created Successfully</span>
                 </div>
-                <p className="text-xs text-[#5e5f5c] leading-relaxed">
+                <p className="text-xs text-[#475950] leading-relaxed">
                   The colleague can immediately sign in to ProxiSpeak with these generated credentials:
                 </p>
 
-                <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-xs flex flex-col gap-2 shadow-2xs">
+                <div className="p-4 rounded-lg bg-[#f4edda] border border-[#9bab99] font-mono text-xs flex flex-col gap-2 shadow-2xs">
                   <div className="flex justify-between">
-                    <span className="text-[#8C8880]">Full Name:</span>
-                    <span className="font-bold text-[#141413]">{createdCredentials.fullName}</span>
+                    <span className="text-[#55675e]">Full Name:</span>
+                    <span className="font-bold text-[#203334]">{createdCredentials.fullName}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-[#EBEAE5]">
-                    <span className="text-[#8C8880]">Official Email:</span>
-                    <span className="font-bold text-[#141413] select-all">{createdCredentials.email}</span>
+                    <span className="text-[#55675e]">Official Email:</span>
+                    <span className="font-bold text-[#203334] select-all">{createdCredentials.email}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-[#EBEAE5]">
-                    <span className="text-[#8C8880]">Username:</span>
-                    <span className="font-bold text-[#141413] select-all">@{createdCredentials.username}</span>
+                    <span className="text-[#55675e]">Username:</span>
+                    <span className="font-bold text-[#203334] select-all">@{createdCredentials.username}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-[#EBEAE5]">
-                    <span className="text-[#8C8880]">Initial Password:</span>
-                    <span className="font-bold text-[#141413] select-all">{createdCredentials.initialPassword}</span>
+                    <span className="text-[#55675e]">Initial Password:</span>
+                    <span className="font-bold text-[#203334] select-all">{createdCredentials.initialPassword}</span>
                   </div>
                 </div>
 
@@ -1741,7 +1742,7 @@ export default function OrganizationHub({
                       const text = `ProxiSpeak Credentials for ${selectedOrg?.name}:\nEmail: ${createdCredentials.email}\nUsername: ${createdCredentials.username}\nPassword: ${createdCredentials.initialPassword}\nSign in: ${window.location.origin}`;
                       copyText(text, 'Full credentials copied');
                     }}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                   >
                     <span className="material-symbols-outlined text-[16px]">content_copy</span>
                     <span>Copy Credentials</span>
@@ -1749,7 +1750,7 @@ export default function OrganizationHub({
                   <button
                     type="button"
                     onClick={() => setCreatedCredentials(null)}
-                    className="py-2.5 px-4 rounded-xl bg-white border border-[#E5E4DE] text-[#141413] text-xs font-semibold hover:bg-[#FAF9F5] transition-colors cursor-pointer shadow-2xs"
+                    className="py-2.5 px-4 rounded-xl bg-white border border-[#9bab99] text-[#203334] text-xs font-semibold hover:bg-[#f4edda] transition-colors cursor-pointer shadow-2xs"
                   >
                     Add Another
                   </button>
@@ -1758,7 +1759,7 @@ export default function OrganizationHub({
             ) : (
               <form onSubmit={handleAddUser} className="p-6 flex flex-col gap-4 bg-white/50">
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                     Colleague Full Name
                   </label>
                   <input
@@ -1767,24 +1768,24 @@ export default function OrganizationHub({
                     value={newUserFullName}
                     onChange={(e) => setNewUserFullName(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                   />
                 </div>
 
                 {/* Real-time Email Preview Banner */}
-                <div className="p-3.5 rounded-2xl bg-[#FAF9F5] border border-[#E5E4DE] flex items-center justify-between text-xs shadow-2xs">
+                <div className="p-3.5 rounded-lg bg-[#f4edda] border border-[#9bab99] flex items-center justify-between text-xs shadow-2xs">
                   <div>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#8C8880] block">Generated Company Email:</span>
-                    <span className="font-mono font-bold text-xs text-[#141413] mt-0.5 block">{derivedUserEmail}</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#55675e] block">Generated Company Email:</span>
+                    <span className="font-mono font-bold text-xs text-[#203334] mt-0.5 block">{derivedUserEmail}</span>
                   </div>
-                  <span className="text-[10px] font-mono text-[#8C8880] px-2 py-1 rounded-lg bg-white border border-[#E5E4DE]">
+                  <span className="text-[10px] font-mono text-[#55675e] px-2 py-1 rounded-lg bg-white border border-[#9bab99]">
                     @{derivedUserHandle || '...'}
                   </span>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] font-semibold">
+                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] font-semibold">
                       Initial Password
                     </label>
                     <button
@@ -1793,7 +1794,7 @@ export default function OrganizationHub({
                         const randomPass = 'Proxi' + Math.random().toString(36).substring(2, 8) + '!';
                         setNewUserPassword(randomPass);
                       }}
-                      className="text-[10px] font-mono text-[#141413] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[10px] font-mono text-[#203334] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[13px]">autorenew</span>
                       <span>Generate Password</span>
@@ -1806,12 +1807,12 @@ export default function OrganizationHub({
                       value={newUserPassword}
                       onChange={(e) => setNewUserPassword(e.target.value)}
                       required
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-mono pr-10"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-mono pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-2.5 text-[#8C8880] hover:text-[#141413] transition-colors cursor-pointer"
+                      className="absolute right-2.5 top-2.5 text-[#55675e] hover:text-[#203334] transition-colors cursor-pointer"
                       title={showPassword ? 'Hide password' : 'Show password'}
                     >
                       <span className="material-symbols-outlined text-[16px]">
@@ -1822,7 +1823,7 @@ export default function OrganizationHub({
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-2 font-semibold">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-2 font-semibold">
                     Organization Role
                   </label>
                   <div className="grid grid-cols-2 gap-2.5">
@@ -1831,8 +1832,8 @@ export default function OrganizationHub({
                       onClick={() => setNewUserRole('member')}
                       className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2.5 transition-all cursor-pointer ${
                         newUserRole === 'member'
-                          ? 'border-[#141413] bg-[#141413] text-[#FAF9F5] shadow-xs'
-                          : 'border-[#E5E4DE] bg-white text-[#5e5f5c] hover:bg-[#FAF9F5]'
+                          ? 'border-[#203334] bg-[#203334] text-[#f4edda] shadow-xs'
+                          : 'border-[#9bab99] bg-white text-[#475950] hover:bg-[#f4edda]'
                       }`}
                     >
                       <span className="material-symbols-outlined text-[18px]">person</span>
@@ -1843,8 +1844,8 @@ export default function OrganizationHub({
                       onClick={() => setNewUserRole('admin')}
                       className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2.5 transition-all cursor-pointer ${
                         newUserRole === 'admin'
-                          ? 'border-[#141413] bg-[#141413] text-[#FAF9F5] shadow-xs'
-                          : 'border-[#E5E4DE] bg-white text-[#5e5f5c] hover:bg-[#FAF9F5]'
+                          ? 'border-[#203334] bg-[#203334] text-[#f4edda] shadow-xs'
+                          : 'border-[#9bab99] bg-white text-[#475950] hover:bg-[#f4edda]'
                       }`}
                     >
                       <span className="material-symbols-outlined text-[18px]">shield_person</span>
@@ -1857,14 +1858,14 @@ export default function OrganizationHub({
                   <button
                     type="button"
                     onClick={() => setShowAddUserModal(false)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#475950] hover:text-[#203334] hover:bg-[#f4edda] border border-[#9bab99] transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isAddingUser || !newUserFullName.trim() || !newUserPassword}
-                    className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold disabled:opacity-40 transition-all flex items-center gap-2 cursor-pointer active:scale-[0.99] shadow-sm"
+                    className="px-5 py-2.5 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold disabled:opacity-40 transition-all flex items-center gap-2 cursor-pointer active:scale-[0.99] shadow-sm"
                   >
                     <span className="material-symbols-outlined text-[16px]">person_add</span>
                     <span>{isAddingUser ? 'Adding...' : 'Create Account & Add Member'}</span>
@@ -1879,23 +1880,23 @@ export default function OrganizationHub({
       {/* ─── MODAL 3: EDIT USER (ADMIN ONLY) ─────────────────────────────────── */}
       {editingMember && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
-            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+          <div className="w-full max-w-md bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-white border border-[#9bab99] shadow-2xs text-[#203334] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">manage_accounts</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Member Settings</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#55675e]">Member Settings</span>
                   </div>
-                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Edit Member: {editingMember.username}</h3>
+                  <h3 className="text-base font-bold text-[#203334] tracking-tight">Edit Member: {editingMember.username}</h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingMember(null)}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 title="Close"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -1904,26 +1905,26 @@ export default function OrganizationHub({
 
             <form onSubmit={handleSaveEditUser} className="p-6 flex flex-col gap-4 bg-white/50">
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Display Name
                 </label>
                 <input
                   type="text"
                   value={editDisplayName}
                   onChange={(e) => setEditDisplayName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Role
                 </label>
                 <select
                   value={editRole}
                   onChange={(e) => setEditRole(e.target.value)}
                   disabled={editingMember.role === 'owner'}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                 >
                   <option value="member">Team Member</option>
                   <option value="admin">Administrator</option>
@@ -1932,7 +1933,7 @@ export default function OrganizationHub({
               </div>
 
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Reset Password (Leave blank to keep current)
                 </label>
                 <input
@@ -1940,7 +1941,7 @@ export default function OrganizationHub({
                   placeholder="New password (optional)"
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-mono"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-mono"
                 />
               </div>
 
@@ -1948,14 +1949,14 @@ export default function OrganizationHub({
                 <button
                   type="button"
                   onClick={() => setEditingMember(null)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#475950] hover:text-[#203334] hover:bg-[#f4edda] border border-[#9bab99] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isEditingMember}
-                  className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
+                  className="px-5 py-2.5 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                 >
                   {isEditingMember ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -1968,23 +1969,23 @@ export default function OrganizationHub({
       {/* ─── MODAL 4: DELETE USER CONFIRMATION ──────────────────────────────── */}
       {deletingMember && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
-            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+          <div className="w-full max-w-sm bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-200 shadow-2xs text-red-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-red-50 border border-red-200 shadow-2xs text-red-600 flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">person_remove</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono uppercase tracking-widest text-red-600 font-semibold">Access Revocation</span>
                   </div>
-                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Remove Member</h3>
+                  <h3 className="text-base font-bold text-[#203334] tracking-tight">Remove Member</h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setDeletingMember(null)}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 title="Close"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -1992,15 +1993,15 @@ export default function OrganizationHub({
             </div>
 
             <div className="p-6 flex flex-col gap-4 bg-white/50">
-              <p className="text-xs text-[#5e5f5c] leading-relaxed">
-                Are you sure you want to remove <strong className="text-[#141413]">{deletingMember.displayName || deletingMember.username}</strong> from {selectedOrg?.name}? They will immediately lose access to the organization's workspaces.
+              <p className="text-xs text-[#475950] leading-relaxed">
+                Are you sure you want to remove <strong className="text-[#203334]">{deletingMember.displayName || deletingMember.username}</strong> from {selectedOrg?.name}? They will immediately lose access to the organization's workspaces.
               </p>
 
               <div className="pt-3 border-t border-[#EBEAE5] flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setDeletingMember(null)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#475950] hover:text-[#203334] hover:bg-[#f4edda] border border-[#9bab99] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -2022,23 +2023,23 @@ export default function OrganizationHub({
       {/* ─── MODAL 5: START INSTANT MEETING (TEMPLATE SELECTOR) ─────────────── */}
       {showStartMeetingModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
-            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+          <div className="w-full max-w-2xl bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-white border border-[#9bab99] shadow-2xs text-[#203334] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">video_call</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Spatial Soundstage</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#55675e]">Spatial Soundstage</span>
                   </div>
-                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Start Instant Spatial Call</h3>
+                  <h3 className="text-base font-bold text-[#203334] tracking-tight">Start Instant Spatial Call</h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowStartMeetingModal(false)}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 title="Close"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -2047,7 +2048,7 @@ export default function OrganizationHub({
 
             <div className="p-6 flex flex-col gap-4 bg-white/50">
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Meeting Room Title
                 </label>
                 <input
@@ -2055,12 +2056,12 @@ export default function OrganizationHub({
                   value={meetingTitle}
                   onChange={(e) => setMeetingTitle(e.target.value)}
                   placeholder="e.g. Daily Standup or Design Critique"
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-2 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-2 font-semibold">
                   Choose Architectural Room Template
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2074,10 +2075,10 @@ export default function OrganizationHub({
                           setSelectedTemplate(tmpl.id);
                           setSelectedCustomLayoutId('');
                         }}
-                        className={`p-4 rounded-2xl border text-left flex flex-col justify-between gap-3 transition-all cursor-pointer ${
+                        className={`p-4 rounded-lg border text-left flex flex-col justify-between gap-3 transition-all cursor-pointer ${
                           isSelected
-                            ? 'border-[#141413] bg-white ring-2 ring-[#141413]/10 shadow-sm'
-                            : 'border-[#E5E4DE] bg-white/60 hover:bg-white hover:border-[#D0CFC8]'
+                            ? 'border-[#203334] bg-white ring-2 ring-[#203334]/10 shadow-sm'
+                            : 'border-[#9bab99] bg-white/60 hover:bg-white hover:border-[#D0CFC8]'
                         }`}
                       >
                         <div>
@@ -2088,12 +2089,12 @@ export default function OrganizationHub({
                             >
                               {tmpl.badge}
                             </span>
-                            <span className="material-symbols-outlined text-[18px] text-[#5e5f5c]">{tmpl.icon}</span>
+                            <span className="material-symbols-outlined text-[18px] text-[#475950]">{tmpl.icon}</span>
                           </div>
-                          <div className="font-bold text-xs text-[#141413]">{tmpl.name}</div>
-                          <p className="text-[11px] text-[#5e5f5c] mt-1 line-clamp-2 leading-relaxed">{tmpl.description}</p>
+                          <div className="font-bold text-xs text-[#203334]">{tmpl.name}</div>
+                          <p className="text-[11px] text-[#475950] mt-1 line-clamp-2 leading-relaxed">{tmpl.description}</p>
                         </div>
-                        <div className="text-[10px] font-mono text-[#8C8880] font-semibold pt-2 border-t border-[#EBEAE5]">
+                        <div className="text-[10px] font-mono text-[#55675e] font-semibold pt-2 border-t border-[#EBEAE5]">
                           {tmpl.capacity}
                         </div>
                       </button>
@@ -2104,7 +2105,7 @@ export default function OrganizationHub({
                 {/* Custom layouts option if available */}
                 {layouts.length > 0 && (
                   <div className="mt-3.5">
-                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#8C8880] mb-1.5 font-semibold">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#55675e] mb-1.5 font-semibold">
                       Or Select Custom Team Canvas
                     </div>
                     <select
@@ -2113,7 +2114,7 @@ export default function OrganizationHub({
                         setSelectedCustomLayoutId(e.target.value);
                         if (e.target.value) setSelectedTemplate('custom');
                       }}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                     >
                       <option value="">-- Use Standard Template Selected Above --</option>
                       {layouts.map((l) => (
@@ -2130,7 +2131,7 @@ export default function OrganizationHub({
                 <button
                   type="button"
                   onClick={() => setShowStartMeetingModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#475950] hover:text-[#203334] hover:bg-[#f4edda] border border-[#9bab99] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -2138,7 +2139,7 @@ export default function OrganizationHub({
                   type="button"
                   onClick={() => handleStartInstantMeeting()}
                   disabled={isStartingMeeting}
-                  className="px-6 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer active:scale-[0.99]"
+                  className="px-6 py-2.5 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer active:scale-[0.99]"
                 >
                   <span className="material-symbols-outlined text-[16px]">rocket_launch</span>
                   <span>{isStartingMeeting ? 'Launching...' : 'Start Meeting Now'}</span>
@@ -2152,23 +2153,23 @@ export default function OrganizationHub({
       {/* ─── MODAL 6: SCHEDULE MEETING (ADMIN & MEMBERS) ────────────────────── */}
       {showScheduleModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-[#FAF9F5] rounded-[26px] border border-[#E5E4DE] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
-            <div className="px-6 py-5 bg-[#FAF9F5] border-b border-[#EBEAE5] flex items-center justify-between">
+          <div className="w-full max-w-lg bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
+            <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-white border border-[#9bab99] shadow-2xs text-[#203334] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">calendar_month</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Calendar & Scheduling</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#55675e]">Calendar & Scheduling</span>
                   </div>
-                  <h3 className="text-base font-bold text-[#141413] tracking-tight">Schedule Meeting for {selectedOrg.name}</h3>
+                  <h3 className="text-base font-bold text-[#203334] tracking-tight">Schedule Meeting for {selectedOrg.name}</h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowScheduleModal(false)}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 title="Close"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -2177,7 +2178,7 @@ export default function OrganizationHub({
 
             <form onSubmit={handleScheduleMeeting} className="p-6 flex flex-col gap-4 bg-white/50">
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Meeting Title
                 </label>
                 <input
@@ -2186,12 +2187,12 @@ export default function OrganizationHub({
                   value={schedTitle}
                   onChange={(e) => setSchedTitle(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Description / Agenda (Optional)
                 </label>
                 <textarea
@@ -2199,13 +2200,13 @@ export default function OrganizationHub({
                   value={schedDesc}
                   onChange={(e) => setSchedDesc(e.target.value)}
                   rows={2}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans resize-none"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans resize-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                     Date
                   </label>
                   <input
@@ -2213,11 +2214,11 @@ export default function OrganizationHub({
                     value={schedDate}
                     onChange={(e) => setSchedDate(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                     Start Time
                   </label>
                   <input
@@ -2225,19 +2226,19 @@ export default function OrganizationHub({
                     value={schedTime}
                     onChange={(e) => setSchedTime(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] block mb-1.5 font-semibold">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] block mb-1.5 font-semibold">
                   Room Template
                 </label>
                 <select
                   value={schedTemplate}
                   onChange={(e) => setSchedTemplate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#E5E4DE] text-[#141413] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-[#9bab99] text-[#203334] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                 >
                   <option value="office">Corporate Headquarters (Default Office)</option>
                   <option value="conference">Townhall & Keynote Auditorium</option>
@@ -2254,14 +2255,14 @@ export default function OrganizationHub({
                 <button
                   type="button"
                   onClick={() => setShowScheduleModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#475950] hover:text-[#203334] hover:bg-[#f4edda] border border-[#9bab99] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isScheduling}
-                  className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
+                  className="px-5 py-2.5 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                 >
                   {isScheduling ? 'Scheduling...' : 'Schedule Meeting'}
                 </button>

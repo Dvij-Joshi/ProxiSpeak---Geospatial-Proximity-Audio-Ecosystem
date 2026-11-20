@@ -38,35 +38,30 @@ export const DOORS = {
     roomKey: 'meeting-room',
     name: 'Meeting Room',
     wall: { x: 508, y: 498, w: 90, h: 8 },
-    arc: [508, 498, 90, -Math.PI / 2, 0],
     isIsolated: true,
   },
   'manager-office': {
     roomKey: 'manager-office',
     name: "Manager's Office",
     wall: { x: 1028, y: 438, w: 100, h: 8 },
-    arc: [1028, 438, 90, -Math.PI / 2, 0],
     isIsolated: true,
   },
   'lounge-break': {
     roomKey: 'lounge-break',
     name: 'Lounge & Break',
     wall: { x: 478, y: 912, w: 100, h: 8 },
-    arc: [478, 912, 100, Math.PI, Math.PI * 1.5],
     isIsolated: false,
   },
   'tech-server': {
     roomKey: 'tech-server',
     name: 'Tech / Server',
     wall: { x: 1612, y: 338, w: 8, h: 120 },
-    arc: [1612, 338, 110, 0, Math.PI / 2],
     isIsolated: false,
   },
   'print-copy': {
     roomKey: 'print-copy',
     name: 'Print / Copy',
     wall: { x: 1712, y: 1170, w: 8, h: 112 },
-    arc: [1712, 1170, 100, 0, Math.PI / 2],
     isIsolated: false,
   },
 };
@@ -110,6 +105,10 @@ export const ROOMS = [
 ];
 
 export function getRoomAt(x, y, theme = 'office') {
+  if (theme && typeof theme === 'object') {
+    const zone = theme.zones.find(z => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h);
+    return zone || { id: 'open-workspace', name: 'Open Workspace', maxDistance: MAX_DISTANCE };
+  }
   if (theme === 'conference') {
     if (x >= 500 && x <= 1700 && y <= 300) {
       return { id: 'keynote-stage', name: 'Keynote Stage (PA Broadcast)', isIsolated: false, isStage: true, maxDistance: 1600 };
@@ -171,34 +170,24 @@ export function isDoorOpen(doorStates, doorKey) {
   return true;
 }
 
-export function countWallIntersections(x1, y1, x2, y2, doorStates = {}) {
-  let count = 0;
-  for (const w of WALLS) {
-    if (w.w === W - 20 || w.h === H - 20) continue;
+function crossesBarrier(x1,y1,x2,y2,m) {
+  const cx=m.x+m.w/2, cy=m.y+m.h/2;
+  const angle=(m.rotation||0)*Math.PI/180, c=Math.cos(angle), s=Math.sin(angle);
+  const ax=(x1-cx)*c+(y1-cy)*s, ay=(y1-cy)*c-(x1-cx)*s;
+  const bx=(x2-cx)*c+(y2-cy)*s, by=(y2-cy)*c-(x2-cx)*s;
+  const w=m.w/2,h=m.h/2;
+  return lineSegmentsIntersect(ax,ay,bx,by,-w,-h,w,-h) || lineSegmentsIntersect(ax,ay,bx,by,w,-h,w,h) ||
+    lineSegmentsIntersect(ax,ay,bx,by,w,h,-w,h) || lineSegmentsIntersect(ax,ay,bx,by,-w,h,-w,-h);
+}
 
-    const hit =
-      lineSegmentsIntersect(x1, y1, x2, y2, w.x, w.y, w.x + w.w, w.y) ||
-      lineSegmentsIntersect(x1, y1, x2, y2, w.x, w.y + w.h, w.x + w.w, w.y + w.h) ||
-      lineSegmentsIntersect(x1, y1, x2, y2, w.x, w.y, w.x, w.y + w.h) ||
-      lineSegmentsIntersect(x1, y1, x2, y2, w.x + w.w, w.y, w.x + w.w, w.y + w.h);
-
-    if (hit) count++;
+export function countWallIntersections(x1,y1,x2,y2,doorStates={},scene=null) {
+  let count=0;
+  for (const wall of scene?.barriers || WALLS) {
+    if (crossesBarrier(x1,y1,x2,y2,wall)) count++;
   }
-
-  Object.entries(DOORS).forEach(([key, door]) => {
-    const isOpen = isDoorOpen(doorStates, key);
-    if (!isOpen && door.wall) {
-      const dw = door.wall;
-      const hit =
-        lineSegmentsIntersect(x1, y1, x2, y2, dw.x, dw.y, dw.x + dw.w, dw.y) ||
-        lineSegmentsIntersect(x1, y1, x2, y2, dw.x, dw.y + dw.h, dw.x + dw.w, dw.y + dw.h) ||
-        lineSegmentsIntersect(x1, y1, x2, y2, dw.x, dw.y, dw.x, dw.y + dw.h) ||
-        lineSegmentsIntersect(x1, y1, x2, y2, dw.x + dw.w, dw.y, dw.x + dw.w, dw.y + dw.h);
-
-      if (hit) count++;
-    }
-  });
-
+  for (const [key,d] of Object.entries(scene?.doorLookup || DOORS)) {
+    if (!isDoorOpen(doorStates,key) && crossesBarrier(x1,y1,x2,y2,d.wall)) count++;
+  }
   return count;
 }
 
@@ -243,12 +232,12 @@ export function calculateAcoustics(localPos, remotePos, doorStates = {}, theme =
   }
 
   // Office layout acoustic raycasting with doors
-  if (theme === 'office') {
-    const wallHits = countWallIntersections(localPos.x, localPos.y, remotePos.x, remotePos.y, doorStates);
+  if (theme === 'office' || typeof theme === 'object') {
+    const wallHits = countWallIntersections(localPos.x, localPos.y, remotePos.x, remotePos.y, doorStates, typeof theme === 'object' ? theme : null);
 
     if ((localRoom.isIsolated || remoteRoom.isIsolated) && localRoom.id !== remoteRoom.id) {
       const isolatedRoom = localRoom.isIsolated ? localRoom : remoteRoom;
-      const isDoorClosed = !isDoorOpen(doorStates, isolatedRoom.id);
+      const isDoorClosed = !isDoorOpen(doorStates, isolatedRoom.doorKey || isolatedRoom.id);
 
       if (isDoorClosed || wallHits > 0) {
         targetGain = 0.0;

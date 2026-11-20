@@ -1,3 +1,4 @@
+import { zoneForDoor } from '../client/src/world/roomGeometry.js';
 import dotenv from 'dotenv';
 dotenv.config();
 if (!process.env.MONGODB_URI) {
@@ -325,14 +326,13 @@ const ROOM_AREAS = {
   'print-copy':     { x1: 1712, y1: 912, x2: 2182, y2: 1282, name: 'Print / Copy' },
 };
 
-function getRoomKeyAt(x, y) {
-  if (x == null || y == null) return null;
-  for (const [key, area] of Object.entries(ROOM_AREAS)) {
-    if (x >= area.x1 && x <= area.x2 && y >= area.y1 && y <= area.y2) {
-      return key;
-    }
-  }
-  return null;
+function isInDoorRoom(roomId, key, x, y) {
+  if (x == null || y == null) return false;
+  const layout = memoryLayouts.get(roomId);
+  const custom = layout && [layout.doors,layout.walls,layout.furniture,layout.soundZones].some(items => items?.length);
+  const door = custom && layout.doors?.find(d => d.key === key);
+  const area = custom ? (door && zoneForDoor(layout.soundZones || [],door)?.bounds) : ROOM_AREAS[key];
+  return Boolean(area && x >= area.x1 && x <= area.x2 && y >= area.y1 && y <= area.y2);
 }
 
 // roomId -> Map<doorKey, Map<visitorSocketId, { visitorId, visitorName, doorKey, timestamp }>>
@@ -370,7 +370,7 @@ function getOccupantsInRoomArea(roomId, roomKey) {
   const users = getRoomUsers(roomId);
   const occupants = [];
   for (const [socketId, user] of users.entries()) {
-    if (getRoomKeyAt(user.x, user.y) === roomKey) {
+    if (isInDoorRoom(roomId, roomKey, user.x, user.y)) {
       occupants.push({ socketId, username: user.username, x: user.x, y: user.y });
     }
   }
@@ -934,6 +934,7 @@ app.get('/api/rooms/:roomId', async (req, res) => {
     if (!layout && isDbConnected()) {
       try {
         layout = await OfficeLayout.findOne({ layoutId: roomId }).lean();
+        if (layout) memoryLayouts.set(roomId, layout);
       } catch (_e) {}
     }
     if (layout) {
@@ -1797,6 +1798,7 @@ app.get('/api/layouts/:layoutId', async (req, res) => {
     if (!layout && isDbConnected()) {
       try {
         layout = await OfficeLayout.findOne({ layoutId }).lean();
+        if (layout) memoryLayouts.set(layoutId, layout);
       } catch (_e) {}
     }
     if (!layout) {
@@ -2175,9 +2177,8 @@ io.on('connection', (socket) => {
     const user = getRoomUsers(roomId).get(socket.id);
     const userX = user?.x ?? socket.data.x;
     const userY = user?.y ?? socket.data.y;
-    const userRoom = getRoomKeyAt(userX, userY);
+    const isUserInside = isInDoorRoom(roomId, key, userX, userY);
     const occupants = getOccupantsInRoomArea(roomId, key);
-    const isUserInside = userRoom === key;
 
     if (!isUserInside && isOpen && occupants.length > 0) {
       const permitted = hasValidPermission(roomId, key, socket.id);
@@ -2292,9 +2293,9 @@ io.on('connection', (socket) => {
     const user = getRoomUsers(roomId).get(socket.id);
     const userX = user?.x ?? socket.data.x;
     const userY = user?.y ?? socket.data.y;
-    const userRoom = getRoomKeyAt(userX, userY);
+    const isUserInside = isInDoorRoom(roomId, key, userX, userY);
 
-    if (userRoom !== key) {
+    if (!isUserInside) {
       socket.emit('door-action-denied', {
         doorKey: key,
         reason: 'Only members currently inside the room can welcome visitors.'
@@ -2359,9 +2360,9 @@ io.on('connection', (socket) => {
     const user = getRoomUsers(roomId).get(socket.id);
     const userX = user?.x ?? socket.data.x;
     const userY = user?.y ?? socket.data.y;
-    const userRoom = getRoomKeyAt(userX, userY);
+    const isUserInside = isInDoorRoom(roomId, key, userX, userY);
 
-    if (userRoom !== key) {
+    if (!isUserInside) {
       return;
     }
 

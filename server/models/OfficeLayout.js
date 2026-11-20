@@ -35,6 +35,8 @@ const OfficeLayoutSchema = new mongoose.Schema({
     default: 1300,
   },
   spawnPoint: {
+    variation: String,
+    color: String,
     x: { type: Number, default: 1100 },
     y: { type: Number, default: 720 },
   },
@@ -62,7 +64,6 @@ const OfficeLayoutSchema = new mongoose.Schema({
       rotation: { type: Number, default: 0 },
       variation: { type: String, default: 'single_swing' },
       color: { type: String, default: '#78350f' },
-      arc: [Number],
       isIsolated: { type: Boolean, default: true },
       _id: false,
     },

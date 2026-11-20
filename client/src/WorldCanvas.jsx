@@ -1,810 +1,15 @@
+import { AvatarPortrait } from './components/WorkspaceArt';
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { getInitials } from './utils/avatar';
 import { io } from 'socket.io-client';
-import { spatialAudio, MAX_DISTANCE, DOORS, isDoorOpen, getRoomAt, playKnockSound, playUiChime } from './services/spatialAudio';
+import { spatialAudio, MAX_DISTANCE, W, H, isDoorOpen, getRoomAt, playKnockSound, playUiChime } from './services/spatialAudio';
 import { webrtc } from './services/webrtc';
 import { SERVER_URL } from './config';
-import { drawArchitecturalWall, drawArchitecturalDoor, drawArchitecturalZone, drawArchitecturalFurniture, drawArchitecturalSpawn } from './components/architecturalComponents';
+import { THEMES, makeScene } from './world/scenes';
+import { blocked, touchesModel, prepareScene, paintScene } from './world/renderScene';
 
-// ─── Constants ─────────────────────────────────────────────────────────────────
-const W = 2200;
-const H = 1300;
-const SPEED = 3.6; // Responsive movement speed for 2200x1300 world
-const R = 15; // avatar radius
-const MOVE_THROTTLE_MS = 50; // emit move at most every 50ms
+const SPEED = 3.6;
+const MOVE_THROTTLE_MS = 50;
 
-// ─── Office Theme Layout (Expanded 2200x1300 World) ──────────────────────────
-const OFFICE_FLOORS = [
-  { x: 18, y: 18, w: W - 36, h: H - 36, color: '#f8fafc' },
-  // Meeting Room (Top-Left)
-  { x: 18, y: 18, w: 580, h: 480, color: '#e0f2fe' },
-  // Manager's Office (Top-Center)
-  { x: 678, y: 18, w: 450, h: 420, color: '#fef3c7' },
-  // Tech / Server Lab (Top-Right)
-  { x: 1620, y: 18, w: 562, h: 440, color: '#dcfce7' },
-  // Lounge & Cafeteria (Bottom-Left)
-  { x: 18, y: 920, w: 560, h: 362, color: '#ffedd5' },
-  // Print & Design Studio (Bottom-Right)
-  { x: 1720, y: 920, w: 462, h: 362, color: '#f3e8ff' },
-];
-
-const OFFICE_LABELS = [
-  { text: 'Executive Boardroom', x: 300, y: 46 },
-  { text: "Manager's Suite", x: 900, y: 46 },
-  { text: 'Cloud Infrastructure & Server Lab', x: 1900, y: 46 },
-  { text: 'Cafeteria & Lounge', x: 290, y: 948 },
-  { text: 'Design & Print Studio', x: 1940, y: 948 },
-  { text: 'Central Collaboration Floor', x: 1100, y: 510 },
-];
-
-const OFFICE_WALLS = [
-  { x: 10, y: 10, w: W - 20, h: 8 },
-  { x: 10, y: 10, w: 8, h: H - 20 },
-  { x: W - 18, y: 10, w: 8, h: H - 20 },
-  { x: 10, y: H - 18, w: W - 20, h: 8 },
-  // Meeting Room (Top-Left)
-  { x: 598, y: 18, w: 8, h: 480 },
-  { x: 18, y: 498, w: 490, h: 8 },
-  // Manager's Office (Top-Center)
-  { x: 670, y: 18, w: 8, h: 420 },
-  { x: 1128, y: 18, w: 8, h: 420 },
-  { x: 678, y: 438, w: 350, h: 8 },
-  // Tech / Server Room (Top-Right)
-  { x: 1612, y: 18, w: 8, h: 320 },
-  { x: 1620, y: 458, w: 562, h: 8 },
-  // Lounge & Break (Bottom-Left)
-  { x: 18, y: 912, w: 460, h: 8 },
-  { x: 578, y: 920, w: 8, h: 362 },
-  // Print & Copy (Bottom-Right)
-  { x: 1720, y: 912, w: 462, h: 8 },
-  { x: 1712, y: 920, w: 8, h: 250 },
-];
-
-const OFFICE_FURNITURE = [
-  // ── Meeting Room (Top-Left): Large Boardroom Table + 10 Chairs + Screen ──
-  { type: 'rect', x: 110, y: 150, w: 360, h: 180, color: '#b5896a', rx: 8 },
-  { type: 'screen', x: 290, y: 46 },
-  { type: 'chair', x: 160, y: 136 }, { type: 'chair', x: 230, y: 136 }, { type: 'chair', x: 300, y: 136 }, { type: 'chair', x: 370, y: 136 },
-  { type: 'chair', x: 160, y: 344 }, { type: 'chair', x: 230, y: 344 }, { type: 'chair', x: 300, y: 344 }, { type: 'chair', x: 370, y: 344 },
-  { type: 'chair', x: 94,  y: 240 }, { type: 'chair', x: 486, y: 240 },
-  { type: 'plant', x: 540, y: 60, r: 16 }, { type: 'plant', x: 60, y: 60, r: 16 }, { type: 'plant', x: 60, y: 440, r: 16 },
-
-  // ── Manager's Executive Suite (Top-Center): L-Desk + Executive Chair + Guest Chairs ──
-  { type: 'rect', x: 740, y: 100, w: 280, h: 65, color: '#b5896a', rx: 4 },
-  { type: 'rect', x: 740, y: 100, w: 65, h: 180, color: '#b5896a', rx: 4 },
-  { type: 'screen', x: 880, y: 92 },
-  { type: 'chair', x: 885, y: 190 }, // Manager chair
-  { type: 'chair', x: 840, y: 70 },  { type: 'chair', x: 930, y: 70 }, // Guest chairs
-  { type: 'plant', x: 1090, y: 55, r: 16 }, { type: 'plant', x: 705, y: 55, r: 14 },
-
-  // ── Cloud Infrastructure & Server Lab (Top-Right): Server Racks + Console ──
-  { type: 'rect', x: 1700, y: 60, w: 42, h: 260, color: '#334155', rx: 4 },
-  { type: 'rect', x: 1770, y: 60, w: 42, h: 260, color: '#334155', rx: 4 },
-  { type: 'rect', x: 1840, y: 60, w: 42, h: 260, color: '#334155', rx: 4 },
-  { type: 'rect', x: 1910, y: 60, w: 42, h: 260, color: '#334155', rx: 4 },
-  // LED Status lights on racks
-  { type: 'rect', x: 1708, y: 80, w: 26, h: 4, color: '#22d3ee', rx: 1 },
-  { type: 'rect', x: 1778, y: 80, w: 26, h: 4, color: '#4ade80', rx: 1 },
-  { type: 'rect', x: 1848, y: 80, w: 26, h: 4, color: '#facc15', rx: 1 },
-  { type: 'rect', x: 1918, y: 80, w: 26, h: 4, color: '#f87171', rx: 1 },
-  // Engineering Console desk
-  { type: 'rect', x: 2000, y: 80, w: 140, h: 80, color: '#475569', rx: 4 },
-  { type: 'screen', x: 2070, y: 72 }, { type: 'chair', x: 2070, y: 185 },
-
-  // ── Central Open Collaboration Floor: 6 Team Pods + Plants ──
-  // Pod 1 (West Upper)
-  { type: 'rect', x: 720, y: 580, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
-  { type: 'screen', x: 760, y: 572 }, { type: 'screen', x: 840, y: 572 },
-  { type: 'chair', x: 760, y: 685 }, { type: 'chair', x: 840, y: 685 },
-
-  // Pod 2 (East Upper)
-  { type: 'rect', x: 1320, y: 580, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
-  { type: 'screen', x: 1360, y: 572 }, { type: 'screen', x: 1440, y: 572 },
-  { type: 'chair', x: 1360, y: 685 }, { type: 'chair', x: 1440, y: 685 },
-
-  // Pod 3 (West Middle)
-  { type: 'rect', x: 720, y: 740, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
-  { type: 'screen', x: 760, y: 732 }, { type: 'screen', x: 840, y: 732 },
-  { type: 'chair', x: 760, y: 845 }, { type: 'chair', x: 840, y: 845 },
-
-  // Pod 4 (East Middle)
-  { type: 'rect', x: 1320, y: 740, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
-  { type: 'screen', x: 1360, y: 732 }, { type: 'screen', x: 1440, y: 732 },
-  { type: 'chair', x: 1360, y: 845 }, { type: 'chair', x: 1440, y: 845 },
-
-  // Pod 5 (West Lower)
-  { type: 'rect', x: 720, y: 900, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
-  { type: 'screen', x: 760, y: 892 }, { type: 'screen', x: 840, y: 892 },
-  { type: 'chair', x: 760, y: 1005 }, { type: 'chair', x: 840, y: 1005 },
-
-  // Pod 6 (East Lower)
-  { type: 'rect', x: 1320, y: 900, w: 160, h: 80, color: '#cbd5e1', rx: 4 },
-  { type: 'screen', x: 1360, y: 892 }, { type: 'screen', x: 1440, y: 892 },
-  { type: 'chair', x: 1360, y: 1005 }, { type: 'chair', x: 1440, y: 1005 },
-
-  // Central Aisle Plants & Feature Trees
-  { type: 'plant', x: 1040, y: 620, r: 18 }, { type: 'plant', x: 1160, y: 620, r: 18 },
-  { type: 'plant', x: 1040, y: 780, r: 18 }, { type: 'plant', x: 1160, y: 780, r: 18 },
-  { type: 'plant', x: 1040, y: 940, r: 18 }, { type: 'plant', x: 1160, y: 940, r: 18 },
-
-  // ── Cafeteria & Lounge (Bottom-Left): Sofas + Espresso Counter ──
-  { type: 'rect', x: 60, y: 980, w: 260, h: 60, color: '#d97706', rx: 8 },
-  { type: 'rect', x: 60, y: 1040, w: 60, h: 160, color: '#d97706', rx: 8 },
-  { type: 'rect', x: 160, y: 1080, w: 120, h: 70, color: '#92400e', rx: 6 },
-  { type: 'rect', x: 360, y: 980, w: 180, h: 50, color: '#78350f', rx: 4 }, // Bar counter
-  { type: 'chair', x: 380, y: 1045 }, { type: 'chair', x: 440, y: 1045 }, { type: 'chair', x: 500, y: 1045 },
-  { type: 'plant', x: 530, y: 1230, r: 18 }, { type: 'plant', x: 60, y: 1230, r: 18 },
-
-  // ── Design & Print Studio (Bottom-Right): Plotter Benches + Tables ──
-  { type: 'rect', x: 1760, y: 980, w: 180, h: 90, color: '#94a3b8', rx: 4 },
-  { type: 'rect', x: 1980, y: 980, w: 160, h: 90, color: '#94a3b8', rx: 4 },
-  { type: 'rect', x: 1760, y: 1120, w: 380, h: 60, color: '#cbd5e1', rx: 4 },
-  { type: 'plant', x: 2130, y: 1230, r: 18 },
-];
-
-// ─── Conference & Auditorium Layout (Expanded 2200x1300 World) ──────────────
-const CONF_WALLS = [
-  { x: 10, y: 10, w: W - 20, h: 8 },
-  { x: 10, y: 10, w: 8, h: H - 20 },
-  { x: W - 18, y: 10, w: 8, h: H - 20 },
-  { x: 10, y: H - 18, w: W - 20, h: 8 },
-  // West Breakout Pod wall
-  { x: 492, y: 18, w: 8, h: 420 },
-  { x: 492, y: 560, w: 8, h: 400 },
-  // East Breakout Pod wall
-  { x: 1700, y: 18, w: 8, h: 420 },
-  { x: 1700, y: 560, w: 8, h: 400 },
-  // Stage barriers
-  { x: 500, y: 310, w: 420, h: 8 },
-  { x: 1280, y: 310, w: 420, h: 8 },
-  // Foyer divider
-  { x: 18, y: 970, w: 850, h: 8 },
-  { x: 1332, y: 970, w: 850, h: 8 },
-];
-
-// ─── Rooftop Lounge Layout (Expanded 2200x1300 World) ─────────────────────────
-const LOUNGE_WALLS = [
-  { x: 10, y: 10, w: W - 20, h: 8 },
-  { x: 10, y: 10, w: 8, h: H - 20 },
-  { x: W - 18, y: 10, w: 8, h: H - 20 },
-  { x: 10, y: H - 18, w: W - 20, h: 8 },
-  // VIP west partition
-  { x: 540, y: 18, w: 8, h: 360 },
-  { x: 540, y: 520, w: 8, h: 380 },
-  // Games east partition
-  { x: 1660, y: 18, w: 8, h: 360 },
-  { x: 1660, y: 520, w: 8, h: 380 },
-  // Terrace balustrade
-  { x: 18, y: 920, w: 860, h: 6 },
-  { x: 1322, y: 920, w: 860, h: 6 },
-];
-
-// ─── Drawing Helpers ──────────────────────────────────────────────────────────
-function drawPlant(ctx, x, y, r) {
-  ctx.beginPath(); ctx.ellipse(x + 2, y + r + 2, r * 0.5, r * 0.25, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fill();
-  ctx.beginPath(); ctx.rect(x - r * 0.45, y + r * 0.45, r * 0.9, r * 0.6);
-  ctx.fillStyle = '#9a5c38'; ctx.fill();
-  for (const [ox, oy, or_, col] of [
-    [0, -r * 0.1, r * 0.85, '#2d7a3a'],
-    [-r * 0.45, -r * 0.2, r * 0.6, '#3a9e4a'],
-    [r * 0.45, -r * 0.15, r * 0.6, '#25693c'],
-    [0, -r * 0.55, r * 0.55, '#44b85a'],
-  ]) {
-    ctx.beginPath(); ctx.arc(x + ox, y + oy, or_, 0, Math.PI * 2);
-    ctx.fillStyle = col; ctx.fill();
-  }
-}
-
-function drawRoundRect(ctx, x, y, w, h, r = 4) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-function drawScreen(ctx, x, y) {
-  ctx.fillStyle = '#0f172a'; ctx.fillRect(x - 14, y, 28, 18);
-  ctx.fillStyle = '#1e3a5f'; ctx.fillRect(x - 12, y + 1, 24, 15);
-  ctx.fillStyle = '#38bdf8'; ctx.fillRect(x - 9, y + 4, 18, 2);
-  ctx.fillStyle = '#7dd3fc'; ctx.fillRect(x - 9, y + 8, 12, 2);
-  ctx.fillStyle = '#4b5563'; ctx.fillRect(x - 3, y + 18, 6, 5);
-  ctx.fillRect(x - 8, y + 23, 16, 3);
-}
-
-function drawRoundTable(ctx, x, y, r, chairCount = 4, tableColor = '#b5896a') {
-  // Table shadow
-  ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fill();
-  // Table top
-  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = tableColor; ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5; ctx.stroke();
-
-  // Surrounding chairs
-  for (let i = 0; i < chairCount; i++) {
-    const angle = (i * Math.PI * 2) / chairCount;
-    const cx = x + Math.cos(angle) * (r + 14);
-    const cy = y + Math.sin(angle) * (r + 14);
-    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2);
-    ctx.fillStyle = '#7c6050'; ctx.fill();
-    ctx.strokeStyle = '#5a4038'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-    ctx.fillStyle = '#a07860'; ctx.fill();
-  }
-}
-
-function drawParasol(ctx, x, y, color = '#06b6d4') {
-  // Shadow
-  ctx.beginPath(); ctx.ellipse(x + 4, y + 6, 28, 18, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fill();
-  // Table
-  ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2);
-  ctx.fillStyle = '#d97706'; ctx.fill();
-  // Parasol canopy
-  ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2);
-  ctx.fillStyle = color; ctx.fill();
-  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
-  // Rib segments
-  for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * 26, y + Math.sin(a) * 26);
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
-  }
-  ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
-  ctx.fillStyle = '#fff'; ctx.fill();
-}
-
-// ─── Theme Renderers ──────────────────────────────────────────────────────────
-function drawOffice(ctx) {
-  ctx.fillStyle = '#1e2030'; ctx.fillRect(0, 0, W, H);
-  for (const rf of OFFICE_FLOORS) { ctx.fillStyle = rf.color; ctx.fillRect(rf.x, rf.y, rf.w, rf.h); }
-  ctx.strokeStyle = 'rgba(0,0,0,0.05)'; ctx.lineWidth = 1;
-  for (let gx = 18; gx < W - 18; gx += 36) {
-    ctx.beginPath(); ctx.moveTo(gx, 18); ctx.lineTo(gx, H - 18); ctx.stroke();
-  }
-  for (let gy = 18; gy < H - 18; gy += 36) {
-    ctx.beginPath(); ctx.moveTo(18, gy); ctx.lineTo(W - 18, gy); ctx.stroke();
-  }
-  ctx.textAlign = 'center';
-  for (const lbl of OFFICE_LABELS) {
-    ctx.font = '600 11px Inter, sans-serif';
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillText(lbl.text.toUpperCase(), lbl.x, lbl.y);
-  }
-  // Furniture
-  for (const f of OFFICE_FURNITURE) {
-    if (f.type === 'rect') {
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.2)'; ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
-      drawRoundRect(ctx, f.x, f.y, f.w, f.h, f.rx ?? 3);
-      ctx.fillStyle = f.color; ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.stroke();
-      ctx.restore();
-    } else if (f.type === 'chair') {
-      ctx.beginPath(); ctx.arc(f.x, f.y, 10, 0, Math.PI * 2);
-      ctx.fillStyle = '#7c6050'; ctx.fill();
-      ctx.strokeStyle = '#5a4038'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.beginPath(); ctx.arc(f.x, f.y, 7, 0, Math.PI * 2);
-      ctx.fillStyle = '#a07860'; ctx.fill();
-    } else if (f.type === 'plant') {
-      drawPlant(ctx, f.x, f.y, f.r ?? 14);
-    } else if (f.type === 'screen') {
-      drawScreen(ctx, f.x, f.y);
-    }
-  }
-  // Walls
-  ctx.fillStyle = '#2c3050';
-  for (const w of OFFICE_WALLS) ctx.fillRect(w.x, w.y, w.w, w.h);
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  for (const w of OFFICE_WALLS) ctx.fillRect(w.x, w.y, w.w, 1);
-}
-
-function drawConference(ctx) {
-  // Base floor
-  ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
-
-  // Keynote Stage floor (top center)
-  ctx.fillStyle = '#1e1b4b'; ctx.fillRect(288, 18, 624, 150);
-  ctx.fillStyle = '#312e81'; ctx.fillRect(320, 24, 560, 138);
-
-  // Auditorium Hall floor
-  ctx.fillStyle = '#181b2e'; ctx.fillRect(288, 176, 624, 318);
-
-  // Breakout pods (left and right)
-  ctx.fillStyle = '#1e2538'; ctx.fillRect(18, 18, 262, 476);
-  ctx.fillStyle = '#1e2538'; ctx.fillRect(923, 18, 259, 476);
-
-  // Networking foyer (bottom)
-  ctx.fillStyle = '#1b2034'; ctx.fillRect(18, 503, W - 36, 159);
-
-  // Stage presentation display screen
-  ctx.save();
-  ctx.shadowColor = 'rgba(56, 189, 248, 0.4)'; ctx.shadowBlur = 15;
-  drawRoundRect(ctx, 420, 36, 360, 32, 6);
-  ctx.fillStyle = '#0369a1'; ctx.fill();
-  ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.font = '700 13px Inter, sans-serif'; ctx.fillStyle = '#e0f2fe'; ctx.textAlign = 'center';
-  ctx.fillText('KEYNOTE PRESENTATION • PROXISPEAK', 600, 56);
-  ctx.restore();
-
-  // Speaker podium
-  drawRoundRect(ctx, 350, 92, 54, 42, 4);
-  ctx.fillStyle = '#4f46e5'; ctx.fill();
-  ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '14px sans-serif'; ctx.font = '700 9px Inter, sans-serif'; ctx.fillStyle = '#ffffff'; ctx.fillText('MIC', 377, 117);
-
-  // Auditorium Seating rows (left and right banks, center aisle)
-  const rows = 4, cols = 5;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cx = 350 + c * 34;
-      const cy = 240 + r * 56;
-      ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-      ctx.fillStyle = '#4338ca'; ctx.fill();
-      ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
-      ctx.fillStyle = '#6366f1'; ctx.fill();
-    }
-  }
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cx = 680 + c * 34;
-      const cy = 240 + r * 56;
-      ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-      ctx.fillStyle = '#4338ca'; ctx.fill();
-      ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
-      ctx.fillStyle = '#6366f1'; ctx.fill();
-    }
-  }
-
-  // Breakout Pods tables and whiteboards
-  drawRoundTable(ctx, 149, 140, 44, 6, '#334155');
-  drawRoundTable(ctx, 149, 340, 44, 6, '#334155');
-  drawScreen(ctx, 149, 36);
-
-  drawRoundTable(ctx, 1052, 140, 44, 6, '#334155');
-  drawRoundTable(ctx, 1052, 340, 44, 6, '#334155');
-  drawScreen(ctx, 1052, 36);
-
-  // Networking Foyer - Refreshment counter & cocktail tables
-  drawRoundRect(ctx, 90, 560, 180, 44, 6);
-  ctx.fillStyle = '#475569'; ctx.fill();
-  ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#f8fafc'; ctx.fillText('Refreshments Bar', 180, 586);
-
-  for (const hx of [420, 600, 780, 980]) {
-    drawRoundTable(ctx, hx, 580, 20, 3, '#64748b');
-  }
-
-  // Plants
-  drawPlant(ctx, 310, 40, 15);
-  drawPlant(ctx, 890, 40, 15);
-  drawPlant(ctx, 298, 460, 14);
-  drawPlant(ctx, 902, 460, 14);
-  drawPlant(ctx, 40, 530, 14);
-  drawPlant(ctx, 1150, 530, 14);
-
-  // Room section labels
-  ctx.font = '700 11px Inter, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.textAlign = 'center';
-  ctx.fillText('BREAKOUT POD A', 149, 235);
-  ctx.fillText('BREAKOUT POD B', 1052, 235);
-  ctx.fillText('MAIN AUDITORIUM SEATING', 600, 205);
-  ctx.fillText('NETWORKING FOYER', 600, 535);
-
-  // Walls
-  ctx.fillStyle = '#312e81';
-  for (const w of CONF_WALLS) ctx.fillRect(w.x, w.y, w.w, w.h);
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  for (const w of CONF_WALLS) ctx.fillRect(w.x, w.y, w.w, 1);
-}
-
-function drawLounge(ctx) {
-  // Base floor
-  ctx.fillStyle = '#1c1917'; ctx.fillRect(0, 0, W, H);
-
-  // VIP Lounge Booths (West)
-  ctx.fillStyle = '#292524'; ctx.fillRect(18, 18, 277, 457);
-
-  // Central Bar Area
-  ctx.fillStyle = '#262220'; ctx.fillRect(303, 18, 592, 457);
-
-  // Games & Rec (East)
-  ctx.fillStyle = '#202624'; ctx.fillRect(903, 18, 279, 457);
-
-  // Sunset Terrace Deck (South)
-  ctx.fillStyle = '#1c2820'; ctx.fillRect(18, 481, W - 36, 181);
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
-  for (let gy = 485; gy < H - 18; gy += 14) {
-    ctx.beginPath(); ctx.moveTo(18, gy); ctx.lineTo(W - 18, gy); ctx.stroke();
-  }
-
-  // Central Bar Counter
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 8;
-  drawRoundRect(ctx, 390, 80, 420, 50, 8);
-  ctx.fillStyle = '#b45309'; ctx.fill();
-  ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.restore();
-
-  // Bar stools
-  for (let i = 0; i < 8; i++) {
-    const sx = 420 + i * 50;
-    ctx.beginPath(); ctx.arc(sx, 146, 8, 0, Math.PI * 2);
-    ctx.fillStyle = '#92400e'; ctx.fill();
-    ctx.strokeStyle = '#fef3c7'; ctx.lineWidth = 1.5; ctx.stroke();
-  }
-
-  // Back bar shelf
-  drawRoundRect(ctx, 420, 32, 360, 24, 4);
-  ctx.fillStyle = '#451a03'; ctx.fill();
-  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#fef3c7'; ctx.textAlign = 'center';
-  ctx.fillText('ROOFTOP ESPRESSO & COCKTAIL BAR', 600, 48);
-
-  // West VIP Booths
-  drawRoundRect(ctx, 50, 90, 160, 45, 8);
-  ctx.fillStyle = '#ea580c'; ctx.fill();
-  drawRoundRect(ctx, 50, 135, 45, 80, 8);
-  ctx.fillStyle = '#ea580c'; ctx.fill();
-  drawRoundTable(ctx, 135, 160, 24, 3, '#78350f');
-
-  drawRoundRect(ctx, 50, 270, 160, 45, 8);
-  ctx.fillStyle = '#ea580c'; ctx.fill();
-  drawRoundRect(ctx, 50, 315, 45, 80, 8);
-  ctx.fillStyle = '#ea580c'; ctx.fill();
-  drawRoundTable(ctx, 135, 340, 24, 3, '#78350f');
-
-  // East Games Room - Billiards Table
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 6;
-  drawRoundRect(ctx, 960, 100, 165, 95, 4);
-  ctx.fillStyle = '#15803d'; ctx.fill();
-  ctx.strokeStyle = '#78350f'; ctx.lineWidth = 7; ctx.stroke();
-  for (const [px, py] of [
-    [960, 100], [1042, 100], [1125, 100],
-    [960, 195], [1042, 195], [1125, 195],
-  ]) {
-    ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2);
-    ctx.fillStyle = '#1c1917'; ctx.fill();
-  }
-  ctx.restore();
-
-  drawRoundTable(ctx, 1042, 320, 32, 4, '#78350f');
-
-  // Sunset Terrace - Parasol patio tables
-  drawParasol(ctx, 230, 570, '#06b6d4');
-  drawParasol(ctx, 600, 570, '#f59e0b');
-  drawParasol(ctx, 970, 570, '#ec4899');
-
-  for (let px = 60; px < W - 50; px += 90) {
-    drawPlant(ctx, px, 475, 12);
-  }
-
-  // Room section labels
-  ctx.font = '700 11px Inter, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.textAlign = 'center';
-  ctx.fillText('VIP FIRESIDE BOOTHS', 156, 45);
-  ctx.fillText('GAMES & BILLIARDS', 1042, 45);
-  ctx.fillText('SUNSET OPEN-AIR TERRACE', 600, 508);
-
-  // Walls
-  ctx.fillStyle = '#451a03';
-  for (const w of LOUNGE_WALLS) ctx.fillRect(w.x, w.y, w.w, w.h);
-  ctx.fillStyle = 'rgba(255,255,255,0.12)';
-  for (const w of LOUNGE_WALLS) ctx.fillRect(w.x, w.y, w.w, 1);
-}
-
-// ─── Dynamic Doors Drawing (Office Environment) ──────────────────────────────
-function drawDoors(ctx, doors = {}) {
-  for (const [key, door] of Object.entries(DOORS)) {
-    const isOpen = isDoorOpen(doors, key);
-    const [cx, cy, rad, sa, ea] = door.arc;
-    const wall = door.wall;
-
-    if (isOpen) {
-      // Draw open door swing radius arc (soft green dashed line)
-      ctx.save();
-      ctx.strokeStyle = 'rgba(34, 197, 94, 0.45)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.arc(cx, cy, rad, sa, ea);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Draw open door slab (swung open along sa)
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(sa);
-      ctx.fillStyle = '#92400e';
-      ctx.fillRect(0, -2.5, rad * 0.95, 5);
-      ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(0, -2.5, rad * 0.95, 5);
-      // Brass hinge
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(0, 0, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Open status badge text
-      ctx.font = '600 9px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      const midX = wall.x + wall.w / 2;
-      const midY = wall.y + wall.h / 2;
-      ctx.fillStyle = '#16a34a';
-      ctx.fillText('OPEN', midX, midY + (wall.h > wall.w ? 0 : -8));
-      ctx.restore();
-    } else {
-      // Draw closed door: solid wooden panel barrier
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 1;
-      ctx.shadowOffsetY = 1;
-
-      // Wooden panel slab
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
-
-      // Panel bevel
-      ctx.strokeStyle = '#b45309';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
-
-      // Golden door lock & handle
-      ctx.fillStyle = '#fbbf24';
-      const hx = wall.w > wall.h ? wall.x + wall.w * 0.72 : wall.x + wall.w / 2;
-      const hy = wall.h > wall.w ? wall.y + wall.h * 0.72 : wall.y + wall.h / 2;
-      ctx.beginPath();
-      ctx.arc(hx, hy, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Closed status badge
-      ctx.font = '600 9px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      const midX = wall.x + wall.w / 2;
-      const midY = wall.y + wall.h / 2;
-      ctx.fillStyle = '#ef4444';
-      ctx.fillText('CLOSED', midX, midY + (wall.h > wall.w ? 0 : -8));
-      ctx.restore();
-    }
-  }
-}
-
-// ─── Theme Registry ───────────────────────────────────────────────────────────
-const THEMES = {
-  office: {
-    id: 'office',
-    name: 'Corporate Office',
-    icon: 'apartment',
-    badgeColor: '#3b82f6',
-    spawn: { x: 1100, y: 720 },
-    draw: drawOffice,
-    walls: OFFICE_WALLS,
-    hasDoors: true,
-  },
-  conference: {
-    id: 'conference',
-    name: 'Conference & Auditorium',
-    icon: 'account_balance',
-    badgeColor: '#8b5cf6',
-    spawn: { x: 1100, y: 1050 },
-    draw: drawConference,
-    walls: CONF_WALLS,
-    hasDoors: false,
-  },
-  lounge: {
-    id: 'lounge',
-    name: 'Executive Sky Rooftop',
-    icon: 'local_cafe',
-    badgeColor: '#10b981',
-    spawn: { x: 1100, y: 650 },
-    draw: drawLounge,
-    walls: LOUNGE_WALLS,
-    hasDoors: false,
-  },
-  rooftop: {
-    id: 'rooftop',
-    name: 'Executive Sky Rooftop',
-    icon: 'deck',
-    badgeColor: '#10b981',
-    spawn: { x: 1100, y: 650 },
-    draw: drawLounge,
-    walls: LOUNGE_WALLS,
-    hasDoors: false,
-  },
-};
-
-// ─── Collision (Checking Theme Walls + Closed Doors) ──────────────────────────
-function collidesWithWall(nx, ny, walls, doors = {}, checkDoors = true) {
-  for (const w of walls) {
-    const cx = Math.max(w.x, Math.min(nx, w.x + w.w));
-    const cy = Math.max(w.y, Math.min(ny, w.y + w.h));
-    if ((nx - cx) ** 2 + (ny - cy) ** 2 < R * R) return true;
-  }
-
-  if (checkDoors) {
-    for (const [key, d] of Object.entries(DOORS)) {
-      const isOpen = isDoorOpen(doors, key);
-      if (!isOpen && d.wall) {
-        const w = d.wall;
-        const cx = Math.max(w.x, Math.min(nx, w.x + w.w));
-        const cy = Math.max(w.y, Math.min(ny, w.y + w.h));
-        if ((nx - cx) ** 2 + (ny - cy) ** 2 < R * R) return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-// ─── Avatar Drawing with Voice Visualizers & Acoustics ────────────────────────
-function drawAvatar(ctx, x, y, color, username, moving, isMe = false, isMuted = false, isSpeaking = false, volumeGain = 0, voiceIntensity = 0, acousticInfo = null) {
-  // Proximity earshot ring (only local player)
-  if (isMe) {
-    ctx.beginPath();
-    ctx.arc(x, y, MAX_DISTANCE, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.32)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 6]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    const grad = ctx.createRadialGradient(x, y, 18, x, y, MAX_DISTANCE);
-    grad.addColorStop(0, 'rgba(59, 130, 246, 0.05)');
-    grad.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, MAX_DISTANCE, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  const boxSize = 36;
-  const boxRad = 9;
-  const boxX = x - boxSize / 2;
-  const boxY = y - boxSize / 2;
-
-  // Drop shadow behind box
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-  drawRoundRect(ctx, boxX + 1, boxY + 4, boxSize, boxSize, boxRad);
-  ctx.fill();
-
-  // Moving aura trail
-  if (moving) {
-    ctx.fillStyle = (color || '#3b82f6') + '30';
-    drawRoundRect(ctx, boxX - 4, boxY - 4, boxSize + 8, boxSize + 8, boxRad + 2);
-    ctx.fill();
-  }
-
-  // Speaking sound waves (pulsing green aura scaled by voice intensity)
-  if ((isSpeaking || voiceIntensity > 0.04) && !isMuted) {
-    const intensityFactor = Math.max(0.1, voiceIntensity);
-    const pulsePad = 5 + intensityFactor * 14;
-
-    ctx.strokeStyle = `rgba(34, 197, 94, ${0.45 + intensityFactor * 0.55})`;
-    ctx.lineWidth = 2 + intensityFactor * 2;
-    drawRoundRect(ctx, boxX - pulsePad, boxY - pulsePad, boxSize + pulsePad * 2, boxSize + pulsePad * 2, boxRad + pulsePad * 0.4);
-    ctx.stroke();
-
-    ctx.strokeStyle = `rgba(34, 197, 94, ${0.2 + intensityFactor * 0.3})`;
-    ctx.lineWidth = 1.5;
-    drawRoundRect(ctx, boxX - pulsePad - 4, boxY - pulsePad - 4, boxSize + (pulsePad + 4) * 2, boxSize + (pulsePad + 4) * 2, boxRad + (pulsePad + 4) * 0.4);
-    ctx.stroke();
-  }
-
-  // Local player outer white highlight border
-  if (isMe) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2.5;
-    drawRoundRect(ctx, boxX - 3, boxY - 3, boxSize + 6, boxSize + 6, boxRad + 2);
-    ctx.stroke();
-  }
-
-  // Avatar Squircle Box in selected color
-  ctx.fillStyle = color || '#3b82f6';
-  drawRoundRect(ctx, boxX, boxY, boxSize, boxSize, boxRad);
-  ctx.fill();
-  ctx.strokeStyle = isMe ? '#ffffff' : 'rgba(255, 255, 255, 0.85)';
-  ctx.lineWidth = isMe ? 2 : 1.5;
-  ctx.stroke();
-
-  // Initials in bold white typography (e.g. "DJ" for Dvij Joshi)
-  const initials = getInitials(username);
-  ctx.font = '700 13px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  ctx.fillStyle = '#ffffff';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(initials, x, y + 0.5);
-
-  // Name tag with mic indicator and live equalizer bars
-  ctx.font = '600 12px Inter, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  const isActuallySpeaking = !isMuted && (isSpeaking || voiceIntensity > 0.04);
-  const micIcon = isMuted ? '[Mute]' : (isActuallySpeaking ? '[Live]' : '[Mic]');
-  const label = isMe ? `${username} (you)` : username;
-  const fullTag = `${micIcon} ${label}`;
-  const tw = ctx.measureText(fullTag).width;
-  const extraForEq = !isMuted ? 16 : 0;
-  const px = 8, tagX = x - (tw + extraForEq) / 2 - px, tagY = boxY - 26;
-  const tagW = tw + extraForEq + px * 2, tagH = 22;
-
-  ctx.fillStyle = isMe ? 'rgba(15,17,23,0.92)' : 'rgba(15,17,23,0.78)';
-  drawRoundRect(ctx, tagX, tagY, tagW, tagH, 6);
-  ctx.fill();
-
-  if (isActuallySpeaking) {
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = isMe ? '#ffffff' : '#cbd5e1';
-  ctx.fillText(fullTag, x - extraForEq / 2, tagY + tagH - 6);
-
-  // 3-bar voice intensity equalizer
-  if (!isMuted) {
-    const eqX = tagX + tagW - 18;
-    const eqCenterY = tagY + tagH / 2;
-    for (let b = 0; b < 3; b++) {
-      const thresh = (b + 1) * 0.2;
-      const barH = voiceIntensity >= thresh ? 5 + b * 2.5 : 2;
-      ctx.fillStyle = voiceIntensity >= thresh ? '#22c55e' : 'rgba(148, 163, 184, 0.35)';
-      ctx.fillRect(eqX + b * 4, eqCenterY - barH / 2, 2.5, barH);
-    }
-  }
-
-  // Volume & Acoustic Status Indicator
-  if (!isMe) {
-    ctx.font = '500 10px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    if (acousticInfo) {
-      if (acousticInfo.status === 'blocked-wall' || acousticInfo.status === 'door-closed') {
-        ctx.fillStyle = '#ef4444';
-        const stLabel = acousticInfo.status === 'door-closed' ? 'Closed Door' : 'Soundproof';
-        ctx.fillText(`[Private] ${acousticInfo.remoteRoom?.name || 'Room'} (${stLabel})`, x, y + R + 15);
-      } else if (acousticInfo.status === 'in-room') {
-        const volPct = Math.round(volumeGain * 100);
-        ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
-        ctx.fillText(`${volPct}% • ${acousticInfo.remoteRoom.name}`, x, y + R + 15);
-      } else if (acousticInfo.status === 'doorway') {
-        const volPct = Math.round(volumeGain * 100);
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillText(`Open Door · ${volPct}%`, x, y + R + 15);
-      } else if (acousticInfo.status === 'occluded') {
-        const volPct = Math.round(volumeGain * 100);
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillText(`Occluded · ${volPct}%`, x, y + R + 15);
-      } else if (volumeGain > 0.04) {
-        const volPct = Math.round(volumeGain * 100);
-        ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
-        ctx.fillText(`${volPct}%`, x, y + R + 15);
-      }
-    } else if (volumeGain > 0.04) {
-      const volPct = Math.round(volumeGain * 100);
-      ctx.fillStyle = isActuallySpeaking ? '#22c55e' : '#10b981';
-      ctx.fillText(`${volPct}%`, x, y + R + 15);
-    }
-  } else if (isMe && acousticInfo?.localRoom) {
-    ctx.font = '500 10px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = acousticInfo.localRoom.isIsolated ? '#38bdf8' : '#94a3b8';
-    ctx.fillText(`${acousticInfo.localRoom.name}`, x, y + R + 15);
-  }
-}
-
-// ─── Main Component ────────────────────────────────────────────────────────────
 export default function WorldCanvas({
   user,
   username: propUsername,
@@ -821,102 +26,30 @@ export default function WorldCanvas({
   const avatarColor = user?.avatarColor || propAvatarColor || '#3b82f6';
   const roomId = room?.roomId || propRoomId || 'main-office';
   const roomName = room?.name || propRoomName || 'Workspace';
-  const [loadedLayout, setLoadedLayout] = useState(room?.layout || null);
+  const [fetchedLayout, setFetchedLayout] = useState(null);
   useEffect(() => {
-    if (room?.layout) {
-      setLoadedLayout(room.layout);
-    } else if (roomId) {
-      fetch(`${SERVER_URL}/api/layouts/${encodeURIComponent(roomId)}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data && data.layoutId) setLoadedLayout(data);
-        })
-        .catch(() => {});
-    }
+    if (room?.layout) return;
+    const controller = new AbortController();
+    fetch(`${SERVER_URL}/api/layouts/${encodeURIComponent(roomId)}`, {signal:controller.signal})
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.layoutId && !controller.signal.aborted) setFetchedLayout({roomId, layout:data});
+      })
+      .catch(() => {});
+    return () => controller.abort();
   }, [roomId, room?.layout]);
 
-  const customLayout = loadedLayout || room?.layout;
+  const customLayout = room?.layout || (fetchedLayout?.roomId === roomId ? fetchedLayout.layout : null);
   const themeKey = (room?.theme && THEMES[room.theme])
     ? room.theme
     : (customLayout?.theme && THEMES[customLayout.theme])
       ? customLayout.theme
       : (propTheme && THEMES[propTheme] ? propTheme : 'office');
 
-  const isCustomFloorPlan = Boolean(
-    customLayout &&
-    Array.isArray(customLayout.walls) &&
-    customLayout.walls.length > 0
-  );
-
-  const activeTheme = useMemo(() => {
-    const base = THEMES[themeKey] || THEMES.office;
-    if (!isCustomFloorPlan) {
-      return {
-        ...base,
-        name: customLayout?.name || roomName || base.name,
-        isCustom: false,
-      };
-    }
-
-    return {
-      id: customLayout.layoutId || 'custom',
-      name: customLayout.name || roomName,
-      icon: 'apartment',
-      badgeColor: '#2563eb',
-      spawn: customLayout.spawnPoint || { x: 1100, y: 720 },
-      isCustom: true,
-      draw: (ctx) => {
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(18, 18, W - 36, H - 36);
-        // Architectural floor grid
-        ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-        ctx.lineWidth = 1;
-        for (let gx = 20; gx < W - 20; gx += 40) {
-          ctx.beginPath(); ctx.moveTo(gx, 20); ctx.lineTo(gx, H - 20); ctx.stroke();
-        }
-        for (let gy = 20; gy < H - 20; gy += 40) {
-          ctx.beginPath(); ctx.moveTo(20, gy); ctx.lineTo(W - 20, gy); ctx.stroke();
-        }
-        // Custom sound zones / rooms carpets
-        if (Array.isArray(customLayout.soundZones)) {
-          for (const z of customLayout.soundZones) {
-            if (z.bounds) {
-              drawArchitecturalZone(ctx, z, false, false);
-            }
-          }
-        }
-        // Furniture & Workstations (Architectural Vector CAD Engine)
-        if (Array.isArray(customLayout.furniture)) {
-          for (const f of customLayout.furniture) {
-            drawArchitecturalFurniture(ctx, f, false, false);
-          }
-        }
-        // Walls (Architectural Profile Engine)
-        if (Array.isArray(customLayout.walls)) {
-          for (const w of customLayout.walls) {
-            drawArchitecturalWall(ctx, w, false, false);
-          }
-        }
-      },
-      walls: customLayout.walls,
-      hasDoors: Boolean(customLayout.doors && customLayout.doors.length > 0),
-      doors: customLayout.doors || [],
-      soundZones: customLayout.soundZones || [],
-    };
-  }, [
-    isCustomFloorPlan,
-    customLayout?.layoutId,
-    customLayout?.updatedAt,
-    customLayout?.name,
-    customLayout?.walls,
-    customLayout?.furniture,
-    customLayout?.doors,
-    customLayout?.soundZones,
-    themeKey,
-    roomName,
-  ]);
+  const activeTheme = useMemo(() => makeScene(THEMES[themeKey], customLayout, roomName), [themeKey, customLayout, roomName]);
+  const themeRef = useRef(activeTheme);
+  themeRef.current = activeTheme;
+  const doorLookup = activeTheme.doorLookup;
 
   const canvasRef   = useRef(null);
   const containerRef = useRef(null);
@@ -925,7 +58,9 @@ export default function WorldCanvas({
   const zoomRef     = useRef(1.0);
   const [zoom, setZoom] = useState(1.0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showRadar, setShowRadar] = useState(true);
+  const [showRadar, setShowRadar] = useState(() => window.innerWidth > 760);
+  const touchRef = useRef(null);
+  const draggedRef = useRef(false);
   const stateRef    = useRef({ x: activeTheme.spawn.x, y: activeTheme.spawn.y, keys: {}, moving: false });
   const peersRef    = useRef({}); // { socketId: { x, y, username, avatarColor, isMuted } }
   const peerVolumesRef = useRef({}); // peerId -> volume
@@ -997,7 +132,7 @@ export default function WorldCanvas({
   }, []);
 
   // Studio Multi-Tool Side Panel State (People, Chat & DMs, Settings)
-  const [showSidePanel, setShowSidePanel] = useState(true);
+  const [showSidePanel, setShowSidePanel] = useState(() => window.innerWidth > 760);
   const [activeSideTab, setActiveSideTab] = useState('people'); // 'people' | 'chat' | 'settings'
   const [chatChannel, setChatChannel] = useState('room'); // 'room' | 'direct'
   const [dmTargetPeerId, setDmTargetPeerId] = useState(null);
@@ -1026,7 +161,7 @@ export default function WorldCanvas({
   const voiceMeterBarRef = useRef(null);
   const settingsVoiceMeterRef = useRef(null);
   const renderRef = useRef(null);
-  const offscreenRef = useRef(null);
+  const sceneArtRef = useRef(null);
   const prevInEarshotRef = useRef(0);
 
   const refreshDiagnostics = useCallback(() => {
@@ -1162,66 +297,22 @@ export default function WorldCanvas({
 
     mctx.clearRect(0, 0, mw, mh);
 
-    // 1. Draw exact architectural floor plan from pre-rendered world canvas (100% fidelity)
-    if (offscreenRef.current) {
-      mctx.drawImage(offscreenRef.current, 0, 0, mw, mh);
-    } else {
-      mctx.fillStyle = '#0b0f19';
-      mctx.fillRect(0, 0, mw, mh);
+    if (sceneArtRef.current) mctx.drawImage(sceneArtRef.current.radar, 0, 0, mw, mh);
+    for (const d of activeTheme.doors) {
+      mctx.fillStyle = isDoorOpen(doorsRef.current,d.key) ? '#478c74' : '#c25b40';
+      mctx.fillRect(d.x*sx,d.y*sy,Math.max(2,d.w*sx),Math.max(2,d.h*sy));
     }
-
-    // Mini doors
-    if (activeTheme.hasDoors) {
-      if (activeTheme.isCustom && Array.isArray(customLayout?.doors) && customLayout.doors.length > 0) {
-        for (const d of customLayout.doors) {
-          const isOpen = isDoorOpen(doorsRef.current, d.key);
-          mctx.fillStyle = isOpen ? '#22c55e' : '#ef4444';
-          mctx.fillRect(d.x * sx, d.y * sy, Math.max(2, d.w * sx), Math.max(2, d.h * sy));
-        }
-      } else {
-        for (const [key, d] of Object.entries(DOORS)) {
-          if (d.wall) {
-            const isOpen = isDoorOpen(doorsRef.current, key);
-            mctx.fillStyle = isOpen ? '#22c55e' : '#ef4444';
-            mctx.fillRect(d.wall.x * sx, d.wall.y * sy, Math.max(2, d.wall.w * sx), Math.max(2, d.wall.h * sy));
-          }
-        }
-      }
+    const blip=(x,y,color,size)=>{
+      mctx.beginPath(); mctx.moveTo(x,y-size); mctx.lineTo(x+size,y);
+      mctx.lineTo(x,y+size); mctx.lineTo(x-size,y); mctx.closePath();
+      mctx.fillStyle=color; mctx.fill(); mctx.strokeStyle='#203334'; mctx.lineWidth=1.5; mctx.stroke();
+    };
+    for(const [id,p] of Object.entries(peersRef.current)) {
+      blip(p.x*sx,p.y*sy,peerIntensitiesRef.current[id]>.05?'#a6df8f':p.avatarColor||'#d89474',3.5);
     }
-
-    // Mini peer squircle blips
-    for (const [peerId, peer] of Object.entries(peersRef.current)) {
-      const px = (peer.renderX ?? peer.x) * sx;
-      const py = (peer.renderY ?? peer.y) * sy;
-      mctx.fillStyle = peer.avatarColor || '#a855f7';
-      drawRoundRect(mctx, px - 3.5, py - 3.5, 7, 7, 2);
-      mctx.fill();
-      mctx.strokeStyle = '#ffffff';
-      mctx.lineWidth = 0.8;
-      mctx.stroke();
-      if ((peerIntensitiesRef.current[peerId] || 0) > 0.05) {
-        mctx.strokeStyle = '#22c55e';
-        mctx.lineWidth = 1.5;
-        mctx.stroke();
-      }
-    }
-
-    // Local player squircle blip + earshot circle on radar
-    const lx = stateRef.current.x * sx;
-    const ly = stateRef.current.y * sy;
-
-    mctx.beginPath();
-    mctx.arc(lx, ly, MAX_DISTANCE * sx, 0, Math.PI * 2);
-    mctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
-    mctx.lineWidth = 1;
-    mctx.stroke();
-
-    mctx.fillStyle = avatarColor;
-    drawRoundRect(mctx, lx - 4.5, ly - 4.5, 9, 9, 2.5);
-    mctx.fill();
-    mctx.strokeStyle = '#ffffff';
-    mctx.lineWidth = 1.5;
-    mctx.stroke();
+    const lx=stateRef.current.x*sx, ly=stateRef.current.y*sy;
+    mctx.strokeStyle='#477a70'; mctx.beginPath(); mctx.ellipse(lx,ly,MAX_DISTANCE*sx,MAX_DISTANCE*sy,0,0,Math.PI*2); mctx.stroke();
+    blip(lx,ly,avatarColor,4.5);
 
     // Camera Viewport Frustum Box
     const canvas = canvasRef.current;
@@ -1231,7 +322,7 @@ export default function WorldCanvas({
       const vh = canvas.height / z;
       const vx = cameraRef.current.x - vw / 2;
       const vy = cameraRef.current.y - vh / 2;
-      mctx.strokeStyle = '#38bdf8';
+      mctx.strokeStyle = '#203334';
       mctx.lineWidth = 1.5;
       mctx.setLineDash([3, 2]);
       mctx.strokeRect(vx * sx, vy * sy, vw * sx, vh * sy);
@@ -1263,33 +354,7 @@ export default function WorldCanvas({
     const vh = canvas.height;
     const z = zoomRef.current;
 
-    // Clear viewport
-    ctx.clearRect(0, 0, vw, vh);
-
-    // Save context for Camera Viewport Transform (World Space)
-    ctx.save();
-    ctx.translate(vw / 2, vh / 2);
-    ctx.scale(z, z);
-    ctx.translate(-cameraRef.current.x, -cameraRef.current.y);
-
-    // 1. Static themed canvas background layer
-    if (offscreenRef.current) {
-      ctx.drawImage(offscreenRef.current, 0, 0);
-    }
-
-    // 1b. Dynamic Doors layer (active in office layout)
-    if (activeTheme.hasDoors) {
-      if (activeTheme.isCustom && Array.isArray(customLayout?.doors) && customLayout.doors.length > 0) {
-        for (const d of customLayout.doors) {
-          const isOpen = isDoorOpen(doorsRef.current, d.key);
-          drawArchitecturalDoor(ctx, d, false, false, isOpen);
-        }
-      } else {
-        drawDoors(ctx, doorsRef.current);
-      }
-    }
-
-    // 2. Draw remote peers — 60fps smooth interpolation & walking dynamics
+    const players = [];
     const LERP = 0.20; // 60fps convergence factor for 50ms socket updates
     const myNameNorm = username?.trim().toLowerCase();
     for (const [peerId, peer] of Object.entries(peersRef.current)) {
@@ -1328,69 +393,28 @@ export default function WorldCanvas({
       // Remote avatar movement animation flag
       const peerMoving = dist > 0.45;
 
-      drawAvatar(
-        ctx,
-        peer.renderX,
-        peer.renderY,
-        peer.avatarColor,
-        peer.username,
-        peerMoving,
-        false,
-        peer.isMuted ?? false,
-        peerSpeaking,
-        vol,
-        intensity,
-        acoustic
-      );
+      if (Math.abs(dx) > .2) peer.facing = Math.sign(dx);
+      if (peerMoving) peer.back = dy < -Math.abs(dx)*.5;
+      players.push({ x: peer.x, y: peer.y, color: peer.avatarColor, name: peer.username,
+        moving: peerMoving, facing: peer.facing, back: peer.back, muted: peer.isMuted, speaking: peerSpeaking,
+        volume: vol, intensity, acoustic });
     }
-
-    // 3. Draw local avatar on top with live voice intensity & local room tag
-    const myIntensity = localIntensityRef.current;
-    drawAvatar(
-      ctx,
-      s.x,
-      s.y,
-      avatarColor,
-      username,
-      s.moving,
-      true,
-      isMutedRef.current,
-      isSpeakingRef.current,
-      1,
-      myIntensity,
-      { localRoom: localRoomRef.current }
-    );
-
-    // Restore context from Camera World Space back to Screen Space
+    players.push({ x:s.x,y:s.y,color:avatarColor,name:username,moving:s.moving,facing:s.facing,back:s.back,
+      local:true,muted:isMutedRef.current,speaking:isSpeakingRef.current,volume:1,
+      intensity:localIntensityRef.current,acoustic:{localRoom:localRoomRef.current} });
+    paintScene(ctx,activeTheme,sceneArtRef.current,players,doorsRef.current,cameraRef.current,vw,vh,z,performance.now());
+    ctx.save();
+    ctx.font='bold 11px Arial';
+    const connected=socketRef.current?.connected;
+    const label=connected?'ONLINE':'OFFLINE';
+    ctx.fillStyle='#203334'; ctx.fillRect(12,16,72,20);
+    ctx.fillStyle=connected?'#a6df8f':'#e98769'; ctx.fillRect(19,23,6,6);
+    ctx.fillStyle='#f4edda'; ctx.fillText(label,31,30);
+    if (vw > 640) {
+      ctx.fillStyle='#203334';ctx.fillRect(12,vh-32,175,20);
+      ctx.fillStyle='#f4edda';ctx.fillText('WASD / Arrows  |  Scroll to zoom',18,vh-18);
+    }
     ctx.restore();
-
-    // 4. Compact movement guide bottom-left (Screen-pinned HUD)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
-    drawRoundRect(ctx, 16, vh - 42, 185, 28, 8);
-    ctx.fill();
-    ctx.strokeStyle = '#D9D7D0';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.font = '500 11px Inter, sans-serif';
-    ctx.fillStyle = '#374151';
-    ctx.textAlign = 'left';
-    ctx.fillText('WASD to move • Scroll to zoom', 26, vh - 24);
-
-    // 5. Connection indicator bottom-right (Screen-pinned HUD)
-    const connected = socketRef.current?.connected;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
-    drawRoundRect(ctx, vw - 116, vh - 38, 102, 26, 13);
-    ctx.fill();
-    ctx.strokeStyle = '#D9D7D0';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.beginPath(); ctx.arc(vw - 102, vh - 25, 4, 0, Math.PI * 2);
-    ctx.fillStyle = connected ? '#10b981' : '#ef4444'; ctx.fill();
-    ctx.font = '500 11px Inter, sans-serif'; ctx.textAlign = 'left';
-    ctx.fillStyle = connected ? '#047857' : '#b91c1c';
-    ctx.fillText(connected ? 'Connected' : 'Offline', vw - 92, vh - 21);
-
-    // 6. Update Minimap Radar
     drawMinimap();
   }, [username, avatarColor, activeTheme, drawMinimap]);
 
@@ -1423,6 +447,9 @@ export default function WorldCanvas({
       showToast(newMuted ? 'Microphone muted' : 'Microphone unmuted', newMuted ? 'info' : 'success');
     }
   };
+
+  const toggleMicRef = useRef(handleToggleMic);
+  toggleMicRef.current = handleToggleMic;
 
   const handleToggleDeafen = () => {
     spatialAudio.ensureContext();
@@ -1459,12 +486,14 @@ export default function WorldCanvas({
 
   // Pre-render static themed background whenever activeTheme changes (independent of socket lifecycle)
   useEffect(() => {
-    const offscreen = document.createElement('canvas');
-    offscreen.width = W;
-    offscreen.height = H;
-    activeTheme.draw(offscreen.getContext('2d'));
-    offscreenRef.current = offscreen;
+    sceneArtRef.current = prepareScene(activeTheme);
   }, [activeTheme]);
+
+  useEffect(() => {
+    Object.assign(stateRef.current,activeTheme.spawn);
+    cameraRef.current = {...activeTheme.spawn};
+    if (socketRef.current?.connected) socketRef.current.emit('move',{...activeTheme.spawn,roomId});
+  }, [roomId,activeTheme.id,activeTheme.spawn.x,activeTheme.spawn.y]);
 
   // Non-passive wheel zoom listener
   useEffect(() => {
@@ -1490,6 +519,7 @@ export default function WorldCanvas({
     // Reset position to theme spawn
     stateRef.current.x = activeTheme.spawn.x;
     stateRef.current.y = activeTheme.spawn.y;
+    cameraRef.current = { ...activeTheme.spawn };
 
     // Socket.io connection
     const socket = io(SERVER_URL, {
@@ -1633,7 +663,7 @@ export default function WorldCanvas({
         doorsRef.current = next;
         return next;
       });
-      const dName = DOORS[key]?.name || key;
+      const dName = themeRef.current.doorLookup[key]?.name || key;
       showToastRef.current?.(`${changedBy || 'Member'} ${isOpen ? 'opened' : 'closed'} the ${dName} door`, isOpen ? 'success' : 'warn');
     });
 
@@ -1641,7 +671,7 @@ export default function WorldCanvas({
     socket.on('door-knocked', ({ doorKey, roomKey, targetRoomKey }) => {
       const key = doorKey || roomKey || targetRoomKey;
       if (!key) return;
-      const amIInside = localRoomRef.current?.id === key;
+      const amIInside = (localRoomRef.current?.doorKey || localRoomRef.current?.id) === key;
       if (amIInside) {
         playKnockSound();
       }
@@ -1649,7 +679,7 @@ export default function WorldCanvas({
 
     // Received by room occupants when a visitor knocks on their door
     socket.on('visitor-knocked', ({ doorKey, roomName: targetRoomName, visitorName, pendingKnocks }) => {
-      const amIInside = localRoomRef.current?.id === doorKey;
+      const amIInside = (localRoomRef.current?.doorKey || localRoomRef.current?.id) === doorKey;
       if (amIInside) {
         playKnockSound();
         setPendingKnockRequests(pendingKnocks || []);
@@ -1659,7 +689,7 @@ export default function WorldCanvas({
 
     // Updated list of pending knocks
     socket.on('pending-knocks-updated', ({ doorKey, pendingKnocks }) => {
-      const amIInside = localRoomRef.current?.id === doorKey;
+      const amIInside = (localRoomRef.current?.doorKey || localRoomRef.current?.id) === doorKey;
       if (amIInside) {
         setPendingKnockRequests(pendingKnocks || []);
       }
@@ -1667,7 +697,7 @@ export default function WorldCanvas({
 
     // Received by visitor regarding their knock status
     socket.on('knock-status', ({ doorKey, status, message }) => {
-      const dName = DOORS[doorKey]?.name || doorKey;
+      const dName = themeRef.current.doorLookup[doorKey]?.name || doorKey;
       if (status === 'waiting') {
         setMyKnockStatus({ doorKey, status: 'waiting', message });
         showToastRef.current?.(`Waiting for occupants of ${dName} to welcome you...`, 'info');
@@ -1692,7 +722,7 @@ export default function WorldCanvas({
 
     // Received if an unauthorized action is denied by the server
     socket.on('door-action-denied', ({ doorKey, reason }) => {
-      const dName = DOORS[doorKey]?.name || doorKey;
+      const dName = themeRef.current.doorLookup[doorKey]?.name || doorKey;
       showToast(`${dName}: ${reason}`, 'alert');
     });
 
@@ -1780,7 +810,7 @@ export default function WorldCanvas({
 
       // Hotkey: M -> Toggle Microphone Mute (explicit key, separate from WASD movement)
       if (e.key === 'm' || e.key === 'M') {
-        handleToggleMic();
+        if (!e.repeat) toggleMicRef.current();
         return;
       }
 
@@ -1813,24 +843,41 @@ export default function WorldCanvas({
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    const releaseInput = () => {
+      stateRef.current.keys = {};
+      touchRef.current = null;
+      if (isPttActiveRef.current) onKeyUp({key:' '});
+    };
+    window.addEventListener('blur',releaseInput);
 
     // 60 FPS Game & Spatial Audio Loop
-    function tick() {
+    let previousFrame;
+    function tick(timestamp) {
+      const speed = SPEED * Math.min(2,previousFrame === undefined ? 1 : (timestamp-previousFrame)/(1000/60));
+      previousFrame = timestamp;
+      const activeTheme = themeRef.current;
+      const doorLookup = activeTheme.doorLookup;
       const s = stateRef.current;
       const k = s.keys;
       let dx = 0, dy = 0;
-      if (k['ArrowUp']    || k['w'] || k['W']) dy -= SPEED;
-      if (k['ArrowDown']  || k['s'] || k['S']) dy += SPEED;
-      if (k['ArrowLeft']  || k['a'] || k['A']) dx -= SPEED;
-      if (k['ArrowRight'] || k['d'] || k['D']) dx += SPEED;
+      if (k['ArrowUp']    || k['w'] || k['W']) dy -= speed;
+      if (k['ArrowDown']  || k['s'] || k['S']) dy += speed;
+      if (k['ArrowLeft']  || k['a'] || k['A']) dx -= speed;
+      if (k['ArrowRight'] || k['d'] || k['D']) dx += speed;
 
-      if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
-      s.moving = dx !== 0 || dy !== 0;
+      if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
+      if (touchRef.current?.length > 8) {
+        const t = touchRef.current;
+        dx = speed * t.dx / t.length;
+        dy = speed * t.dy / t.length;
+      }
 
       const prevX = s.x, prevY = s.y;
-      const checkDoors = Boolean(activeTheme.hasDoors);
-      if (dx && !collidesWithWall(s.x + dx, s.y, activeTheme.walls, doorsRef.current, checkDoors)) s.x += dx;
-      if (dy && !collidesWithWall(s.x, s.y + dy, activeTheme.walls, doorsRef.current, checkDoors)) s.y += dy;
+      if (dx && !blocked(activeTheme, s.x + dx, s.y, doorsRef.current)) s.x += dx;
+      if (dy && !blocked(activeTheme, s.x, s.y + dy, doorsRef.current)) s.y += dy;
+      s.moving = s.x !== prevX || s.y !== prevY;
+      if (dx) s.facing = Math.sign(dx);
+      if (dx || dy) s.back = dy < -Math.abs(dx)*.5;
 
       // Smooth camera interpolation tracking avatar
       const camLerp = 0.12;
@@ -1848,7 +895,7 @@ export default function WorldCanvas({
       }
 
       // Update Web Audio distance attenuation, room isolation & wall raycasting
-      const themeKey = activeTheme?.id || 'office';
+      const themeKey = activeTheme.isCustom ? activeTheme : activeTheme.id;
       const { inEarshotCount: currentInEarshot, peerVolumes, peerIntensities, peerAcoustics, localRoom } =
         spatialAudio.updatePositions(s, peersRef.current, doorsRef.current, themeKey);
       peerVolumesRef.current = peerVolumes;
@@ -1859,28 +906,28 @@ export default function WorldCanvas({
       prevInEarshotRef.current = currentInEarshot;
       setInEarshotCount((prev) => (prev !== currentInEarshot ? currentInEarshot : prev));
 
-      if (localRoom && localRoom.name !== localRoomRef.current?.name) {
+      if (localRoom && localRoom.id !== localRoomRef.current?.id) {
         const prevRoom = localRoomRef.current;
         localRoomRef.current = localRoom;
         setCurrentRoom(localRoom);
 
         // If player stepped into a room that they knocked on or were welcomed into:
-        if (localRoom.id && DOORS[localRoom.id]) {
+        const enteredRoomKey = localRoom.doorKey || localRoom.id;
+        if (enteredRoomKey && doorLookup[enteredRoomKey]) {
           setWelcomedDoors((prev) => {
-            if (prev[localRoom.id]) {
+            if (prev[enteredRoomKey]) {
               const next = { ...prev };
-              delete next[localRoom.id];
+              delete next[enteredRoomKey];
               return next;
             }
             return prev;
           });
-          setMyKnockStatus((prev) => (prev?.doorKey === localRoom.id ? null : prev));
+          setMyKnockStatus((prev) => (prev?.doorKey === enteredRoomKey ? null : prev));
 
           // Auto-close door after 3.5s when entering room to secure meeting privacy
           if (doorAutoCloseTimerRef.current) clearTimeout(doorAutoCloseTimerRef.current);
-          const enteredRoomKey = localRoom.id;
           doorAutoCloseTimerRef.current = setTimeout(() => {
-            if (localRoomRef.current?.id === enteredRoomKey && isDoorOpen(doorsRef.current, enteredRoomKey)) {
+            if ((localRoomRef.current?.doorKey || localRoomRef.current?.id) === enteredRoomKey && isDoorOpen(doorsRef.current, enteredRoomKey)) {
               socketRef.current?.emit('toggle-door', {
                 roomId,
                 doorKey: enteredRoomKey,
@@ -1900,7 +947,7 @@ export default function WorldCanvas({
       // Check for nearby door proximity (within 95px of door midpoint)
       if (activeTheme.hasDoors) {
         let detectedNearbyDoor = null;
-        for (const [key, d] of Object.entries(DOORS)) {
+        for (const [key, d] of Object.entries(doorLookup)) {
           if (d.wall) {
             const dcx = d.wall.x + d.wall.w / 2;
             const dcy = d.wall.y + d.wall.h / 2;
@@ -1922,7 +969,7 @@ export default function WorldCanvas({
 
       // Auto-cancel knock if visitor walked away (> 160px) from door
       if (myKnockStatusRef.current?.status === 'waiting') {
-        const targetDoor = DOORS[myKnockStatusRef.current.doorKey];
+        const targetDoor = doorLookup[myKnockStatusRef.current.doorKey];
         if (targetDoor?.wall) {
           const dcx = targetDoor.wall.x + targetDoor.wall.w / 2;
           const dcy = targetDoor.wall.y + targetDoor.wall.h / 2;
@@ -1936,9 +983,10 @@ export default function WorldCanvas({
       }
 
       const now = Date.now();
-      if ((s.x !== prevX || s.y !== prevY) && now - lastEmitRef.current >= MOVE_THROTTLE_MS) {
+      if ((s.x !== s.sentX || s.y !== s.sentY) && now - lastEmitRef.current >= MOVE_THROTTLE_MS) {
         socket.emit('move', { x: s.x, y: s.y, roomId });
         lastEmitRef.current = now;
+        s.sentX = s.x; s.sentY = s.y;
       }
 
       if (renderRef.current) {
@@ -1952,6 +1000,7 @@ export default function WorldCanvas({
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur',releaseInput);
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
@@ -1967,8 +1016,8 @@ export default function WorldCanvas({
   }, [username, avatarColor, roomId]);
 
   // Door Interaction Calculations
-  const currentRoomId = currentRoom?.id || localRoomRef.current?.id;
-  const roomDoorKey = currentRoomId && DOORS[currentRoomId] ? currentRoomId : null;
+  const currentRoomId = currentRoom?.doorKey || currentRoom?.id || localRoomRef.current?.id;
+  const roomDoorKey = currentRoomId && doorLookup[currentRoomId] ? currentRoomId : null;
   const isRoomDoorOpen = roomDoorKey ? isDoorOpen(doors, roomDoorKey) : false;
 
   const currentRoomKnocks = (pendingKnockRequests || []).filter(
@@ -1981,8 +1030,8 @@ export default function WorldCanvas({
   let nearbyDoorOccupants = 0;
   if (nearbyDoor) {
     for (const peer of Object.values(peersRef.current)) {
-      const peerRoom = getRoomAt(peer.x, peer.y);
-      if (peerRoom?.id === nearbyDoor) {
+      const peerRoom = getRoomAt(peer.x, peer.y, activeTheme.isCustom ? activeTheme : activeTheme.id);
+      if ((peerRoom?.doorKey || peerRoom?.id) === nearbyDoor) {
         nearbyDoorOccupants++;
       }
     }
@@ -2007,7 +1056,7 @@ export default function WorldCanvas({
       doorKey,
     });
     setMyKnockStatus({ doorKey, status: 'waiting' });
-    const dName = DOORS[doorKey]?.name || doorKey;
+    const dName = themeRef.current.doorLookup[doorKey]?.name || doorKey;
     showToast(`You knocked on the ${dName} door. Waiting for occupants...`, 'info');
   };
 
@@ -2048,13 +1097,13 @@ export default function WorldCanvas({
     const px = p.renderX ?? p.x;
     const py = p.renderY ?? p.y;
     const dist = Math.round(Math.hypot(px - stateRef.current.x, py - stateRef.current.y));
-    const pRoom = getRoomAt(px, py);
+    const pRoom = getRoomAt(px, py, activeTheme.isCustom ? activeTheme : activeTheme.id);
     return {
       id,
       ...p,
       dist,
       roomName: pRoom?.name || 'Central Collaboration Floor',
-      inEarshot: dist <= MAX_DISTANCE,
+      inEarshot: (peerVolumesRef.current[id] || 0) > .04,
     };
   });
 
@@ -2073,28 +1122,28 @@ export default function WorldCanvas({
     : chatMessages;
 
   return (
-    <div
+    <div className="world-shell"
       style={{
         position: 'fixed',
         inset: 0,
         width: '100vw',
-        height: '100vh',
+        height: '100dvh',
         display: 'flex',
         flexDirection: 'column',
-        background: '#FAF9F5',
+        background: '#f4edda',
         overflow: 'hidden',
         boxSizing: 'border-box',
         userSelect: 'none',
       }}
     >
       {/* ── Top Header Console Bar ────────────────────────────────────────── */}
-      <header
+      <header className="world-header"
         style={{
           height: '56px',
           width: '100%',
           padding: '0 16px',
-          background: '#ffffff',
-          borderBottom: '1px solid #E5E4DE',
+          background: '#fff9e9',
+          borderBottom: '1px solid #9bab99',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -2106,12 +1155,12 @@ export default function WorldCanvas({
       >
         {/* Left: Meeting Branding, Room ID & Invite */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h2
+          <div className="world-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 title={roomName}
               style={{
                 fontWeight: 700,
                 fontSize: '15px',
-                color: '#1c1b1b',
+                color: '#203334',
                 letterSpacing: '-0.02em',
                 margin: 0,
                 whiteSpace: 'nowrap',
@@ -2127,9 +1176,9 @@ export default function WorldCanvas({
                 textTransform: 'uppercase',
                 padding: '2px 8px',
                 borderRadius: '6px',
-                backgroundColor: '#F4F3EF',
-                color: '#5e5f5c',
-                border: '1px solid #D9D7D0',
+                backgroundColor: '#eae4cc',
+                color: '#475950',
+                border: '1px solid #849388',
                 whiteSpace: 'nowrap',
               }}
             >
@@ -2141,7 +1190,7 @@ export default function WorldCanvas({
             onClick={handleCopyInviteLink}
             style={{
               fontSize: '11px',
-              color: '#8C8880',
+              color: '#55675e',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
@@ -2155,13 +1204,13 @@ export default function WorldCanvas({
             <span>ID:</span>
             <code
               style={{
-                color: '#1c1b1b',
-                background: '#F4F3EF',
+                color: '#203334',
+                background: '#eae4cc',
                 padding: '2px 6px',
                 borderRadius: '4px',
                 fontFamily: 'monospace',
                 fontSize: '11px',
-                border: '1px solid #E9E8E4',
+                border: '1px solid #e2dcc5',
               }}
             >
               {roomId}
@@ -2175,10 +1224,10 @@ export default function WorldCanvas({
               alignItems: 'center',
               gap: '4px',
               padding: '5px 10px',
-              borderRadius: '8px',
-              background: copiedLink ? '#ecfdf5' : '#ffffff',
-              border: copiedLink ? '1px solid #a7f3d0' : '1px solid #D9D7D0',
-              color: copiedLink ? '#059669' : '#1c1b1b',
+              borderRadius: '4px',
+              background: copiedLink ? '#ecfdf5' : '#fff9e9',
+              border: copiedLink ? '1px solid #a7f3d0' : '1px solid #849388',
+              color: copiedLink ? '#059669' : '#203334',
               fontSize: '11px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -2195,14 +1244,14 @@ export default function WorldCanvas({
 
         {/* Center: Dynamic Acoustic Zone Locator */}
         {activeTheme.hasDoors && (
-          <div
+          <div className="world-location"
             style={{
-              background: currentRoom.isIsolated ? '#eff6ff' : '#F4F3EF',
-              border: currentRoom.isIsolated ? '1px solid #bfdbfe' : '1px solid #D9D7D0',
-              borderRadius: '20px',
+              background: currentRoom.isIsolated ? '#e2efdf' : '#eae4cc',
+              border: currentRoom.isIsolated ? '1px solid #96bda8' : '1px solid #849388',
+              borderRadius: '4px',
               padding: '4px 12px',
               fontSize: '11px',
-              color: currentRoom.isIsolated ? '#1d4ed8' : '#1c1b1b',
+              color: currentRoom.isIsolated ? '#205e57' : '#203334',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -2211,18 +1260,18 @@ export default function WorldCanvas({
           >
             <span
               className="material-symbols-outlined"
-              style={{ fontSize: '14px', color: currentRoom.isIsolated ? '#2563eb' : '#8C8880' }}
+              style={{ fontSize: '14px', color: currentRoom.isIsolated ? '#277970' : '#55675e' }}
             >
               {currentRoom.isIsolated ? 'lock' : 'spatial_audio'}
             </span>
-            <span style={{ fontWeight: 600, color: currentRoom.isIsolated ? '#1e40af' : '#1c1b1b' }}>
+            <span style={{ fontWeight: 600, color: currentRoom.isIsolated ? '#1e40af' : '#203334' }}>
               {currentRoom.name}
             </span>
             {currentRoom.isIsolated && (
               <span
                 style={{
                   fontSize: '9px',
-                  background: '#dbeafe',
+                  background: '#d0e8d9',
                   color: '#1e40af',
                   padding: '1px 5px',
                   borderRadius: '4px',
@@ -2252,10 +1301,10 @@ export default function WorldCanvas({
               alignItems: 'center',
               gap: '5px',
               padding: '6px 11px',
-              borderRadius: '8px',
-              background: showSidePanel && activeSideTab === 'people' ? '#1c1b1b' : '#ffffff',
-              border: '1px solid ' + (showSidePanel && activeSideTab === 'people' ? '#1c1b1b' : '#D9D7D0'),
-              color: showSidePanel && activeSideTab === 'people' ? '#ffffff' : '#1c1b1b',
+              borderRadius: '4px',
+              background: showSidePanel && activeSideTab === 'people' ? '#203334' : '#fff9e9',
+              border: '1px solid ' + (showSidePanel && activeSideTab === 'people' ? '#203334' : '#849388'),
+              color: showSidePanel && activeSideTab === 'people' ? '#fff9e9' : '#203334',
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -2282,10 +1331,10 @@ export default function WorldCanvas({
               alignItems: 'center',
               gap: '5px',
               padding: '6px 11px',
-              borderRadius: '8px',
-              background: showSidePanel && activeSideTab === 'chat' ? '#1c1b1b' : '#ffffff',
-              border: '1px solid ' + (showSidePanel && activeSideTab === 'chat' ? '#1c1b1b' : '#D9D7D0'),
-              color: showSidePanel && activeSideTab === 'chat' ? '#ffffff' : '#1c1b1b',
+              borderRadius: '4px',
+              background: showSidePanel && activeSideTab === 'chat' ? '#203334' : '#fff9e9',
+              border: '1px solid ' + (showSidePanel && activeSideTab === 'chat' ? '#203334' : '#849388'),
+              color: showSidePanel && activeSideTab === 'chat' ? '#fff9e9' : '#203334',
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -2306,7 +1355,7 @@ export default function WorldCanvas({
                   height: '8px',
                   borderRadius: '50%',
                   background: '#ef4444',
-                  border: '1.5px solid #ffffff',
+                  border: '1.5px solid #fff9e9',
                 }}
               />
             )}
@@ -2328,10 +1377,10 @@ export default function WorldCanvas({
               alignItems: 'center',
               gap: '5px',
               padding: '6px 11px',
-              borderRadius: '8px',
-              background: showSidePanel && activeSideTab === 'settings' ? '#1c1b1b' : '#ffffff',
-              border: '1px solid ' + (showSidePanel && activeSideTab === 'settings' ? '#1c1b1b' : '#D9D7D0'),
-              color: showSidePanel && activeSideTab === 'settings' ? '#ffffff' : '#1c1b1b',
+              borderRadius: '4px',
+              background: showSidePanel && activeSideTab === 'settings' ? '#203334' : '#fff9e9',
+              border: '1px solid ' + (showSidePanel && activeSideTab === 'settings' ? '#203334' : '#849388'),
+              color: showSidePanel && activeSideTab === 'settings' ? '#fff9e9' : '#203334',
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -2346,9 +1395,9 @@ export default function WorldCanvas({
           {/* User Profile Badge with Avatar Initials Box */}
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #D9D7D0',
-              borderRadius: '8px',
+              background: '#fff9e9',
+              border: '1px solid #849388',
+              borderRadius: '4px',
               padding: '3px 8px 3px 4px',
               display: 'flex',
               alignItems: 'center',
@@ -2362,7 +1411,7 @@ export default function WorldCanvas({
                 height: '26px',
                 borderRadius: '6px',
                 backgroundColor: avatarColor,
-                color: '#ffffff',
+                color: '#fff9e9',
                 fontWeight: 700,
                 fontSize: '11px',
                 display: 'flex',
@@ -2371,11 +1420,11 @@ export default function WorldCanvas({
                 boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
               }}
             >
-              {getInitials(username)}
+              <AvatarPortrait name={username} color={avatarColor} />
             </div>
             <span
               style={{
-                color: '#1c1b1b',
+                color: '#203334',
                 fontWeight: 600,
                 fontSize: '12px',
                 maxWidth: '120px',
@@ -2396,7 +1445,7 @@ export default function WorldCanvas({
               alignItems: 'center',
               gap: '4px',
               padding: '6px 12px',
-              borderRadius: '8px',
+              borderRadius: '4px',
               background: '#fef2f2',
               border: '1px solid #fecaca',
               color: '#dc2626',
@@ -2419,19 +1468,19 @@ export default function WorldCanvas({
           flex: 1,
           display: 'flex',
           width: '100%',
-          height: 'calc(100vh - 56px)',
+          minHeight: 0,
           overflow: 'hidden',
           position: 'relative',
         }}
       >
-        {/* Left/Center: Dynamic Responsive 2D Spatial Canvas Area */}
+        {/* Responsive world viewport */}
         <div
           ref={containerRef}
           style={{
             flex: 1,
             height: '100%',
             position: 'relative',
-            background: '#0f172a',
+            background: '#233d3e',
             overflow: 'hidden',
           }}
         >
@@ -2450,10 +1499,10 @@ export default function WorldCanvas({
                     ? '#10b981'
                     : doorToast.type === 'warn'
                     ? '#f59e0b'
-                    : '#1c1b1b',
-                color: '#ffffff',
+                    : '#203334',
+                color: '#fff9e9',
                 padding: '8px 20px',
-                borderRadius: '20px',
+                borderRadius: '4px',
                 fontWeight: 600,
                 fontSize: '12px',
                 boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
@@ -2476,9 +1525,9 @@ export default function WorldCanvas({
                 top: doorToast ? '72px' : '20px',
                 left: '50%',
                 transform: 'translateX(-50%)',
-                background: '#FAF9F5',
-                border: '1px solid #E5E4DE',
-                borderRadius: '20px',
+                background: '#f4edda',
+                border: '1px solid #9bab99',
+                borderRadius: '4px',
                 padding: '14px 18px',
                 boxShadow: '0 24px 60px -12px rgba(20,20,19,0.22)',
                 zIndex: 30,
@@ -2503,15 +1552,15 @@ export default function WorldCanvas({
                     style={{
                       width: '28px',
                       height: '28px',
-                      borderRadius: '8px',
-                      background: '#ffffff',
-                      border: '1px solid #E5E4DE',
+                      borderRadius: '4px',
+                      background: '#fff9e9',
+                      border: '1px solid #9bab99',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#141413' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#203334' }}>
                       doorbell
                     </span>
                   </div>
@@ -2522,13 +1571,13 @@ export default function WorldCanvas({
                         fontFamily: 'monospace',
                         textTransform: 'uppercase',
                         letterSpacing: '0.1em',
-                        color: '#8C8880',
+                        color: '#55675e',
                         fontWeight: 600,
                       }}
                     >
                       Access Request
                     </div>
-                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#141413' }}>
+                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#203334' }}>
                       Knock at the Door
                     </span>
                   </div>
@@ -2545,12 +1594,12 @@ export default function WorldCanvas({
                       justifyContent: 'space-between',
                       gap: '12px',
                       padding: '8px 12px',
-                      background: '#ffffff',
-                      borderRadius: '12px',
-                      border: '1px solid #E5E4DE',
+                      background: '#fff9e9',
+                      borderRadius: '4px',
+                      border: '1px solid #9bab99',
                     }}
                   >
-                    <span style={{ fontWeight: 600, fontSize: '12px', color: '#141413' }}>
+                    <span style={{ fontWeight: 600, fontSize: '12px', color: '#203334' }}>
                       {k.visitorName}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -2558,10 +1607,10 @@ export default function WorldCanvas({
                         onClick={() => handleWelcomeVisitor(k.doorKey, k.visitorId)}
                         style={{
                           padding: '5px 10px',
-                          borderRadius: '8px',
+                          borderRadius: '4px',
                           border: 'none',
                           background: '#10b981',
-                          color: '#ffffff',
+                          color: '#fff9e9',
                           fontWeight: 600,
                           fontSize: '11px',
                           cursor: 'pointer',
@@ -2573,10 +1622,10 @@ export default function WorldCanvas({
                         onClick={() => handleDeclineVisitor(k.doorKey, k.visitorId)}
                         style={{
                           padding: '5px 10px',
-                          borderRadius: '8px',
-                          border: '1px solid #D9D7D0',
-                          background: '#F4F3EF',
-                          color: '#5e5f5c',
+                          borderRadius: '4px',
+                          border: '1px solid #849388',
+                          background: '#eae4cc',
+                          color: '#475950',
                           fontWeight: 500,
                           fontSize: '11px',
                           cursor: 'pointer',
@@ -2604,10 +1653,10 @@ export default function WorldCanvas({
                 left: '50%',
                 transform: 'translateX(-50%)',
                 zIndex: 35,
-                background: '#1c1b1b',
-                color: '#ffffff',
+                background: '#203334',
+                color: '#fff9e9',
                 padding: '9px 20px',
-                borderRadius: '20px',
+                borderRadius: '4px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
                 display: 'flex',
                 alignItems: 'center',
@@ -2622,7 +1671,7 @@ export default function WorldCanvas({
 
           {/* Minimap Radar Floating Card (Top-Right) */}
           {showRadar && (
-            <div
+            <div className="world-radar"
               style={{
                 position: 'absolute',
                 top: '16px',
@@ -2630,7 +1679,7 @@ export default function WorldCanvas({
                 background: 'rgba(15, 23, 42, 0.88)',
                 backdropFilter: 'blur(16px)',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: '12px',
+                borderRadius: '4px',
                 padding: '8px 10px',
                 boxShadow: '0 12px 28px rgba(0, 0, 0, 0.35)',
                 zIndex: 20,
@@ -2649,7 +1698,7 @@ export default function WorldCanvas({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#38bdf8' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#399c92' }}>
                     radar
                   </span>
                   <span style={{ fontSize: '10px', fontWeight: 700, color: '#e2e8f0', letterSpacing: '0.5px' }}>
@@ -2666,7 +1715,7 @@ export default function WorldCanvas({
                 height={124}
                 style={{
                   display: 'block',
-                  borderRadius: '8px',
+                  borderRadius: '4px',
                   background: '#0b0f19',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                 }}
@@ -2675,7 +1724,7 @@ export default function WorldCanvas({
           )}
 
           {/* Floating Zoom & Viewport Controls HUD (Bottom-Right) */}
-          <div
+          <div className="world-zoom"
             style={{
               position: 'absolute',
               bottom: '16px',
@@ -2686,8 +1735,8 @@ export default function WorldCanvas({
               background: 'rgba(255, 255, 255, 0.94)',
               backdropFilter: 'blur(12px)',
               padding: '4px 8px',
-              borderRadius: '12px',
-              border: '1px solid #D9D7D0',
+              borderRadius: '4px',
+              border: '1px solid #849388',
               boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)',
               zIndex: 20,
             }}
@@ -2741,7 +1790,7 @@ export default function WorldCanvas({
             >
               <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>add</span>
             </button>
-            <div style={{ width: '1px', height: '16px', background: '#D9D7D0', margin: '0 2px' }} />
+            <div style={{ width: '1px', height: '16px', background: '#849388', margin: '0 2px' }} />
             <button
               onClick={() => setShowRadar((v) => !v)}
               style={{
@@ -2749,7 +1798,7 @@ export default function WorldCanvas({
                 borderRadius: '6px',
                 border: 'none',
                 background: 'transparent',
-                color: showRadar ? '#0284c7' : '#64748b',
+                color: showRadar ? '#277970' : '#64748b',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -2765,7 +1814,7 @@ export default function WorldCanvas({
                 borderRadius: '6px',
                 border: 'none',
                 background: 'transparent',
-                color: isFullscreen ? '#0284c7' : '#64748b',
+                color: isFullscreen ? '#277970' : '#64748b',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -2778,11 +1827,26 @@ export default function WorldCanvas({
             </button>
           </div>
 
-          {/* Main 2D Spatial Canvas Element */}
+          {/* Floor coordinates are also the input plane for doors and touch movement. */}
           <canvas
             ref={canvasRef}
             tabIndex={0}
+            aria-label="Office map. Move with WASD, arrow keys, or touch and drag. Tap a door to operate it."
+            onPointerDown={e => {
+              draggedRef.current = false;
+              if (e.pointerType === 'mouse') return;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              touchRef.current = {id:e.pointerId,x:e.clientX,y:e.clientY,length:0};
+            }}
+            onPointerMove={e => {
+              const t = touchRef.current;
+              if (!t || t.id !== e.pointerId) return;
+              t.dx=e.clientX-t.x; t.dy=e.clientY-t.y; t.length=Math.hypot(t.dx,t.dy);
+              if(t.length>8) draggedRef.current=true;
+            }}
+            onLostPointerCapture={() => { touchRef.current = null; }}
             onClick={(e) => {
+              if(draggedRef.current) return;
               const canvas = canvasRef.current;
               if (!canvas) return;
               const rect = canvas.getBoundingClientRect();
@@ -2794,11 +1858,9 @@ export default function WorldCanvas({
 
               // Check if user clicked a door to toggle
               if (activeTheme.hasDoors) {
-                for (const [key, d] of Object.entries(DOORS)) {
+                for (const [key, d] of Object.entries(doorLookup)) {
                   if (d.wall) {
-                    const dcx = d.wall.x + d.wall.w / 2;
-                    const dcy = d.wall.y + d.wall.h / 2;
-                    if (Math.hypot(wx - dcx, wy - dcy) < 65) {
+                    if (touchesModel(wx, wy, 12, d.wall) || touchesModel(wx+5, wy+14, 5, d.wall)) {
                       handleToggleDoor(key);
                       return;
                     }
@@ -2812,12 +1874,13 @@ export default function WorldCanvas({
               height: '100%',
               outline: 'none',
               cursor: 'default',
-              background: '#0f172a',
+              touchAction: 'none',
+              background: '#233d3e',
             }}
           />
 
           {/* Floating Audio Controls HUD (Bottom-Center) */}
-          <div
+          <div className="world-audio"
             style={{
               position: 'absolute',
               bottom: '16px',
@@ -2829,8 +1892,8 @@ export default function WorldCanvas({
               background: 'rgba(255, 255, 255, 0.96)',
               backdropFilter: 'blur(20px)',
               padding: '5px 8px',
-              borderRadius: '12px',
-              border: '1px solid #D9D7D0',
+              borderRadius: '4px',
+              border: '1px solid #849388',
               boxShadow: '0 8px 24px -4px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.04)',
               zIndex: 20,
               whiteSpace: 'nowrap',
@@ -2850,14 +1913,14 @@ export default function WorldCanvas({
                 alignItems: 'center',
                 gap: '6px',
                 padding: '0 12px',
-                borderRadius: '8px',
+                borderRadius: '4px',
                 border: isMuted ? '1px solid #fecaca' : 'none',
                 background: !micActive
-                  ? '#1c1b1b'
+                  ? '#203334'
                   : isMuted
                   ? '#fef2f2'
                   : '#10b981',
-                color: isMuted ? '#dc2626' : '#ffffff',
+                color: isMuted ? '#dc2626' : '#fff9e9',
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -2884,7 +1947,7 @@ export default function WorldCanvas({
                   alignItems: 'center',
                   gap: '4px',
                   padding: '0 8px',
-                  borderRadius: '8px',
+                  borderRadius: '4px',
                   background: '#fef3c7',
                   border: '1px solid #fde68a',
                   color: '#92400e',
@@ -2909,18 +1972,18 @@ export default function WorldCanvas({
                   alignItems: 'center',
                   gap: '5px',
                   padding: '0 8px',
-                  borderRadius: '8px',
-                  background: '#F4F3EF',
-                  border: '1px solid #D9D7D0',
+                  borderRadius: '4px',
+                  background: '#eae4cc',
+                  border: '1px solid #849388',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                 }}
                 title="Live voice intensity level"
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#8C8880' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#55675e' }}>
                   graphic_eq
                 </span>
-                <div style={{ width: '40px', height: '5px', background: '#E9E8E4', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ width: '40px', height: '5px', background: '#e2dcc5', borderRadius: '3px', overflow: 'hidden' }}>
                   <div
                     ref={voiceMeterBarRef}
                     style={{
@@ -2948,10 +2011,10 @@ export default function WorldCanvas({
                 alignItems: 'center',
                 gap: '6px',
                 padding: '0 11px',
-                borderRadius: '8px',
-                border: '1px solid ' + (isDeafened ? '#fecaca' : '#D9D7D0'),
-                background: isDeafened ? '#fef2f2' : '#F4F3EF',
-                color: isDeafened ? '#dc2626' : '#1c1b1b',
+                borderRadius: '4px',
+                border: '1px solid ' + (isDeafened ? '#fecaca' : '#849388'),
+                background: isDeafened ? '#fef2f2' : '#eae4cc',
+                color: isDeafened ? '#dc2626' : '#203334',
                 fontSize: '12px',
                 fontWeight: 500,
                 cursor: 'pointer',
@@ -2977,7 +2040,7 @@ export default function WorldCanvas({
                   alignItems: 'center',
                   gap: '5px',
                   padding: '0 11px',
-                  borderRadius: '8px',
+                  borderRadius: '4px',
                   border: '1px solid ' + (isRoomDoorOpen ? '#fde68a' : '#bbf7d0'),
                   background: isRoomDoorOpen ? '#fffbeb' : '#f0fdf4',
                   color: isRoomDoorOpen ? '#92400e' : '#166534',
@@ -2990,7 +2053,7 @@ export default function WorldCanvas({
                 }}
                 title={
                   isRoomDoorOpen
-                    ? `Close door to make ${DOORS[roomDoorKey]?.name || 'room'} private`
+                    ? `Close door to make ${doorLookup[roomDoorKey]?.name || 'room'} private`
                     : `Open door to welcome other members in`
                 }
               >
@@ -3013,7 +2076,7 @@ export default function WorldCanvas({
                       alignItems: 'center',
                       gap: '5px',
                       padding: '0 11px',
-                      borderRadius: '8px',
+                      borderRadius: '4px',
                       border: '1px solid ' + (isNearbyDoorOpen ? '#fde68a' : '#bbf7d0'),
                       background: isNearbyDoorOpen ? '#fffbeb' : '#f0fdf4',
                       color: isNearbyDoorOpen ? '#92400e' : '#166534',
@@ -3045,7 +2108,7 @@ export default function WorldCanvas({
                               alignItems: 'center',
                               gap: '5px',
                               padding: '0 11px',
-                              borderRadius: '8px',
+                              borderRadius: '4px',
                               border: '1px solid #bbf7d0',
                               background: '#f0fdf4',
                               color: '#166534',
@@ -3068,7 +2131,7 @@ export default function WorldCanvas({
                                 alignItems: 'center',
                                 gap: '4px',
                                 padding: '0 9px',
-                                borderRadius: '8px',
+                                borderRadius: '4px',
                                 background: '#fffbeb',
                                 border: '1px solid #fde68a',
                                 color: '#92400e',
@@ -3087,10 +2150,10 @@ export default function WorldCanvas({
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 padding: '0 8px',
-                                borderRadius: '8px',
-                                border: '1px solid #D9D7D0',
-                                background: '#F4F3EF',
-                                color: '#5e5f5c',
+                                borderRadius: '4px',
+                                border: '1px solid #849388',
+                                background: '#eae4cc',
+                                color: '#475950',
                                 fontSize: '11px',
                                 fontWeight: 500,
                                 cursor: 'pointer',
@@ -3109,10 +2172,10 @@ export default function WorldCanvas({
                               alignItems: 'center',
                               gap: '5px',
                               padding: '0 11px',
-                              borderRadius: '8px',
-                              border: '1px solid #D9D7D0',
-                              background: '#1c1b1b',
-                              color: '#ffffff',
+                              borderRadius: '4px',
+                              border: '1px solid #849388',
+                              background: '#203334',
+                              color: '#fff9e9',
                               fontSize: '12px',
                               fontWeight: 600,
                               cursor: 'pointer',
@@ -3139,11 +2202,11 @@ export default function WorldCanvas({
                 alignItems: 'center',
                 gap: '5px',
                 padding: '0 9px',
-                borderRadius: '8px',
-                background: '#F4F3EF',
-                border: '1px solid #D9D7D0',
+                borderRadius: '4px',
+                background: '#eae4cc',
+                border: '1px solid #849388',
                 fontSize: '12px',
-                color: '#5e5f5c',
+                color: '#475950',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
               }}
@@ -3153,11 +2216,11 @@ export default function WorldCanvas({
                   width: '6px',
                   height: '6px',
                   borderRadius: '50%',
-                  backgroundColor: inEarshotCount > 0 ? '#10b981' : '#BDBAB2',
+                  backgroundColor: inEarshotCount > 0 ? '#10b981' : '#9da698',
                   flexShrink: 0,
                 }}
               />
-              <span style={{ color: inEarshotCount > 0 ? '#059669' : '#5e5f5c', fontWeight: 500, whiteSpace: 'nowrap' }}>
+              <span style={{ color: inEarshotCount > 0 ? '#059669' : '#475950', fontWeight: 500, whiteSpace: 'nowrap' }}>
                 {inEarshotCount} nearby
               </span>
             </div>
@@ -3172,11 +2235,11 @@ export default function WorldCanvas({
               minWidth: '320px',
               maxWidth: '400px',
               height: '100%',
-              background: '#ffffff',
-              borderLeft: '1px solid #E5E4DE',
+              background: '#fff9e9',
+              borderLeft: '1px solid #9bab99',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '-4px 0 20px rgba(0,0,0,0.04)',
+              boxShadow: '-3px 0 #203334',
               zIndex: 30,
               flexShrink: 0,
               overflow: 'hidden',
@@ -3189,8 +2252,8 @@ export default function WorldCanvas({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '10px 14px',
-                borderBottom: '1px solid #E5E4DE',
-                background: '#FAF9F5',
+                borderBottom: '1px solid #9bab99',
+                background: '#f4edda',
                 flexShrink: 0,
               }}
             >
@@ -3199,10 +2262,10 @@ export default function WorldCanvas({
                   onClick={() => setActiveSideTab('people')}
                   style={{
                     padding: '6px 12px',
-                    borderRadius: '8px',
+                    borderRadius: '4px',
                     border: 'none',
-                    background: activeSideTab === 'people' ? '#1c1b1b' : 'transparent',
-                    color: activeSideTab === 'people' ? '#ffffff' : '#5e5f5c',
+                    background: activeSideTab === 'people' ? '#203334' : 'transparent',
+                    color: activeSideTab === 'people' ? '#fff9e9' : '#475950',
                     fontWeight: 600,
                     fontSize: '12px',
                     cursor: 'pointer',
@@ -3218,9 +2281,9 @@ export default function WorldCanvas({
                     style={{
                       fontSize: '10px',
                       padding: '1px 5px',
-                      borderRadius: '10px',
-                      background: activeSideTab === 'people' ? '#333333' : '#E5E4DE',
-                      color: activeSideTab === 'people' ? '#ffffff' : '#5e5f5c',
+                      borderRadius: '4px',
+                      background: activeSideTab === 'people' ? '#333333' : '#9bab99',
+                      color: activeSideTab === 'people' ? '#fff9e9' : '#475950',
                     }}
                   >
                     {peersList.length + 1}
@@ -3231,10 +2294,10 @@ export default function WorldCanvas({
                   onClick={() => setActiveSideTab('chat')}
                   style={{
                     padding: '6px 12px',
-                    borderRadius: '8px',
+                    borderRadius: '4px',
                     border: 'none',
-                    background: activeSideTab === 'chat' ? '#1c1b1b' : 'transparent',
-                    color: activeSideTab === 'chat' ? '#ffffff' : '#5e5f5c',
+                    background: activeSideTab === 'chat' ? '#203334' : 'transparent',
+                    color: activeSideTab === 'chat' ? '#fff9e9' : '#475950',
                     fontWeight: 600,
                     fontSize: '12px',
                     cursor: 'pointer',
@@ -3251,9 +2314,9 @@ export default function WorldCanvas({
                       style={{
                         fontSize: '10px',
                         padding: '1px 5px',
-                        borderRadius: '10px',
-                        background: activeSideTab === 'chat' ? '#333333' : '#E5E4DE',
-                        color: activeSideTab === 'chat' ? '#ffffff' : '#5e5f5c',
+                        borderRadius: '4px',
+                        background: activeSideTab === 'chat' ? '#333333' : '#9bab99',
+                        color: activeSideTab === 'chat' ? '#fff9e9' : '#475950',
                       }}
                     >
                       {chatMessages.length + privateMessages.length}
@@ -3268,10 +2331,10 @@ export default function WorldCanvas({
                   }}
                   style={{
                     padding: '6px 12px',
-                    borderRadius: '8px',
+                    borderRadius: '4px',
                     border: 'none',
-                    background: activeSideTab === 'settings' ? '#1c1b1b' : 'transparent',
-                    color: activeSideTab === 'settings' ? '#ffffff' : '#5e5f5c',
+                    background: activeSideTab === 'settings' ? '#203334' : 'transparent',
+                    color: activeSideTab === 'settings' ? '#fff9e9' : '#475950',
                     fontWeight: 600,
                     fontSize: '12px',
                     cursor: 'pointer',
@@ -3291,7 +2354,7 @@ export default function WorldCanvas({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#8C8880',
+                  color: '#55675e',
                   cursor: 'pointer',
                   width: '26px',
                   height: '26px',
@@ -3316,13 +2379,13 @@ export default function WorldCanvas({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: '#FAF9F5',
-                      border: '1px solid #D9D7D0',
-                      borderRadius: '8px',
+                      background: '#f4edda',
+                      border: '1px solid #849388',
+                      borderRadius: '4px',
                       padding: '6px 10px',
                     }}
                   >
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#8C8880' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#55675e' }}>
                       search
                     </span>
                     <input
@@ -3335,14 +2398,14 @@ export default function WorldCanvas({
                         background: 'transparent',
                         outline: 'none',
                         fontSize: '12px',
-                        color: '#1c1b1b',
+                        color: '#203334',
                         width: '100%',
                       }}
                     />
                     {peopleFilter && (
                       <button
                         onClick={() => setPeopleFilter('')}
-                        style={{ border: 'none', background: 'transparent', color: '#8C8880', cursor: 'pointer' }}
+                        style={{ border: 'none', background: 'transparent', color: '#55675e', cursor: 'pointer' }}
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
                       </button>
@@ -3359,9 +2422,9 @@ export default function WorldCanvas({
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '10px 12px',
-                      background: '#FAF9F5',
-                      borderRadius: '12px',
-                      border: '1px solid #E5E4DE',
+                      background: '#f4edda',
+                      borderRadius: '4px',
+                      border: '1px solid #9bab99',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -3369,9 +2432,9 @@ export default function WorldCanvas({
                         style={{
                           width: '34px',
                           height: '34px',
-                          borderRadius: '8px',
+                          borderRadius: '4px',
                           backgroundColor: avatarColor,
-                          color: '#ffffff',
+                          color: '#fff9e9',
                           fontWeight: 700,
                           fontSize: '12px',
                           display: 'flex',
@@ -3380,16 +2443,16 @@ export default function WorldCanvas({
                           boxShadow: '0 2px 4px rgba(0,0,0,0.12)',
                         }}
                       >
-                        {getInitials(username)}
+                        <AvatarPortrait name={username} color={avatarColor} />
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <span style={{ fontWeight: 700, fontSize: '13px', color: '#1c1b1b' }}>{username}</span>
-                          <span style={{ fontSize: '10px', color: '#2563eb', fontWeight: 600, background: '#eff6ff', padding: '1px 5px', borderRadius: '4px' }}>
+                          <span style={{ fontWeight: 700, fontSize: '13px', color: '#203334' }}>{username}</span>
+                          <span style={{ fontSize: '10px', color: '#277970', fontWeight: 600, background: '#e2efdf', padding: '1px 5px', borderRadius: '4px' }}>
                             You
                           </span>
                         </div>
-                        <div style={{ fontSize: '11px', color: '#8C8880', marginTop: '2px' }}>
+                        <div style={{ fontSize: '11px', color: '#55675e', marginTop: '2px' }}>
                           {currentRoom.name}
                         </div>
                       </div>
@@ -3405,12 +2468,12 @@ export default function WorldCanvas({
                     </div>
                   </div>
 
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#8C8880', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '8px 0 4px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#55675e', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '8px 0 4px' }}>
                     Connected Participants ({filteredPeers.length})
                   </div>
 
                   {filteredPeers.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '24px 12px', color: '#8C8880', fontSize: '12px' }}>
+                    <div style={{ textAlign: 'center', padding: '24px 12px', color: '#55675e', fontSize: '12px' }}>
                       {peopleFilter ? 'No participants match your search.' : 'No other members in this room yet. Share the invite link to connect.'}
                     </div>
                   ) : (
@@ -3422,8 +2485,8 @@ export default function WorldCanvas({
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '10px 12px',
-                          background: '#ffffff',
-                          borderRadius: '12px',
+                          background: '#fff9e9',
+                          borderRadius: '4px',
                           border: '1px solid #EBEAE5',
                           transition: 'border-color 0.12s ease',
                         }}
@@ -3433,9 +2496,9 @@ export default function WorldCanvas({
                             style={{
                               width: '34px',
                               height: '34px',
-                              borderRadius: '8px',
+                              borderRadius: '4px',
                               backgroundColor: p.avatarColor || '#a855f7',
-                              color: '#ffffff',
+                              color: '#fff9e9',
                               fontWeight: 700,
                               fontSize: '12px',
                               display: 'flex',
@@ -3445,10 +2508,10 @@ export default function WorldCanvas({
                               boxShadow: '0 2px 4px rgba(0,0,0,0.12)',
                             }}
                           >
-                            {getInitials(p.username)}
+                            <AvatarPortrait name={p.username} color={p.avatarColor} />
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: '13px', color: '#1c1b1b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 600, fontSize: '13px', color: '#203334', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {p.username}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', marginTop: '2px' }}>
@@ -3458,10 +2521,10 @@ export default function WorldCanvas({
                                   width: '6px',
                                   height: '6px',
                                   borderRadius: '50%',
-                                  backgroundColor: p.inEarshot ? '#10b981' : '#BDBAB2',
+                                  backgroundColor: p.inEarshot ? '#10b981' : '#9da698',
                                 }}
                               />
-                              <span style={{ color: p.inEarshot ? '#059669' : '#8C8880' }}>
+                              <span style={{ color: p.inEarshot ? '#059669' : '#55675e' }}>
                                 {p.inEarshot ? `In earshot (${p.dist}px)` : `${p.dist}px away`}
                               </span>
                             </div>
@@ -3476,10 +2539,10 @@ export default function WorldCanvas({
                               alignItems: 'center',
                               gap: '4px',
                               padding: '5px 9px',
-                              borderRadius: '8px',
-                              background: '#F4F3EF',
-                              border: '1px solid #D9D7D0',
-                              color: '#1c1b1b',
+                              borderRadius: '4px',
+                              background: '#eae4cc',
+                              border: '1px solid #849388',
+                              color: '#203334',
                               fontSize: '11px',
                               fontWeight: 600,
                               cursor: 'pointer',
@@ -3509,7 +2572,7 @@ export default function WorldCanvas({
                     gap: '6px',
                     padding: '8px 14px',
                     borderBottom: '1px solid #EBEAE5',
-                    background: '#FAF9F5',
+                    background: '#f4edda',
                   }}
                 >
                   <button
@@ -3519,8 +2582,8 @@ export default function WorldCanvas({
                       padding: '5px 8px',
                       borderRadius: '6px',
                       border: 'none',
-                      background: chatChannel === 'room' ? '#1c1b1b' : 'transparent',
-                      color: chatChannel === 'room' ? '#ffffff' : '#5e5f5c',
+                      background: chatChannel === 'room' ? '#203334' : 'transparent',
+                      color: chatChannel === 'room' ? '#fff9e9' : '#475950',
                       fontSize: '11px',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -3536,8 +2599,8 @@ export default function WorldCanvas({
                       padding: '5px 8px',
                       borderRadius: '6px',
                       border: 'none',
-                      background: chatChannel === 'direct' ? '#1c1b1b' : 'transparent',
-                      color: chatChannel === 'direct' ? '#ffffff' : '#5e5f5c',
+                      background: chatChannel === 'direct' ? '#203334' : 'transparent',
+                      color: chatChannel === 'direct' ? '#fff9e9' : '#475950',
                       fontSize: '11px',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -3554,7 +2617,7 @@ export default function WorldCanvas({
                     style={{
                       padding: '8px 14px',
                       borderBottom: '1px solid #EBEAE5',
-                      background: '#eff6ff',
+                      background: '#e2efdf',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -3562,7 +2625,7 @@ export default function WorldCanvas({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#2563eb' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#277970' }}>
                         lock
                       </span>
                       <span style={{ fontSize: '11px', color: '#1e40af', fontWeight: 600 }}>
@@ -3572,8 +2635,8 @@ export default function WorldCanvas({
                         value={dmTargetPeerId || ''}
                         onChange={(e) => setDmTargetPeerId(e.target.value || null)}
                         style={{
-                          background: '#ffffff',
-                          border: '1px solid #bfdbfe',
+                          background: '#fff9e9',
+                          border: '1px solid #96bda8',
                           borderRadius: '6px',
                           padding: '3px 8px',
                           fontSize: '11px',
@@ -3594,7 +2657,7 @@ export default function WorldCanvas({
                     </div>
 
                     {activeDmPeer && (
-                      <span style={{ fontSize: '10px', color: '#2563eb', fontWeight: 600 }}>
+                      <span style={{ fontSize: '10px', color: '#277970', fontWeight: 600 }}>
                         Private 1:1
                       </span>
                     )}
@@ -3621,7 +2684,7 @@ export default function WorldCanvas({
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
-                        color: '#8C8880',
+                        color: '#55675e',
                         textAlign: 'center',
                         padding: '20px',
                       }}
@@ -3636,7 +2699,7 @@ export default function WorldCanvas({
                             : 'Select a participant to start a private conversation'
                           : 'No room messages yet'}
                       </span>
-                      <span style={{ fontSize: '11px', color: '#BDBAB2' }}>
+                      <span style={{ fontSize: '11px', color: '#9da698' }}>
                         {chatChannel === 'direct'
                           ? 'Messages are private and visible only to the two of you.'
                           : 'Send a message to everyone on the meeting floor.'}
@@ -3664,8 +2727,8 @@ export default function WorldCanvas({
                                   width: '20px',
                                   height: '20px',
                                   borderRadius: '5px',
-                                  backgroundColor: msg.avatarColor || '#38bdf8',
-                                  color: '#ffffff',
+                                  backgroundColor: msg.avatarColor || '#399c92',
+                                  color: '#fff9e9',
                                   fontSize: '10px',
                                   fontWeight: 700,
                                   display: 'flex',
@@ -3673,13 +2736,13 @@ export default function WorldCanvas({
                                   justifyContent: 'center',
                                 }}
                               >
-                                {getInitials(msg.username)}
+                                <AvatarPortrait name={msg.username} color={msg.avatarColor} />
                               </div>
-                              <span style={{ fontSize: '11px', fontWeight: 600, color: '#5e5f5c' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 600, color: '#475950' }}>
                                 {msg.username}
                               </span>
                               {msg.isPrivate && (
-                                <span style={{ fontSize: '9px', background: '#eff6ff', color: '#2563eb', padding: '1px 4px', borderRadius: '4px', fontWeight: 600 }}>
+                                <span style={{ fontSize: '9px', background: '#e2efdf', color: '#277970', padding: '1px 4px', borderRadius: '4px', fontWeight: 600 }}>
                                   DM
                                 </span>
                               )}
@@ -3690,8 +2753,8 @@ export default function WorldCanvas({
                               maxWidth: '260px',
                               padding: '8px 12px',
                               borderRadius: isSelf ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
-                              background: isSelf ? '#1c1b1b' : '#F4F3EF',
-                              color: isSelf ? '#ffffff' : '#1c1b1b',
+                              background: isSelf ? '#203334' : '#eae4cc',
+                              color: isSelf ? '#fff9e9' : '#203334',
                               fontSize: '12px',
                               lineHeight: 1.45,
                               wordBreak: 'break-word',
@@ -3699,7 +2762,7 @@ export default function WorldCanvas({
                           >
                             {msg.message}
                           </div>
-                          <span style={{ fontSize: '10px', color: '#BDBAB2' }}>{timeStr}</span>
+                          <span style={{ fontSize: '10px', color: '#9da698' }}>{timeStr}</span>
                         </div>
                       );
                     })
@@ -3711,12 +2774,12 @@ export default function WorldCanvas({
                 <div
                   style={{
                     padding: '10px 14px',
-                    borderTop: '1px solid #E9E8E4',
+                    borderTop: '1px solid #e2dcc5',
                     display: 'flex',
                     gap: '8px',
                     alignItems: 'flex-end',
                     flexShrink: 0,
-                    background: '#ffffff',
+                    background: '#fff9e9',
                   }}
                 >
                   <textarea
@@ -3740,12 +2803,12 @@ export default function WorldCanvas({
                     style={{
                       flex: 1,
                       padding: '8px 11px',
-                      borderRadius: '10px',
-                      border: '1px solid #D9D7D0',
+                      borderRadius: '4px',
+                      border: '1px solid #849388',
                       fontSize: '12px',
                       fontFamily: 'inherit',
-                      color: '#1c1b1b',
-                      background: '#FAF9F5',
+                      color: '#203334',
+                      background: '#f4edda',
                       resize: 'none',
                       outline: 'none',
                       lineHeight: 1.4,
@@ -3757,10 +2820,10 @@ export default function WorldCanvas({
                     disabled={!chatInput.trim() || (chatChannel === 'direct' && !dmTargetPeerId)}
                     style={{
                       padding: '8px 12px',
-                      borderRadius: '10px',
+                      borderRadius: '4px',
                       border: 'none',
-                      background: chatInput.trim() && (chatChannel === 'room' || dmTargetPeerId) ? '#1c1b1b' : '#E9E8E4',
-                      color: chatInput.trim() && (chatChannel === 'room' || dmTargetPeerId) ? '#ffffff' : '#BDBAB2',
+                      background: chatInput.trim() && (chatChannel === 'room' || dmTargetPeerId) ? '#203334' : '#e2dcc5',
+                      color: chatInput.trim() && (chatChannel === 'room' || dmTargetPeerId) ? '#fff9e9' : '#9da698',
                       cursor: chatInput.trim() && (chatChannel === 'room' || dmTargetPeerId) ? 'pointer' : 'not-allowed',
                       transition: 'all 0.15s ease',
                       display: 'flex',
@@ -3795,7 +2858,7 @@ export default function WorldCanvas({
                       style={{
                         fontSize: '11px',
                         fontWeight: 700,
-                        color: '#8C8880',
+                        color: '#55675e',
                         textTransform: 'uppercase',
                         letterSpacing: '0.06em',
                       }}
@@ -3808,7 +2871,7 @@ export default function WorldCanvas({
                           fontSize: '10px',
                           fontWeight: 600,
                           padding: '2px 7px',
-                          borderRadius: '10px',
+                          borderRadius: '4px',
                           backgroundColor: micActive && !isMuted ? '#dcfce7' : micActive && isMuted ? '#fef3c7' : '#f1f5f9',
                           color: micActive && !isMuted ? '#15803d' : micActive && isMuted ? '#b45309' : '#64748b',
                           border: `1px solid ${micActive && !isMuted ? '#86efac' : micActive && isMuted ? '#fde68a' : '#cbd5e1'}`,
@@ -3836,7 +2899,7 @@ export default function WorldCanvas({
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#8C8880',
+                          color: '#55675e',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -3852,7 +2915,7 @@ export default function WorldCanvas({
                     <div
                       style={{
                         padding: '10px 12px',
-                        borderRadius: '8px',
+                        borderRadius: '4px',
                         background: '#FFFBEB',
                         border: '1px solid #FDE68A',
                         marginBottom: '8px',
@@ -3879,7 +2942,7 @@ export default function WorldCanvas({
                           borderRadius: '6px',
                           border: '1px solid #D97706',
                           background: '#D97706',
-                          color: '#ffffff',
+                          color: '#fff9e9',
                           fontSize: '11.5px',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -3915,11 +2978,11 @@ export default function WorldCanvas({
                     style={{
                       width: '100%',
                       padding: '8px 10px',
-                      borderRadius: '8px',
-                      border: '1px solid #D9D7D0',
-                      background: '#FAF9F5',
+                      borderRadius: '4px',
+                      border: '1px solid #849388',
+                      background: '#f4edda',
                       fontSize: '12px',
-                      color: '#1c1b1b',
+                      color: '#203334',
                       outline: 'none',
                       cursor: 'pointer',
                     }}
@@ -3933,14 +2996,14 @@ export default function WorldCanvas({
                   </select>
 
                   {/* Real-time Voice Input Level Meter */}
-                  <div style={{ marginTop: '8px', padding: '6px 8px', borderRadius: '6px', background: '#F4F3EF', border: '1px solid #E5E4DE' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 600, color: '#5e5f5c', marginBottom: '3px' }}>
+                  <div style={{ marginTop: '8px', padding: '6px 8px', borderRadius: '6px', background: '#eae4cc', border: '1px solid #9bab99' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 600, color: '#475950', marginBottom: '3px' }}>
                       <span>Live Mic Input Level</span>
-                      <span style={{ color: micActive && !isMuted ? '#15803d' : '#8C8880' }}>
+                      <span style={{ color: micActive && !isMuted ? '#15803d' : '#55675e' }}>
                         {micActive && !isMuted ? 'Live' : 'Muted / Inactive'}
                       </span>
                     </div>
-                    <div style={{ height: '6px', background: '#E5E4DE', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', background: '#9bab99', borderRadius: '3px', overflow: 'hidden' }}>
                       <div
                         ref={settingsVoiceMeterRef}
                         style={{
@@ -3961,7 +3024,7 @@ export default function WorldCanvas({
                     style={{
                       fontSize: '11px',
                       fontWeight: 700,
-                      color: '#8C8880',
+                      color: '#55675e',
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
                       display: 'block',
@@ -3976,10 +3039,10 @@ export default function WorldCanvas({
                         onClick={handleToggleMic}
                         style={{
                           padding: '8px 12px',
-                          borderRadius: '8px',
-                          border: isMuted ? '1px solid #86efac' : '1px solid #D9D7D0',
-                          background: isMuted ? '#f0fdf4' : '#FAF9F5',
-                          color: isMuted ? '#166534' : '#1c1b1b',
+                          borderRadius: '4px',
+                          border: isMuted ? '1px solid #86efac' : '1px solid #849388',
+                          background: isMuted ? '#f0fdf4' : '#f4edda',
+                          color: isMuted ? '#166534' : '#203334',
                           fontSize: '12px',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -4004,10 +3067,10 @@ export default function WorldCanvas({
                       }}
                       style={{
                         padding: '8px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid #D9D7D0',
-                        background: '#FAF9F5',
-                        color: '#1c1b1b',
+                        borderRadius: '4px',
+                        border: '1px solid #849388',
+                        background: '#f4edda',
+                        color: '#203334',
                         fontSize: '12px',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -4037,7 +3100,7 @@ export default function WorldCanvas({
                       }}
                       style={{
                         padding: '8px 12px',
-                        borderRadius: '8px',
+                        borderRadius: '4px',
                         border: '1px solid #a7f3d0',
                         background: '#f0fdf4',
                         color: '#166534',
@@ -4061,10 +3124,10 @@ export default function WorldCanvas({
                       }}
                       style={{
                         padding: '8px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid #D9D7D0',
-                        background: '#FAF9F5',
-                        color: '#1c1b1b',
+                        borderRadius: '4px',
+                        border: '1px solid #849388',
+                        background: '#f4edda',
+                        color: '#203334',
                         fontSize: '12px',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -4082,31 +3145,31 @@ export default function WorldCanvas({
                 {/* Spatial Soundstage Physics */}
                 <div
                   style={{
-                    background: '#FAF9F5',
-                    borderRadius: '12px',
-                    border: '1px solid #E5E4DE',
+                    background: '#f4edda',
+                    borderRadius: '4px',
+                    border: '1px solid #9bab99',
                     padding: '12px',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '6px',
                   }}
                 >
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#1c1b1b' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#203334' }}>
                     Soundstage Acoustic Engine
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Max Earshot Radius:</span>
                     <span style={{ fontWeight: 600 }}>320 px</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Solid Wall Cutoff:</span>
                     <span style={{ fontWeight: 600 }}>-14 dB</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Closed Door Isolation:</span>
                     <span style={{ fontWeight: 600 }}>-18 dB</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Audio Context State:</span>
                     <span style={{ fontWeight: 600, color: diagData?.audioCtxState === 'running' ? '#059669' : '#d97706' }}>
                       {diagData?.audioCtxState || 'Active'}
@@ -4117,39 +3180,39 @@ export default function WorldCanvas({
                 {/* Keyboard Hotkeys */}
                 <div
                   style={{
-                    background: '#FAF9F5',
-                    borderRadius: '12px',
-                    border: '1px solid #E5E4DE',
+                    background: '#f4edda',
+                    borderRadius: '4px',
+                    border: '1px solid #9bab99',
                     padding: '12px',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '6px',
                   }}
                 >
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#1c1b1b' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#203334' }}>
                     Keyboard Hotkeys
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Move Avatar:</span>
-                    <kbd style={{ background: '#ffffff', padding: '1px 5px', borderRadius: '4px', border: '1px solid #D9D7D0' }}>W, A, S, D / Arrows</kbd>
+                    <kbd style={{ background: '#fff9e9', padding: '1px 5px', borderRadius: '4px', border: '1px solid #849388' }}>W, A, S, D / Arrows</kbd>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Toggle Microphone:</span>
-                    <kbd style={{ background: '#ffffff', padding: '1px 5px', borderRadius: '4px', border: '1px solid #D9D7D0' }}>M</kbd>
+                    <kbd style={{ background: '#fff9e9', padding: '1px 5px', borderRadius: '4px', border: '1px solid #849388' }}>M</kbd>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Toggle Deafen:</span>
-                    <kbd style={{ background: '#ffffff', padding: '1px 5px', borderRadius: '4px', border: '1px solid #D9D7D0' }}>D</kbd>
+                    <kbd style={{ background: '#fff9e9', padding: '1px 5px', borderRadius: '4px', border: '1px solid #849388' }}>D</kbd>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Push to Talk:</span>
-                    <kbd style={{ background: '#ffffff', padding: '1px 5px', borderRadius: '4px', border: '1px solid #D9D7D0' }}>Space (Hold)</kbd>
+                    <kbd style={{ background: '#fff9e9', padding: '1px 5px', borderRadius: '4px', border: '1px solid #849388' }}>Space (Hold)</kbd>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Zoom In / Out:</span>
                     <span style={{ fontWeight: 600 }}>Mouse Scroll</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#5e5f5c' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475950' }}>
                     <span>Knock / Open Door:</span>
                     <span style={{ fontWeight: 600 }}>Click Door</span>
                   </div>

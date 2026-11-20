@@ -1,3 +1,4 @@
+import { WorkspaceArt, AvatarPortrait } from './WorkspaceArt';
 import { useState, useEffect, useRef } from 'react';
 import { SERVER_URL } from '../config';
 import { spatialAudio } from '../services/spatialAudio';
@@ -9,7 +10,6 @@ const OFFICIAL_WORKSPACES = [
     theme: 'office',
     subtitle: 'Acoustic Boardroom',
     description: 'Executive suites, natural acoustic timber tables, and spatial team desks.',
-    image: '/images/office.jpg',
     onlineCount: 3,
     avatars: [
       { initials: 'AK', bg: 'bg-accent-purple/20', text: 'text-accent-purple' },
@@ -23,7 +23,6 @@ const OFFICIAL_WORKSPACES = [
     theme: 'conference',
     subtitle: 'Keynote Auditorium',
     description: 'Stepped acoustic wooden hall, presentation stage, and zoned breakouts.',
-    image: '/images/auditorium.jpg',
     onlineCount: 0,
     avatars: [],
   },
@@ -33,7 +32,6 @@ const OFFICIAL_WORKSPACES = [
     theme: 'lounge',
     subtitle: 'Open-Air Terrace',
     description: 'Ambient evening terrace, sofa booths, and low-attenuation coffee syncs.',
-    image: '/images/lounge.jpg',
     onlineCount: 5,
     avatars: [
       { initials: 'MR', bg: 'bg-accent-rose/20', text: 'text-accent-rose' },
@@ -47,7 +45,6 @@ const OFFICIAL_WORKSPACES = [
     theme: 'office',
     subtitle: 'Private Executive Suite',
     description: 'Dedicated leadership pod with high-isolation acoustic boundary.',
-    image: '/images/office.jpg',
     onlineCount: 1,
     avatars: [
       { initials: 'SG', bg: 'bg-accent-amber/20', text: 'text-accent-amber' },
@@ -59,7 +56,6 @@ const OFFICIAL_WORKSPACES = [
     theme: 'conference',
     subtitle: 'Collaborative Hub',
     description: 'Open timber tables, collaborative screens, and cross-team voice pods.',
-    image: '/images/auditorium.jpg',
     onlineCount: 2,
     avatars: [
       { initials: 'VL', bg: 'bg-primary', text: 'text-on-primary' },
@@ -72,7 +68,6 @@ const OFFICIAL_WORKSPACES = [
     theme: 'office',
     subtitle: 'Acoustic Sound Lab',
     description: 'Studio monitors, diffuser walls, spatial screen sharing, and pairing pods.',
-    image: '/images/soundstage.jpg',
     onlineCount: 4,
     avatars: [
       { initials: 'JY', bg: 'bg-accent-rose/20', text: 'text-accent-rose' },
@@ -88,21 +83,18 @@ const THEME_OPTIONS = [
     name: 'Corporate Office',
     icon: 'domain',
     desc: 'Executive suites, conference room, lounge, and open desks.',
-    image: '/images/office.jpg',
   },
   {
     id: 'conference',
     name: 'Conference & Auditorium',
     icon: 'account_balance',
     desc: 'Keynote stage, presentation hall, and breakout pods.',
-    image: '/images/auditorium.jpg',
   },
   {
     id: 'lounge',
     name: 'Rooftop Social Lounge',
     icon: 'deck',
     desc: 'Casual coffee bar, sofa booths, and open air terrace.',
-    image: '/images/lounge.jpg',
   },
 ];
 
@@ -188,12 +180,6 @@ export default function MeetingLobby({
           theme: apiRoom.theme || 'office',
           subtitle: `Created by ${apiRoom.createdBy || 'Team'}`,
           description: apiRoom.description || 'Custom interactive spatial workspace with real-time audio.',
-          image:
-            apiRoom.theme === 'conference'
-              ? '/images/auditorium.jpg'
-              : apiRoom.theme === 'lounge'
-              ? '/images/lounge.jpg'
-              : '/images/office.jpg',
           onlineCount: apiRoom.occupants?.length || 1,
           avatars: [
             { initials: (apiRoom.createdBy || 'US').slice(0, 2).toUpperCase(), bg: 'bg-primary', text: 'text-on-primary' },
@@ -309,18 +295,9 @@ export default function MeetingLobby({
   const totalPeers = filteredWorkspaces.reduce((acc, w) => acc + (w.onlineCount || 0), 0) + 15;
 
   return (
-    <div className="min-h-screen bg-page-bg font-body-md text-on-surface antialiased selection:bg-accent-orange selection:text-white relative overflow-x-hidden">
-      {/* Background Acoustic Waves Concentric Circles */}
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute left-1/2 top-48 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-line/40 opacity-50" />
-        <div className="absolute left-1/2 top-48 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] rounded-full border border-line/30 opacity-40" />
-        <div className="absolute left-1/2 top-48 -translate-x-1/2 -translate-y-1/2 w-[1250px] h-[1250px] rounded-full border border-line/20 opacity-30" />
-        <div className="absolute left-1/2 top-48 -translate-x-1/2 -translate-y-1/2 w-[1650px] h-[1650px] rounded-full border border-line/10 opacity-20" />
-      </div>
-
-      {/* Floating Capsule Header */}
+    <div className="workspace-lobby min-h-screen bg-page-bg font-body-md text-on-surface antialiased selection:bg-accent-orange selection:text-white relative overflow-x-hidden">
       <header className="fixed top-6 inset-x-0 z-50 flex justify-center px-4">
-        <div className="h-14 w-full max-w-[1728px] mx-auto flex items-center justify-between px-4 sm:px-6 bg-primary/95 text-on-primary rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl">
+        <div className="h-14 w-full max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 bg-primary/95 text-on-primary rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl">
           {/* Logo & Brand */}
           <div
             className="flex items-center gap-3 cursor-pointer"
@@ -360,7 +337,7 @@ export default function MeetingLobby({
             </button>
             <button
               onClick={onOpenOrgHub}
-              className="font-label text-[11px] font-semibold text-[#2563eb] hover:text-white px-3 py-1 bg-[#2563eb]/10 hover:bg-[#2563eb] rounded-full transition-all cursor-pointer flex items-center gap-1.5 border border-[#2563eb]/20"
+              className="font-label text-[11px] font-semibold text-[#277970] hover:text-white px-3 py-1 bg-[#277970]/10 hover:bg-[#277970] rounded-full transition-all cursor-pointer flex items-center gap-1.5 border border-[#277970]/20"
               title="Organizations and Office Layouts"
             >
               <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
@@ -373,7 +350,7 @@ export default function MeetingLobby({
             {/* Header Org Hub Quick Button */}
             <button
               onClick={onOpenOrgHub}
-              className="inline-flex lg:hidden items-center gap-1 px-2.5 py-1 rounded-full bg-[#2563eb]/15 text-[#2563eb] text-[11px] font-semibold border border-[#2563eb]/20 cursor-pointer"
+              className="inline-flex lg:hidden items-center gap-1 px-2.5 py-1 rounded-full bg-[#277970]/15 text-[#277970] text-[11px] font-semibold border border-[#277970]/20 cursor-pointer"
               title="Organizations"
             >
               <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
@@ -395,9 +372,9 @@ export default function MeetingLobby({
                 </button>
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-sm ring-2 ring-white/20"
-                  style={{ backgroundColor: user.avatarColor || '#FF4B2B' }}
+
                 >
-                  {user.username ? user.username.slice(0, 2).toUpperCase() : 'PS'}
+                  <AvatarPortrait color={user.avatarColor} name={user.username} />
                 </div>
               </>
             ) : (
@@ -418,54 +395,15 @@ export default function MeetingLobby({
       {/* Main Page Content */}
       <main className="relative z-10 w-full pt-28 bg-transparent min-h-screen">
         <div className="flex flex-col w-full">
-          {/* Subtle Ambient Radial Acoustic Glows */}
-          <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-30">
-            <div className="absolute top-0 right-1/4 w-[900px] h-[500px] bg-gradient-to-b from-soft-card-2 to-transparent blur-3xl" />
-          </div>
-
-          <div className="relative z-10 w-full max-w-[1728px] mx-auto px-margin-mobile lg:px-margin pb-space-xl">
-            {/* 1. Header / Hero Title Section */}
-            <section className="w-full pt-space-md lg:pt-space-lg pb-space-md flex flex-col items-center text-center">
-              {/* Radar Pulse Pill Badge */}
-              <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-soft-card/70 shadow-sm backdrop-blur-md mb-6 border border-line/30">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-orange opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-orange" />
-                </span>
-                <span className="font-label-caps text-label-caps text-on-surface tracking-widest uppercase">
-                  Dolby 3D Binaural Engine Active
-                </span>
-                <span className="text-line text-xs font-light">•</span>
-                <span className="font-label text-label text-muted">48kHz Lossless Grid</span>
-              </div>
-
-              {/* Editorial Headline */}
-              <h1 className="font-display text-h1 lg:text-display text-on-surface tracking-tight max-w-4xl mx-auto mb-6">
-                Choose a Workspace or Host a Call
-              </h1>
-
-              {/* Editorial Subline */}
-              <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto font-normal">
-                Walk up to teammates to speak naturally. Sound attenuates smoothly with distance and direction across persistent spatial soundstages.
-              </p>
-
-              {/* Interactive Soundwave Visual Indicator */}
-              <div className="mt-8 flex items-center justify-center gap-1.5 h-8 px-6 py-2 rounded-full bg-soft-card-2 shadow-sm border border-line/20">
-                <span className="font-label text-label text-muted mr-2">HRTF Soundfield</span>
-                <span className="w-1 h-3 rounded-full bg-on-surface/30 animate-pulse" />
-                <span className="w-1 h-5 rounded-full bg-accent-orange animate-[bounce_1.4s_infinite]" />
-                <span className="w-1 h-7 rounded-full bg-primary animate-[bounce_1.1s_infinite]" />
-                <span className="w-1 h-4 rounded-full bg-accent-purple animate-[bounce_1.6s_infinite]" />
-                <span className="w-1 h-6 rounded-full bg-on-surface/40 animate-[bounce_1.3s_infinite]" />
-                <span className="w-1 h-3 rounded-full bg-on-surface/20" />
-                <span className="font-label text-label text-on-surface ml-3 font-semibold">Ready</span>
-              </div>
-
-              {/* Organization Hub & Office Designer Hero Fast-Track */}
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3 z-10">
+          <div className="relative z-10 w-full max-w-[1400px] mx-auto px-margin-mobile lg:px-margin pb-space-xl">
+            <section className="workspace-hero">
+              <div className="hero-copy">
+                <h1>Find your<br /><em>workspace.</em></h1>
+                <p>Pick a floor and walk over to your team. Nearby voices come into focus as you move.</p>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3 z-10">
                 <button
                   onClick={onOpenOrgHub}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
                   title="Open Organization Headquarters & Team Workspace Switcher"
                 >
                   <span className="material-symbols-outlined text-[18px]">corporate_fare</span>
@@ -475,34 +413,28 @@ export default function MeetingLobby({
 
                 <button
                   onClick={() => onOpenDesigner && onOpenDesigner(activeOrg)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white hover:bg-soft-card text-[#1c1b1b] border border-[#D9D7D0] text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white hover:bg-soft-card text-[#203334] border border-[#849388] text-xs font-semibold shadow-sm transition-all cursor-pointer"
                   title="Design custom office layouts with walls, soundproof doors, and furniture"
                 >
-                  <span className="material-symbols-outlined text-[18px] text-[#2563eb]">draw</span>
+                  <span className="material-symbols-outlined text-[18px] text-[#277970]">draw</span>
                   <span>Design Custom Office</span>
                 </button>
               </div>
+              </div>
+              <div className="hero-art"><WorkspaceArt theme="office" /></div>
             </section>
 
             {/* 2. Primary Action Cards Grid (Host a Meeting vs Join via Code) */}
             <section className="w-full mt-4 mb-space-lg">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter lg:gap-gutter-lg items-stretch">
                 {/* Card 1: Host a New Meeting */}
-                <div className="lg:col-span-6 rounded-lg bg-white-card shadow-[0_12px_40px_rgba(0,0,0,0.06)] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden group border border-line/20">
-                  {/* Glass sheen & geometric acoustic aura */}
-                  <div className="absolute top-0 right-0 w-2/5 h-full opacity-15 pointer-events-none overflow-hidden group-hover:opacity-25 transition-opacity duration-700 hidden sm:block">
-                    <img
-                      alt="Soundstage acoustics"
-                      className="w-full h-full object-cover object-center filter grayscale contrast-125"
-                      src="/images/soundstage.jpg"
-                    />
-                  </div>
+                <div className="lg:col-span-6 rounded-lg bg-white-card shadow-[4px_4px_0_#203334] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden group border border-line">
                   <div>
                     <div className="flex items-center justify-between mb-8">
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-accent-orange to-accent-amber flex items-center justify-center text-on-primary shadow-md">
+                      <div className="w-14 h-14 rounded-full bg-accent-orange flex items-center justify-center text-on-primary shadow-md">
                         <span className="material-symbols-outlined text-[26px]">spatial_audio_off</span>
                       </div>
-                      <span className="px-3.5 py-1 rounded-full bg-soft-card-2 font-label-caps text-label-caps tracking-widest text-on-surface uppercase border border-line/20">
+                      <span className="px-3.5 py-1 rounded-full bg-soft-card-2 font-label-caps text-label-caps tracking-widest text-on-surface uppercase border border-line">
                         Instant Soundstage
                       </span>
                     </div>
@@ -513,21 +445,6 @@ export default function MeetingLobby({
                       Create a customized spatial meeting room. Choose from Corporate Office, Auditorium, or Lounge canvas layouts with instant acoustic positioning.
                     </p>
 
-                    {/* Feature Pills */}
-                    <div className="flex flex-wrap gap-2 mb-10">
-                      <span className="px-3.5 py-1.5 rounded-full bg-soft-card text-on-surface font-label text-label flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[16px] text-accent-orange">multimodal_hand_eye</span>
-                        Directional attenuation
-                      </span>
-                      <span className="px-3.5 py-1.5 rounded-full bg-soft-card text-on-surface font-label text-label flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[16px] text-accent-purple">surround_sound</span>
-                        Dolby Atmos engine
-                      </span>
-                      <span className="px-3.5 py-1.5 rounded-full bg-soft-card text-on-surface font-label text-label flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[16px] text-muted">link</span>
-                        Instant share link
-                      </span>
-                    </div>
                   </div>
 
                   {/* CTA Button */}
@@ -539,19 +456,19 @@ export default function MeetingLobby({
                       <span>+ Host Meeting Room</span>
                       <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                     </button>
-                    <span className="font-label text-label text-muted">Zero download • Browser native</span>
+
                   </div>
                 </div>
 
                 {/* Card 2: Join with Code or Link */}
-                <div className="lg:col-span-6 rounded-lg bg-white-card shadow-[0_12px_40px_rgba(0,0,0,0.06)] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden border border-line/20">
+                <div className="lg:col-span-6 rounded-lg bg-white-card shadow-[4px_4px_0_#203334] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden border border-line">
                   <div className="absolute -right-20 -bottom-20 w-72 h-72 rounded-full bg-gradient-to-tl from-accent-purple/15 to-transparent blur-2xl pointer-events-none" />
                   <div>
                     <div className="flex items-center justify-between mb-8">
                       <div className="w-14 h-14 rounded-full bg-soft-card-2 flex items-center justify-center text-on-surface shadow-sm">
                         <span className="material-symbols-outlined text-[26px]">connect_without_contact</span>
                       </div>
-                      <span className="px-3.5 py-1 rounded-full bg-soft-card-2 font-label-caps text-label-caps tracking-widest text-on-surface uppercase border border-line/20">
+                      <span className="px-3.5 py-1 rounded-full bg-soft-card-2 font-label-caps text-label-caps tracking-widest text-on-surface uppercase border border-line">
                         Direct Ingestion
                       </span>
                     </div>
@@ -572,7 +489,7 @@ export default function MeetingLobby({
 
                     {/* Input Box */}
                     <form onSubmit={handleJoinByCode} className="relative mb-8">
-                      <div className="flex items-center rounded-DEFAULT bg-soft-card-2 px-4 py-3.5 focus-within:bg-surface-container-lowest transition-colors shadow-inner border border-line/20">
+                      <div className="flex items-center rounded-DEFAULT bg-soft-card-2 px-4 py-3.5 focus-within:bg-surface-container-lowest transition-colors shadow-inner border border-line">
                         <span className="material-symbols-outlined text-muted text-[20px] mr-3">link</span>
                         <input
                           ref={inputRef}
@@ -656,7 +573,7 @@ export default function MeetingLobby({
                 </div>
                 <div className="flex items-center gap-3">
                   {/* Theme Filter Pills */}
-                  <div className="hidden md:flex items-center gap-1.5 p-1 bg-soft-card-2 rounded-full border border-line/20">
+                  <div className="hidden md:flex items-center gap-1.5 p-1 bg-soft-card-2 rounded-full border border-line">
                     {['all', 'office', 'conference', 'lounge'].map((th) => (
                       <button
                         key={th}
@@ -675,7 +592,7 @@ export default function MeetingLobby({
                   {/* Design Office Button */}
                   <button
                     onClick={onOpenDesigner}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#2563eb] text-white font-label text-label hover:bg-[#1d4ed8] transition-all shadow-sm cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#277970] text-white font-label text-label hover:bg-[#205e57] transition-all shadow-sm cursor-pointer"
                     title="Design a custom office layout with walls, soundproof doors, and furniture"
                   >
                     <span className="material-symbols-outlined text-[16px]">draw</span>
@@ -686,7 +603,7 @@ export default function MeetingLobby({
                   <button
                     id="refreshGridBtn"
                     onClick={fetchRooms}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white-card shadow-sm text-on-surface font-label text-label hover:bg-soft-card transition-colors border border-line/20 cursor-pointer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white-card shadow-sm text-on-surface font-label text-label hover:bg-soft-card transition-colors border border-line cursor-pointer"
                   >
                     <span
                       id="refreshIcon"
@@ -706,14 +623,10 @@ export default function MeetingLobby({
                 {filteredWorkspaces.map((ws) => (
                   <div
                     key={ws.roomId}
-                    className="rounded-DEFAULT bg-white-card shadow-sm hover:shadow-md transition-all flex flex-col justify-between group overflow-hidden border border-line/20"
+                    className="rounded-DEFAULT bg-white-card shadow-sm hover:shadow-[3px_3px_0_#203334] transition-all flex flex-col justify-between group overflow-hidden border border-line"
                   >
                     <div className="relative h-44 w-full overflow-hidden">
-                      <img
-                        alt={ws.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                        src={ws.image}
-                      />
+                      <WorkspaceArt theme={ws.theme} />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                       <div className="absolute top-3 right-3">
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/80 backdrop-blur-md text-on-primary font-label text-label">
@@ -741,7 +654,7 @@ export default function MeetingLobby({
                         <p className="font-body-md text-body-md text-on-surface-variant mb-5">{ws.description}</p>
                       </div>
 
-                      <div className="pt-4 flex items-center justify-between border-t border-line/20">
+                      <div className="pt-4 flex items-center justify-between border-t border-line">
                         {ws.avatars && ws.avatars.length > 0 ? (
                           <div className="flex -space-x-2">
                             {ws.avatars.map((av, idx) => (
@@ -749,7 +662,7 @@ export default function MeetingLobby({
                                 key={idx}
                                 className={`w-7 h-7 rounded-full ${av.bg} ${av.text} flex items-center justify-center font-label text-label font-bold ring-2 ring-white-card`}
                               >
-                                {av.initials}
+                                {av.initials.startsWith('+') ? av.initials : <AvatarPortrait color={['#399c92', '#e47b57', '#eed46d'][idx % 3]} name={av.initials} />}
                               </div>
                             ))}
                           </div>
@@ -773,7 +686,7 @@ export default function MeetingLobby({
 
             {/* 5. Spatial Audio Physics Micro-Feature Banner (Lumio Style) */}
             <section className="w-full" id="mechanics">
-              <div className="rounded-lg bg-soft-card-2 p-8 lg:p-12 shadow-sm relative overflow-hidden border border-line/20">
+              <div className="rounded-lg bg-soft-card-2 p-8 lg:p-12 shadow-sm relative overflow-hidden border border-line">
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 pb-6 border-b border-line/30 gap-4">
                   <div>
                     <span className="font-label-caps text-label-caps uppercase tracking-widest text-muted block mb-2">
@@ -835,7 +748,7 @@ export default function MeetingLobby({
 
       {/* Footer */}
       <footer className="relative z-10 w-full bg-primary text-on-primary mt-space-section" id="docs">
-        <div className="max-w-[1728px] mx-auto px-margin-mobile lg:px-margin pt-space-lg pb-space-md">
+        <div className="max-w-[1400px] mx-auto px-margin-mobile lg:px-margin pt-space-lg pb-space-md">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter lg:gap-gutter-lg pb-space-md border-b border-surface-container-highest/15">
             <div className="md:col-span-6 flex flex-col justify-between gap-6">
               <div className="flex items-center gap-3">
@@ -930,26 +843,26 @@ export default function MeetingLobby({
           onClick={() => setShowHostModal(false)}
         >
           <div
-            className="w-full max-w-lg rounded-[26px] bg-[#FAF9F5] p-6 sm:p-7 shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] border border-[#E5E4DE] relative text-[#141413] flex flex-col gap-4 overflow-hidden"
+            className="w-full max-w-lg rounded-[26px] bg-[#f4edda] p-6 sm:p-7 shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] border border-[#9bab99] relative text-[#203334] flex flex-col gap-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-start justify-between pb-4 border-b border-[#EBEAE5]">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-white border border-[#9bab99] shadow-2xs text-[#203334] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">add_circle</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Soundstage Deployment</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#55675e]">Soundstage Deployment</span>
                   </div>
-                  <h3 className="font-bold text-base text-[#141413] tracking-tight">Host Workspace</h3>
+                  <h3 className="font-bold text-base text-[#203334] tracking-tight">Host Workspace</h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowHostModal(false)}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 aria-label="Close modal"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -959,7 +872,7 @@ export default function MeetingLobby({
             <form onSubmit={handleCreateRoom} className="space-y-4">
               {/* Workspace Name */}
               <div>
-                <label className="block text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] mb-1.5 font-semibold">
+                <label className="block text-[11px] font-mono uppercase tracking-wider text-[#475950] mb-1.5 font-semibold">
                   Workspace Name
                 </label>
                 <input
@@ -968,7 +881,7 @@ export default function MeetingLobby({
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   placeholder="e.g. Design Sync, Engineering Standup"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E5E4DE] text-xs text-[#141413] placeholder:text-[#8C8880] focus:outline-none focus:border-[#141413] focus:ring-2 focus:ring-[#141413]/5 transition-all shadow-2xs font-sans"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#9bab99] text-xs text-[#203334] placeholder:text-[#55675e] focus:outline-none focus:border-[#203334] focus:ring-2 focus:ring-[#203334]/5 transition-all shadow-2xs font-sans"
                   autoFocus
                 />
               </div>
@@ -976,10 +889,10 @@ export default function MeetingLobby({
               {/* Environment Layout */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5e5f5c] font-semibold">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#475950] font-semibold">
                     Environment Layout
                   </label>
-                  <span className="text-[10px] font-mono text-[#8C8880]">Acoustic Template</span>
+                  <span className="text-[10px] font-mono text-[#55675e]">Acoustic Template</span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
@@ -990,28 +903,24 @@ export default function MeetingLobby({
                         key={theme.id}
                         type="button"
                         onClick={() => setNewRoomTheme(theme.id)}
-                        className={`group text-left rounded-2xl p-2.5 border transition-all flex flex-col cursor-pointer ${
+                        className={`group text-left rounded-lg p-2.5 border transition-all flex flex-col cursor-pointer ${
                           isSelected
-                            ? 'border-[#141413] bg-white ring-2 ring-[#141413]/10 shadow-sm'
-                            : 'border-[#E5E4DE] bg-white/60 hover:border-[#D0CFC8] hover:bg-white'
+                            ? 'border-[#203334] bg-white ring-2 ring-[#203334]/10 shadow-sm'
+                            : 'border-[#9bab99] bg-white/60 hover:border-[#D0CFC8] hover:bg-white'
                         }`}
                       >
-                        <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-neutral-100 mb-2 relative border border-[#E5E4DE]">
-                          <img
-                            src={theme.image}
-                            alt={theme.name}
-                            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                          />
+                        <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-neutral-100 mb-2 relative border border-[#9bab99]">
+                          <WorkspaceArt theme={theme.id} />
                           {isSelected && (
-                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[#141413] text-[#FAF9F5] flex items-center justify-center shadow">
+                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[#203334] text-[#f4edda] flex items-center justify-center shadow">
                               <span className="material-symbols-outlined text-[11px] leading-none">check</span>
                             </div>
                           )}
                         </div>
-                        <span className="font-semibold text-xs text-[#141413] truncate w-full">
+                        <span className="font-semibold text-xs text-[#203334] truncate w-full">
                           {theme.name}
                         </span>
-                        <span className="text-[10px] text-[#8C8880] font-mono mt-0.5 line-clamp-1">
+                        <span className="text-[10px] text-[#55675e] font-mono mt-0.5 line-clamp-1">
                           {theme.id === 'office' && 'Desks & pods'}
                           {theme.id === 'conference' && 'Auditorium'}
                           {theme.id === 'lounge' && 'Open terrace'}
@@ -1027,18 +936,18 @@ export default function MeetingLobby({
                 <button
                   type="button"
                   onClick={() => setShowHostModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#5e5f5c] hover:text-[#141413] hover:bg-[#FAF9F5] border border-[#E5E4DE] transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#475950] hover:text-[#203334] hover:bg-[#f4edda] border border-[#9bab99] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold transition-all shadow-sm active:scale-[0.99] cursor-pointer disabled:opacity-40 flex items-center gap-2"
+                  className="px-5 py-2.5 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold transition-all shadow-sm active:scale-[0.99] cursor-pointer disabled:opacity-40 flex items-center gap-2"
                 >
                   {creating ? (
                     <>
-                      <svg className="animate-spin h-3.5 w-3.5 text-[#FAF9F5]" viewBox="0 0 24 24" fill="none">
+                      <svg className="animate-spin h-3.5 w-3.5 text-[#f4edda]" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
@@ -1061,12 +970,12 @@ export default function MeetingLobby({
           onClick={() => setActiveModal(null)}
         >
           <div
-            className="w-full max-w-lg rounded-[26px] bg-[#FAF9F5] p-6 sm:p-7 shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] border border-[#E5E4DE] relative text-[#141413] flex flex-col gap-4 overflow-hidden"
+            className="w-full max-w-lg rounded-[26px] bg-[#f4edda] p-6 sm:p-7 shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] border border-[#9bab99] relative text-[#203334] flex flex-col gap-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-[#EBEAE5]">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs text-[#141413] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-white border border-[#9bab99] shadow-2xs text-[#203334] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">
                     {activeModal === 'spatial-audio' && 'graphic_eq'}
                     {activeModal === 'hardware' && 'headphones'}
@@ -1075,9 +984,9 @@ export default function MeetingLobby({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8880]">Technical Specification</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#55675e]">Technical Specification</span>
                   </div>
-                  <h3 className="font-bold text-base text-[#141413] tracking-tight">
+                  <h3 className="font-bold text-base text-[#203334] tracking-tight">
                     {activeModal === 'spatial-audio' && 'Spatial Audio Architecture'}
                     {activeModal === 'hardware' && 'Audio Hardware & Latency'}
                     {activeModal === 'docs' && 'ProxiSpeak Documentation'}
@@ -1087,7 +996,7 @@ export default function MeetingLobby({
               <button
                 type="button"
                 onClick={() => setActiveModal(null)}
-                className="w-8 h-8 rounded-xl border border-[#E5E4DE] bg-white hover:bg-[#F5F4EE] text-[#8C8880] hover:text-[#141413] transition-colors flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl border border-[#9bab99] bg-white hover:bg-[#F5F4EE] text-[#55675e] hover:text-[#203334] transition-colors flex items-center justify-center cursor-pointer"
                 aria-label="Close modal"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -1096,22 +1005,22 @@ export default function MeetingLobby({
 
             <div className="mt-1">
               {activeModal === 'spatial-audio' && (
-                <div className="space-y-3 text-xs text-[#5e5f5c] leading-relaxed">
-                  <div className="p-3.5 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs">
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">WebAudio HRTF Engine</div>
-                    <p className="text-[#141413]">
+                <div className="space-y-3 text-xs text-[#475950] leading-relaxed">
+                  <div className="p-3.5 rounded-lg bg-white border border-[#9bab99] shadow-2xs">
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#55675e] mb-1 font-semibold">WebAudio HRTF Engine</div>
+                    <p className="text-[#203334]">
                       ProxiSpeak integrates a browser-native WebAudio spatial panner node calibrated to Head-Related Transfer Function (HRTF) impulse responses.
                     </p>
                   </div>
-                  <div className="p-3.5 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs">
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">Acoustic Isolation</div>
-                    <p className="text-[#141413]">
+                  <div className="p-3.5 rounded-lg bg-white border border-[#9bab99] shadow-2xs">
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#55675e] mb-1 font-semibold">Acoustic Isolation</div>
+                    <p className="text-[#203334]">
                       When meeting participants step into private rooms or close doors, soundproof filters attenuate audio by -40dB, providing true privacy for confidential syncs.
                     </p>
                   </div>
-                  <div className="p-3.5 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs">
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">Inverse-Square Attenuation</div>
-                    <p className="text-[#141413]">
+                  <div className="p-3.5 rounded-lg bg-white border border-[#9bab99] shadow-2xs">
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-[#55675e] mb-1 font-semibold">Inverse-Square Attenuation</div>
+                    <p className="text-[#203334]">
                       As you navigate your avatar across the office floor, voice levels scale according to inverse-square distance equations for natural, organic conversations.
                     </p>
                   </div>
@@ -1119,21 +1028,21 @@ export default function MeetingLobby({
               )}
 
               {activeModal === 'hardware' && (
-                <div className="space-y-3 text-xs text-[#5e5f5c] leading-relaxed">
-                  <p className="text-[#141413]">
+                <div className="space-y-3 text-xs text-[#475950] leading-relaxed">
+                  <p className="text-[#203334]">
                     ProxiSpeak delivers optimal spatial immersion with stereo headphones or binaural headsets.
                   </p>
-                  <div className="p-4 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs space-y-2 text-[#141413]">
+                  <div className="p-4 rounded-lg bg-white border border-[#9bab99] shadow-2xs space-y-2 text-[#203334]">
                     <div className="flex items-start gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-[#141413] mt-0.5">verified</span>
+                      <span className="material-symbols-outlined text-[16px] text-[#203334] mt-0.5">verified</span>
                       <span><strong>Recommended:</strong> Apple AirPods Max/Pro, Sony WH-1000XM5, Bose QuietComfort.</span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-[#141413] mt-0.5">check_circle</span>
+                      <span className="material-symbols-outlined text-[16px] text-[#203334] mt-0.5">check_circle</span>
                       <span>Supports standard 44.1kHz or 48kHz audio interfaces without external drivers.</span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-[#141413] mt-0.5">check_circle</span>
+                      <span className="material-symbols-outlined text-[16px] text-[#203334] mt-0.5">check_circle</span>
                       <span>Built-in hardware echo cancellation, noise suppression, and auto gain control.</span>
                     </div>
                   </div>
@@ -1141,21 +1050,21 @@ export default function MeetingLobby({
               )}
 
               {activeModal === 'docs' && (
-                <div className="space-y-3 text-xs text-[#5e5f5c] leading-relaxed">
-                  <p className="text-[#141413]">
+                <div className="space-y-3 text-xs text-[#475950] leading-relaxed">
+                  <p className="text-[#203334]">
                     ProxiSpeak is powered by a low-latency WebRTC mesh paired with a persistent WebSocket presence and state synchronization protocol.
                   </p>
-                  <div className="p-4 rounded-2xl bg-white border border-[#E5E4DE] shadow-2xs space-y-2.5">
+                  <div className="p-4 rounded-lg bg-white border border-[#9bab99] shadow-2xs space-y-2.5">
                     <div>
-                      <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">Controls</div>
-                      <p className="text-[#141413]">
-                        Use <kbd className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-[11px] text-[#141413]">W, A, S, D</kbd> or <kbd className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-[11px] text-[#141413]">Arrow Keys</kbd> to move your avatar. Press <kbd className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-[11px] text-[#141413]">M</kbd> to toggle mute, or <kbd className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono text-[11px] text-[#141413]">Spacebar</kbd> for push-to-talk.
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-[#55675e] mb-1 font-semibold">Controls</div>
+                      <p className="text-[#203334]">
+                        Use <kbd className="px-2 py-0.5 rounded-lg bg-[#f4edda] border border-[#9bab99] font-mono text-[11px] text-[#203334]">W, A, S, D</kbd> or <kbd className="px-2 py-0.5 rounded-lg bg-[#f4edda] border border-[#9bab99] font-mono text-[11px] text-[#203334]">Arrow Keys</kbd> to move your avatar. Press <kbd className="px-2 py-0.5 rounded-lg bg-[#f4edda] border border-[#9bab99] font-mono text-[11px] text-[#203334]">M</kbd> to toggle mute, or <kbd className="px-2 py-0.5 rounded-lg bg-[#f4edda] border border-[#9bab99] font-mono text-[11px] text-[#203334]">Spacebar</kbd> for push-to-talk.
                       </p>
                     </div>
                     <div className="pt-2 border-t border-[#EBEAE5]">
-                      <div className="font-mono text-[10px] uppercase tracking-wider text-[#8C8880] mb-1 font-semibold">Room Invites</div>
-                      <p className="text-[#141413]">
-                        Share meeting links with <code className="px-2 py-0.5 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] text-[11px] font-mono text-[#141413]">?room=your-room-id</code> for instant access.
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-[#55675e] mb-1 font-semibold">Room Invites</div>
+                      <p className="text-[#203334]">
+                        Share meeting links with <code className="px-2 py-0.5 rounded-lg bg-[#f4edda] border border-[#9bab99] text-[11px] font-mono text-[#203334]">?room=your-room-id</code> for instant access.
                       </p>
                     </div>
                   </div>
@@ -1167,7 +1076,7 @@ export default function MeetingLobby({
               <button
                 type="button"
                 onClick={() => setActiveModal(null)}
-                className="px-5 py-2.5 rounded-xl bg-[#141413] hover:bg-[#252522] text-[#FAF9F5] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
+                className="px-5 py-2.5 rounded-xl bg-[#203334] hover:bg-[#252522] text-[#f4edda] text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.99]"
               >
                 Done
               </button>

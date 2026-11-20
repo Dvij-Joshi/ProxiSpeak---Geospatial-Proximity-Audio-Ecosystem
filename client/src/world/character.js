@@ -1,0 +1,85 @@
+import { INK } from './models.js';
+import { MAX_DISTANCE } from '../services/spatialAudio.js';
+
+function shape(ctx,points,fill) {
+  ctx.beginPath();
+  points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+  ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+export function drawCharacter(ctx,x,y,color,{moving=false,facing=1,back=false,time=0}={}) {
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.fillStyle='rgba(32,51,52,.25)';
+  ctx.beginPath(); ctx.ellipse(3,1,13,5,-.08,0,Math.PI*2); ctx.fill();
+  ctx.scale(facing<0?-1:1,1);
+  const step=moving?Math.sin(time/95)*3.4:0;
+  ctx.translate(0,-Math.abs(step)*.27);
+  // High-top boots, cuffed trousers, colour-block jacket, face and swept hair.
+  for(const [offset,stride] of [[-7,-step],[3,step]]) {
+    shape(ctx,[[offset,-13],[offset+7,-13],[offset+6,stride-2],[offset+8,stride],[offset+8,stride+2],[offset-1,stride+2]],'#465660');
+    shape(ctx,[[offset-1,stride-2],[offset+6,stride-2],[offset+10,stride],[offset+9,stride+2],[offset-1,stride+2]],'#eee0b8');
+  }
+  shape(ctx,[[-10,-24],[-5,-29],[5,-29],[10,-24],[8,-10],[-8,-10]],color||'#429a8a');
+  shape(ctx,[[-10,-24],[-6,-24],[-6,-14],[-10,-11],[-13,-14]],color||'#429a8a');
+  shape(ctx,[[6,-26],[11,-24],[13,-14],[9,-12],[6,-17]],color||'#429a8a');
+  if (back) {
+    shape(ctx,[[-6,-26],[1,-23],[7,-26],[6,-22],[0,-20],[-6,-22]],'#526764');
+    shape(ctx,[[-8,-38],[-6,-42],[3,-44],[8,-40],[9,-34],[6,-29],[-2,-28],[-7,-31]],'#394348');
+  } else {
+    shape(ctx,[[-5,-28],[1,-24],[5,-28],[2,-16]],'#f1daba');
+  shape(ctx,[[-7,-38],[-2,-42],[6,-40],[9,-36],[9,-31],[5,-27],[-1,-27],[-7,-32]],'#c79271');
+  shape(ctx,[[-9,-36],[-8,-41],[-3,-44],[4,-43],[8,-41],[10,-37],[4,-38],[0,-35],[-3,-36],[-4,-31],[-7,-32]],'#394348');
+  ctx.fillStyle=INK; ctx.fillRect(5,-34,1.8,1.7);
+  }
+  ctx.restore();
+}
+
+export function drawEarshot(ctx,x,y) {
+  ctx.save();
+  ctx.strokeStyle='rgba(42,102,95,.46)'; ctx.lineWidth=1.4; ctx.setLineDash([8,10]);
+  ctx.beginPath(); ctx.arc(x,y,MAX_DISTANCE,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+export function drawPlayer(ctx,p,time) {
+  const {x,y,color,moving,local,muted,speaking,intensity,facing}=p;
+  ctx.save();
+  const live=!muted && (speaking || intensity>.05);
+  ctx.strokeStyle=live?'#327b64':local?'#f8edb7':'#55675d';
+  ctx.lineWidth=local||live?3:1.4;
+  ctx.beginPath(); ctx.ellipse(x,y,local?18:15,local?8:6,0,0,Math.PI*2); ctx.stroke();
+  if(live) {
+    const phase=(time%800)/800;
+    ctx.globalAlpha=1-phase;
+    ctx.beginPath(); ctx.ellipse(x,y,18+phase*10,8+phase*5,0,0,Math.PI*2); ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+  drawCharacter(ctx,x,y,color,{moving,facing,back:p.back,time});
+  ctx.restore();
+}
+
+export function drawName(ctx,p) {
+  const {x,y,name,muted,speaking,intensity,acoustic,volume,local}=p;
+  const live=!muted && (speaking||intensity>.05);
+  ctx.save(); ctx.textAlign='center'; ctx.font='bold 11px Arial';
+  const label=String(name||'Guest').slice(0,26);
+  const width=ctx.measureText(label).width+26;
+  ctx.fillStyle=INK; ctx.fillRect(x-width/2,y-64,width,16);
+  ctx.fillStyle='#fff3d4'; ctx.fillText(label,x+5,y-52.5);
+  ctx.fillStyle=muted?'#e98769':live?'#a6df8f':'#eed46d';
+  for(let i=0;i<3;i++){
+    const h=muted?2:live?3+i*2:3;
+    ctx.fillRect(x-width/2+4+i*2.7,y-55-h/2,1.8,h);
+  }
+  const pct=Math.round((volume||0)*100)+'%';
+  const statuses={'door-closed':'Door closed','blocked-wall':'Soundproof',occluded:'Muffled',doorway:'Open door','in-room':acoustic?.remoteRoom?.name};
+  const detail=local?acoustic?.localRoom?.name:statuses[acoustic?.status]||((volume||0)>.04?pct:'');
+  if(detail) {
+    ctx.font='bold 9px Arial';
+    const sub=detail+(!local&&statuses[acoustic?.status]?' · '+pct:'');
+    const w=ctx.measureText(sub).width+8;
+    ctx.fillStyle='#f4edda';ctx.fillRect(x-w/2,y+8,w,13);ctx.fillStyle=INK;ctx.fillText(sub,x,y+18);
+  }
+  ctx.restore();
+}

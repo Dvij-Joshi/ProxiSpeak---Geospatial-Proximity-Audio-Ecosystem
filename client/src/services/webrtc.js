@@ -186,21 +186,13 @@ class WebRTCManager {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         await this.flushIceCandidateQueue(from, pc);
 
-        // Ensure local audio track is attached so the answer includes bidirectional audio
-        if (this.localStream) {
-          const audioTrack = this.localStream.getAudioTracks()[0];
-          if (audioTrack && audioTrack.readyState === 'live') {
-            const senders = pc.getSenders();
-            const hasLiveTrack = senders.some((s) => s.track && s.track.id === audioTrack.id);
-            if (!hasLiveTrack) {
-              const emptySender = senders.find((s) => !s.track || (s.track.kind === 'audio' && s.track.readyState === 'ended'));
-              if (emptySender) {
-                await emptySender.replaceTrack(audioTrack);
-              } else {
-                try { pc.addTrack(audioTrack, this.localStream); } catch (_e) {}
-              }
-            }
-          }
+        // The remote offer creates the answering transceiver. Reserve its
+        // sending direction even when the user has yet to enable the mic.
+        const audio = pc.getTransceivers().find(t => t.receiver.track.kind === 'audio');
+        if (audio) {
+          audio.direction = 'sendrecv';
+          const track = this.localStream?.getAudioTracks()[0];
+          if (track?.readyState === 'live') await audio.sender.replaceTrack(track);
         }
 
         const answer = await pc.createAnswer();
@@ -347,6 +339,18 @@ class WebRTCManager {
     }
   }
 
+  async _replaceMicrophoneTrack(track) {
+    // An answerer awaiting its first offer gets the current track in the
+    // offer handler. Negotiated connections already have a bidirectional sender.
+    await Promise.all(Array.from(this.peers.values(), async pc => {
+      const audio = pc.getTransceivers().find(t => !t.stopped && t.receiver.track.kind === 'audio');
+      if (audio && audio.sender.track !== track) {
+        await audio.sender.replaceTrack(track);
+        this._optimizeAudioSender(audio.sender);
+      }
+    }));
+  }
+
   /**
    * Seamlessly switches to a selected microphone device without dropping peer connections.
    */
@@ -364,27 +368,7 @@ class WebRTCManager {
       newTrack.enabled = !this.isMuted;
       this._monitorTrack(newTrack);
 
-      this.peers.forEach((pc, peerId) => {
-        const senders = pc.getSenders();
-        let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
-        if (audioSender) {
-          audioSender.replaceTrack(newTrack).catch((e) => {
-            console.warn(`[WebRTC] replaceTrack error for ${peerId}:`, e);
-          });
-        } else {
-          try { pc.addTrack(newTrack, stream); } catch (_e) {}
-        }
-
-        const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
-        const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
-        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
-          audioTransceiver.direction = 'sendrecv';
-        }
-
-        if (pc.signalingState === 'stable') {
-          this.initiateOffer(peerId, pc);
-        }
-      });
+      await this._replaceMicrophoneTrack(newTrack);
     }
 
     this.setupVoiceActivityDetection(stream);
@@ -407,27 +391,7 @@ class WebRTCManager {
       newTrack.enabled = !this.isMuted;
       this._monitorTrack(newTrack);
 
-      this.peers.forEach((pc, peerId) => {
-        const senders = pc.getSenders();
-        let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
-        if (audioSender) {
-          audioSender.replaceTrack(newTrack).catch((e) => {
-            console.warn(`[WebRTC] replaceTrack error for ${peerId}:`, e);
-          });
-        } else {
-          try { pc.addTrack(newTrack, stream); } catch (_e) {}
-        }
-
-        const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
-        const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
-        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
-          audioTransceiver.direction = 'sendrecv';
-        }
-
-        if (pc.signalingState === 'stable') {
-          this.initiateOffer(peerId, pc);
-        }
-      });
+      await this._replaceMicrophoneTrack(newTrack);
     }
     this.setupVoiceActivityDetection(stream);
     console.log('[WebRTC] Microphone re-acquired after device change');
@@ -464,31 +428,7 @@ class WebRTCManager {
         if (this.socket) {
           this.socket.emit('user-mute-status', { isMuted: false, roomId: this.currentRoomId });
         }
-        this.peers.forEach((pc, peerId) => {
-          const senders = pc.getSenders();
-          let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
-          if (audioSender) {
-            audioSender.replaceTrack(existingTrack).catch(() => {});
-          } else {
-            try {
-              pc.addTrack(existingTrack, this.localStream);
-              if (pc.signalingState === 'stable') {
-                this.initiateOffer(peerId, pc);
-              }
-            } catch (_e) {}
-          }
-          const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
-          const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
-          if (audioTransceiver) {
-            const currentDir = audioTransceiver.currentDirection;
-            if (audioTransceiver.direction !== 'sendrecv' || (currentDir && currentDir !== 'sendrecv')) {
-              audioTransceiver.direction = 'sendrecv';
-              if (pc.signalingState === 'stable') {
-                this.initiateOffer(peerId, pc);
-              }
-            }
-          }
-        });
+        await this._replaceMicrophoneTrack(existingTrack);
         return this.localStream;
       } else {
         this.localStream = null;
@@ -524,52 +464,7 @@ class WebRTCManager {
         }
       }
 
-      // Hot-swap audio track to all active peer connections without unnecessary renegotiation
-      this.peers.forEach((pc, peerId) => {
-        const senders = pc.getSenders();
-        let audioSender = senders.find((s) => s.track?.kind === 'audio') || senders.find((s) => !s.track);
-        let needsRenegotiation = false;
-
-        if (audioSender && audioTrack) {
-          audioSender.replaceTrack(audioTrack).then(() => {
-            console.log(`[WebRTC] Hot-swapped live mic track for ${peerId} (0ms renegotiation)`);
-          }).catch((e) => {
-            console.warn('[WebRTC] replaceTrack error:', e);
-          });
-          this._optimizeAudioSender(audioSender);
-        } else if (audioTrack) {
-          try {
-            const addedSender = pc.addTrack(audioTrack, this.localStream);
-            this._optimizeAudioSender(addedSender);
-            needsRenegotiation = true;
-          } catch (_e) {}
-        }
-
-        // Ensure transceiver direction is sendrecv
-        const transceivers = typeof pc.getTransceivers === 'function' ? pc.getTransceivers() : [];
-        const audioTransceiver = transceivers.find((t) => t.sender === audioSender || t.receiver?.track?.kind === 'audio');
-        if (audioTransceiver) {
-          const currentDir = audioTransceiver.currentDirection;
-          if (audioTransceiver.direction !== 'sendrecv' || (currentDir && currentDir !== 'sendrecv')) {
-            console.log(`[WebRTC] Upgrading transceiver direction to sendrecv for ${peerId} (currentDirection: ${currentDir})`);
-            audioTransceiver.direction = 'sendrecv';
-            needsRenegotiation = true;
-          }
-        }
-
-        // Only renegotiate if transceiver direction actually changed or new track added
-        if (needsRenegotiation) {
-          if (pc.signalingState === 'stable') {
-            this.initiateOffer(peerId, pc);
-          } else {
-            setTimeout(() => {
-              if (this.peers.has(peerId) && pc.signalingState === 'stable') {
-                this.initiateOffer(peerId, pc);
-              }
-            }, 300);
-          }
-        }
-      });
+      if (audioTrack) await this._replaceMicrophoneTrack(audioTrack);
 
       if (this.socket) {
         this.socket.emit('user-mute-status', { isMuted: false, roomId: this.currentRoomId });
@@ -612,17 +507,12 @@ class WebRTCManager {
     const pc = new RTCPeerConnection(this.getIceConfig());
     this.peers.set(peerId, pc);
 
-    // If local microphone already exists, attach track directly; otherwise create bidirectional transceiver
-    if (this.localStream) {
-      const audioTrack = this.localStream.getAudioTracks()[0];
-      if (audioTrack && audioTrack.readyState === 'live') {
-        const sender = pc.addTrack(audioTrack, this.localStream);
-        this._optimizeAudioSender(sender);
-      } else {
-        pc.addTransceiver('audio', { direction: 'sendrecv' });
-      }
-    } else {
-      pc.addTransceiver('audio', { direction: 'sendrecv' });
+    // Only the offerer allocates a media section. Preallocating one on the
+    // answerer creates a second, unassociated sender in Chromium.
+    if (isInitiator) {
+      const track = this.localStream?.getAudioTracks()[0];
+      const audio = pc.addTransceiver(track?.readyState === 'live' ? track : 'audio', { direction: 'sendrecv' });
+      this._optimizeAudioSender(audio.sender);
     }
 
     pc.onicecandidate = (event) => {
