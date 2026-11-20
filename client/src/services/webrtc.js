@@ -37,6 +37,7 @@ class WebRTCManager {
     this.localStream = null;
     this.peers = new Map();
     this.peerMeta = new Map();
+    this.negotiations = new Map();
     this.iceCandidateQueues = new Map();
     this.isMuted = true;
     this.currentRoomId = 'main-office';
@@ -153,7 +154,7 @@ class WebRTCManager {
     this.socket.off('webrtc-ice-candidate');
     this.socket.off('user-mute-status');
 
-    this.socket.on('webrtc-offer', async ({ from, offer }) => {
+    this.socket.on('webrtc-offer', ({ from, offer }) => this._queueNegotiation(from, async () => {
       try {
         console.log(`[WebRTC] Received offer from ${from}`);
         let pc = this.getOrCreatePeer(from, false);
@@ -223,9 +224,9 @@ class WebRTCManager {
       } catch (err) {
         console.error('[WebRTC] Error handling offer from', from, err);
       }
-    });
+    }));
 
-    this.socket.on('webrtc-answer', async ({ from, answer }) => {
+    this.socket.on('webrtc-answer', ({ from, answer }) => this._queueNegotiation(from, async () => {
       try {
         console.log(`[WebRTC] Received answer from ${from}`);
         const pc = this.peers.get(from);
@@ -243,7 +244,7 @@ class WebRTCManager {
       } catch (err) {
         console.error('[WebRTC] Error handling answer from', from, err);
       }
-    });
+    }));
 
     this.socket.on('webrtc-ice-candidate', async ({ from, candidate }) => {
       try {
@@ -379,6 +380,10 @@ class WebRTCManager {
             needsOffer = true;
           }
         } else {
+          // The answering side receives its transceiver with the offer.
+          // Creating a sender during microphone startup competes with that
+          // offer and can leave two unrelated audio media sections.
+          if (!this.socket || this.socket.id < peerId) return;
           try {
             const sender = pc.addTrack(track, this.localStream);
             this._optimizeAudioSender(sender);
@@ -671,7 +676,26 @@ class WebRTCManager {
    * Initiates an SDP offer to connect with a peer.
    * Armed with retry timer and offer watchdog for auto-recovery.
    */
-  async initiateOffer(peerId, pc, _retryCount = 0, isIceRestart = false) {
+  _queueNegotiation(peerId, operation) {
+    const socket = this.socket;
+    const previous = this.negotiations.get(peerId) || Promise.resolve();
+    const pending = previous.catch(() => {}).then(() => {
+      if (this.socket === socket && socket?.connected) return operation();
+    });
+    this.negotiations.set(peerId, pending);
+    const cleanup = () => {
+      if (this.negotiations.get(peerId) === pending) this.negotiations.delete(peerId);
+    };
+    pending.then(cleanup, cleanup);
+    return pending;
+  }
+
+  initiateOffer(peerId, pc, retryCount = 0, isIceRestart = false) {
+    return this._queueNegotiation(peerId, () => this._createOffer(peerId, pc, retryCount, isIceRestart));
+  }
+
+  async _createOffer(peerId, pc, _retryCount = 0, isIceRestart = false) {
+    if (this.peers.get(peerId) !== pc) return;
     const meta = this.getPeerMeta(peerId);
 
     // Clear any existing retry timer for this peer

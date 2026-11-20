@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+test('peer negotiation operations serialize across await boundaries', async () => {
+  const source = (await readFile(new URL('../src/services/webrtc.js', import.meta.url), 'utf8'))
+    .replace("import { SERVER_URL } from '../config';", "const SERVER_URL = 'http://127.0.0.1:1';");
+  const { webrtc } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  webrtc.socket = { connected: true };
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const events = [];
+  const first = webrtc._queueNegotiation('peer', async () => {
+    events.push('remote-offer');
+    await gate;
+    events.push('local-answer');
+  });
+  const second = webrtc._queueNegotiation('peer', () => events.push('next-offer'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(events, ['remote-offer']);
+  release();
+  await Promise.all([first, second]);
+  assert.deepEqual(events, ['remote-offer', 'local-answer', 'next-offer']);
+  await webrtc._queueNegotiation('peer', () => { throw new Error('rejected operation'); }).catch(() => {});
+  await webrtc._queueNegotiation('peer', () => events.push('recovered'));
+  assert.equal(events.at(-1), 'recovered');
+});
