@@ -71,6 +71,9 @@ class WebRTCManager {
         const data = await res.json();
         if (data.iceServers && Array.isArray(data.iceServers) && data.iceServers.length > 0) {
           this.iceServers = data.iceServers;
+          for (const pc of this.peers.values()) {
+            if (pc.signalingState !== 'closed') pc.setConfiguration(this.getIceConfig());
+          }
           console.log('[WebRTC] Loaded ICE servers from backend:', this.iceServers.length);
         }
       }
@@ -560,11 +563,6 @@ class WebRTCManager {
     if (isInitiator) {
       const audio = pc.addTransceiver(track?.readyState === 'live' ? track : 'audio', { direction: 'sendrecv' });
       this._optimizeAudioSender(audio.sender);
-    } else {
-      if (track?.readyState === 'live') {
-        const audio = pc.addTransceiver(track, { direction: 'sendrecv' });
-        this._optimizeAudioSender(audio.sender);
-      }
     }
 
     pc.onicecandidate = (event) => {
@@ -637,6 +635,7 @@ class WebRTCManager {
    * Deterministic failure recovery: only designated initiator restarts ICE to prevent glare.
    */
   _handleConnectionFailure(peerId, pc) {
+    if (this.peers.get(peerId) !== pc) return;
     const meta = this.getPeerMeta(peerId);
     if (meta.isRestartingIce) return;
     meta.isRestartingIce = true;
@@ -654,7 +653,7 @@ class WebRTCManager {
     } else {
       console.warn(`[WebRTC] Connection failed with ${peerId}, awaiting initiator's ICE restart offer...`);
       setTimeout(() => {
-        if (this.peers.has(peerId) && (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed')) {
+        if (this.peers.get(peerId) === pc && (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed')) {
           console.warn(`[WebRTC] ICE recovery timed out for ${peerId}, performing clean peer reset...`);
           this.resetPeer(peerId);
         }
@@ -743,8 +742,10 @@ class WebRTCManager {
   resetPeer(peerId) {
     console.log(`[WebRTC] Resetting peer connection for ${peerId}`);
     this.removePeer(peerId);
-    const shouldInitiate = Boolean(this.socket && this.socket.id > peerId);
-    this.getOrCreatePeer(peerId, shouldInitiate);
+    // A reset must announce its new transport to the remote endpoint. Waiting
+    // here leaves the remote using the discarded DTLS/ICE transport forever.
+    // Concurrent resets are resolved by the existing polite-peer rollback.
+    this.getOrCreatePeer(peerId, true);
   }
 
   /**
