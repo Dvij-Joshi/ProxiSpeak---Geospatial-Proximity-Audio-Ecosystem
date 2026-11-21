@@ -1,6 +1,5 @@
 import WorkspaceDashboard from './WorkspaceDashboard';
 import OfficeDiorama from './OfficeDiorama';
-import SpatialPreview from './SpatialPreview';
 import './landing.css';
 import { WorkspaceArt } from './WorkspaceArt';
 import { useState, useEffect, useRef } from 'react';
@@ -215,42 +214,22 @@ export default function MeetingLobby({
     }
   };
 
-  const [preview,setPreview] = useState('office');
   const host=()=>user?setShowHostModal(true):onRequestAuth();
   return (
     <div className="landing" id="top">
       <header className="landing-nav wrap">
         <a href="#top" className="wordmark"><img src="/favicon.svg" alt="" width="34" height="34"/>ProxiSpeak</a>
-        <nav aria-label="Main navigation"><a href="#experience">How it works</a><a href="#workspaces">Workspaces</a><button onClick={onOpenOrgHub}>Organizations</button></nav>
+        <nav aria-label="Main navigation"><button onClick={()=>setActiveModal('spatial-audio')}>Spatial audio</button><a href="#workspaces">Workspaces</a><button onClick={onOpenOrgHub}>Organizations</button></nav>
         <button className="nav-account" onClick={user?onLogout:onRequestAuth}>{user?'Sign out':'Sign in'} <span aria-hidden="true">&#8599;</span></button>
       </header>
       <main>
         <div className="wrap dashboard-wrap"><WorkspaceDashboard key={user?.id || user?.username || 'guest'} user={user} activeOrg={activeOrg} onSelectOrg={onSelectOrg}
           onOpenHub={onDashboardHub} onDesign={onOpenDesigner} onResume={onResumeDraft} onHost={host} onJoinCode={()=>inputRef.current?.focus()}/></div>
-        {!user && <section className="landing-hero wrap">
-          <div className="hero-intro"><div className="section-label"><i/> Spatial voice workspace</div>
-            <h1>Walk in.<br/>Talk <em>naturally.</em></h1>
-            <p>A virtual office where conversations happen by proximity. Move your avatar closer to join in, or find a quiet corner with your team.</p>
-            <div className="hero-actions"><a className="solid-action" href="#workspaces">Explore workspaces <span aria-hidden="true">&#8599;</span></a><button className="line-action" onClick={()=>inputRef.current?.focus()}>Join by code</button></div>
-          </div>
-          <figure className="studio-preview" onPointerMove={e=>{
-            if(e.pointerType!=='mouse')return;
-            const rect=e.currentTarget.getBoundingClientRect();
-            e.currentTarget.style.setProperty('--shift',((e.clientX-rect.left)/rect.width*8-4)+'px');
-          }} onPointerLeave={e=>e.currentTarget.style.removeProperty('--shift')}>
-            <figcaption><span><b className="signal-bars" aria-hidden="true"><i/><i/><i/></b> Office preview</span><span>{preview==='office'?'Shared studio':preview==='lounge'?'Social lounge':'Auditorium'}</span></figcaption>
-            <OfficeDiorama theme={preview} animated/>
-            <div className="scene-switch" role="group" aria-label="Preview environment">{['office','conference','lounge'].map(key=><button key={key} aria-pressed={preview===key} onClick={()=>setPreview(key)}>{key}</button>)}</div>
-          </figure>
-        </section>}
         <section className="arrival"><div className="wrap arrival-grid"><div><h2>Have an invite?</h2><p>Enter a room code or paste your meeting link.</p></div>
           <form onSubmit={handleJoinByCode}><label className="sr-only" htmlFor="lobby-code">Meeting code or invite link</label>
             <input ref={inputRef} id="lobby-code" value={joinCode} onChange={e=>{setJoinCode(e.target.value);setJoinError('');}} placeholder="Room code or invite link" aria-invalid={!!joinError}/>
             <button>Join room <span aria-hidden="true">&#8594;</span></button>{joinError&&<small role="alert">{joinError}</small>}
           </form></div></section>
-        <section id="experience" className="experience wrap"><SpatialPreview/><div className="experience-copy"><div className="section-label"><i/> Spatial audio</div>
-          <h2>One floor.<br/><em>Many conversations.</em></h2><p>Walk up to a teammate and their voice comes into focus. Move away and it fades. Try changing the distance in the preview.</p>
-          <button className="text-action" onClick={()=>setActiveModal('spatial-audio')}>Explore the acoustics &#8599;</button></div></section>
         <section className="directory" id="workspaces"><div className="wrap">
           <div className="directory-heading"><div><div className="section-label"><i/> Workspace directory</div><h2>Choose your space.</h2></div><button className="solid-action" onClick={host}>+ Host a meeting</button></div>
           <div className="directory-tools"><div role="group" aria-label="Filter workspaces">{['all','office','conference','lounge'].map(key=><button key={key} aria-pressed={selectedThemeFilter===key} onClick={()=>setSelectedThemeFilter(key)}>{key==='all'?'All spaces':key}</button>)}</div>

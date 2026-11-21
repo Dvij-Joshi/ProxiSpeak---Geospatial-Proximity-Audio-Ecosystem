@@ -162,7 +162,7 @@ export default function App() {
   const handleLeaveRoom = () => {
     setCurrentRoom(null);
     setInviteRoomId(null);
-    window.history.pushState({}, '', window.location.pathname);
+    window.history.replaceState({}, '', '/dashboard');
   };
 
   const handleLogout = () => {
@@ -172,7 +172,7 @@ export default function App() {
     setActiveOrg(null);
     setDesignerOrg(null);
     setCurrentRoom(null);
-    window.history.pushState({}, '', window.location.pathname);
+    window.location.replace('/');
   };
 
   const openDesigner = (org=null,layout=null,id=null) => {
@@ -193,7 +193,8 @@ export default function App() {
         organization={designerOrg} initialLayout={initialLayout} draftId={draftId}
         onBackToLobby={() => {
           setIsDesigningOffice(false);
-          window.history.replaceState({},'',window.location.pathname==='/designer'?'/':window.location.pathname);
+          if (!user) {window.location.assign('/');return;}
+          window.history.replaceState({},'',user?'/dashboard':'/designer');
         }}
         onLaunchOffice={(officeData) => {
           setIsDesigningOffice(false);
@@ -228,10 +229,15 @@ export default function App() {
     );
   }
 
+  if (!user && !showOrgHub && !requestedRoom) {
+    return <AuthModal defaultRoomName={inviteRoomId} onClose={()=>window.location.replace('/')}
+      onAuthSuccess={setUser}/>;
+  }
+
   // Workspace directory
   return (
     <>
-      <MeetingLobby
+      {user && <MeetingLobby
         user={user}
         onJoinRoom={handleJoinRoom}
         onLogout={handleLogout}
@@ -242,7 +248,7 @@ export default function App() {
         onDashboardHub={openHub}
         onOpenOrgHub={()=>openHub(activeOrg)}
         activeOrg={activeOrg}
-      />
+      />}
 
       {/* Organization & Office Layouts Hub Modal */}
       {showOrgHub && (

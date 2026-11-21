@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AvatarPortrait } from './WorkspaceArt';
+import { AvatarPortrait } from '../components/WorkspaceArt';
 import { calculateAcoustics } from '../services/spatialAudio';
 
 export default function SpatialPreview() {

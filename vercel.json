@@ -7,6 +7,10 @@
     {
       "source": "/health",
       "destination": "https://proxispeak-server-sgwp.onrender.com/health"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/index.html"
     }
   ]
 }
