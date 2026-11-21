@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { SERVER_URL } from '../config';
 import { listDrafts } from '../services/layoutDrafts';
 import { organizationRole } from '../services/organizationRole';
-import './workspaceDashboard.css';
+import OfficeDiorama from './OfficeDiorama';
 
 export default function WorkspaceDashboard({user,activeOrg,onSelectOrg,onOpenHub,onDesign,onResume,onHost,onJoinCode}) {
   const [organizations,setOrganizations] = useState([]);
@@ -42,14 +42,17 @@ export default function WorkspaceDashboard({user,activeOrg,onSelectOrg,onOpenHub
   const admin = role==='admin';
   const meetings = schedule?.orgId===org?.orgId ? schedule : null;
   return <section className="workspace-dashboard" aria-label="Workspace dashboard">
-    <header><div><small>{admin?'Organization administrator':role?'Organization member':'Personal workspace'}</small>
-      <h1>{org?.name || 'My workspace'}</h1></div>
-      {organizations.length>0 && <select aria-label="Dashboard workspace" value={org?.orgId || ''} onChange={e=>{
-        onSelectOrg(organizations.find(o=>o.orgId===e.target.value)||null);
-      }}><option value="">Personal workspace</option>{organizations.map(o=><option key={o.orgId} value={o.orgId}>{o.name}</option>)}</select>}
-    </header>
+    <header className="overview-banner"><div className="overview-copy">
+      <small>{admin?'Organization administrator':role?'Organization member':'Personal workspace'}</small>
+      <h1>{org?.name || 'My workspace'}</h1>
+      <div className="overview-meta">{org && <span>{org.members?.length ?? 0} {org.members?.length===1?'member':'members'}</span>}<span>{visible.length} layout {visible.length===1?'draft':'drafts'}</span></div>
+      {organizations.length>0 && <label className="workspace-switch"><span>Switch workspace</span>
+        <select aria-label="Dashboard workspace" value={org?.orgId || ''} onChange={e=>{
+          onSelectOrg(organizations.find(o=>o.orgId===e.target.value)||null);
+        }}><option value="">Personal workspace</option>{organizations.map(o=><option key={o.orgId} value={o.orgId}>{o.name}</option>)}</select></label>}
+    </div><div className="overview-art" aria-hidden="true"><OfficeDiorama/></div></header>
     {orgError && <p role="status">Organization details are unavailable.</p>}
-    <div className="dashboard-columns"><div className="dashboard-panel"><h2>{org?'Team workspace':'Meetings'}</h2>
+    <div className="dashboard-columns"><div className="dashboard-panel"><h2><span className="material-symbols-outlined" aria-hidden="true">group</span>{org?'Team workspace':'Meetings'}</h2>
       <div className="dashboard-links">
         {org ? <>
           <button onClick={()=>openTab('meetings')}>{admin?'Schedule and manage meetings':'Open meeting schedule'}</button>
@@ -65,10 +68,10 @@ export default function WorkspaceDashboard({user,activeOrg,onSelectOrg,onOpenHub
       {org && <div className="dashboard-agenda"><h3>Team agenda</h3>{!meetings?'Loading schedule…':meetings.error?'Schedule unavailable':
         [...(meetings.active||[]),...(meetings.upcoming||[])].length===0?'No active or upcoming meetings.':
         [...(meetings.active||[]),...(meetings.upcoming||[])].slice(0,3).map(m=><button key={m.meetingId||m.roomId} onClick={()=>openTab('meetings')}>
-          <strong>{m.title}</strong><span>{m.scheduledAt?new Date(m.scheduledAt).toLocaleString():'In progress'}</span></button>)}</div>}
-    </div><div className="dashboard-panel"><div className="draft-heading"><h2>Layout drafts</h2>
-      <button onClick={()=>onDesign(org)}>New layout</button></div>
-      {visible.length===0 ? <p>Layouts you edit on this device appear here.</p> :
+          <strong>{m.title}</strong><span>{m.scheduledAt?new Date(m.scheduledAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'In progress'}</span></button>)}</div>}
+    </div><div className="dashboard-panel" id="drafts"><div className="draft-heading"><h2><span className="material-symbols-outlined" aria-hidden="true">architecture</span>Layout drafts</h2>
+      <button onClick={()=>onDesign(org)}>+ New layout</button></div>
+      {visible.length===0 ? <div className="draft-empty"><span className="material-symbols-outlined" aria-hidden="true">architecture</span><strong>No drafts yet</strong><p>Your unfinished layouts are saved here on this device.</p></div> :
         <ul>{visible.map(d=><li key={d.id}><div><strong>{d.layout.name || 'Untitled layout'}</strong>
           <small>Saved {new Date(d.updatedAt).toLocaleString()}</small></div>
           <button aria-label={'Resume '+(d.layout.name||'untitled layout')} onClick={()=>onResume(d,org)}>Resume</button></li>)}</ul>}

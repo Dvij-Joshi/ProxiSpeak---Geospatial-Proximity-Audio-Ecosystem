@@ -518,6 +518,19 @@ app.get('/api/ice-servers', async (_req, res) => {
     return res.json({ iceServers });
   }
 
+  // Public high-availability TURN relay fallback (OpenRelay by Metered)
+  // Ensures global cross-network connectivity even before/without custom METERED_API_KEY
+  iceServers.push({
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  });
+
   res.json({ iceServers });
 });
 

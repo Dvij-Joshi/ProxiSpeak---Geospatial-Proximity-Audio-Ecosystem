@@ -29,6 +29,17 @@ const DEFAULT_ICE_SERVERS = [
   { urls: ['stun:stun.voiparound.com'] },
   { urls: ['stun:stun.voipbuster.com'] },
   { urls: ['stun:stun.voipstunt.com'] },
+  // High-availability public TURN relay fallback (OpenRelay by Metered) for cross-network connectivity
+  {
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ];
 
 // Detect iOS for audio session workarounds
@@ -236,7 +247,19 @@ class WebRTCManager {
           return;
         }
         const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
+        if (this.peers.get(from) !== pc || pc.signalingState !== 'have-remote-offer') {
+          console.warn(`[WebRTC] Peer ${from} state changed during createAnswer (state: ${pc.signalingState}), aborting answer`);
+          return;
+        }
+        try {
+          await pc.setLocalDescription(answer);
+        } catch (setErr) {
+          if (pc.signalingState !== 'have-remote-offer') {
+            console.warn(`[WebRTC] Aborting answer for ${from} due to state change (${pc.signalingState})`);
+            return;
+          }
+          throw setErr;
+        }
         this.socket.emit('webrtc-answer', { to: from, answer });
         console.log(`[WebRTC] Sent answer to ${from}`);
       } catch (err) {

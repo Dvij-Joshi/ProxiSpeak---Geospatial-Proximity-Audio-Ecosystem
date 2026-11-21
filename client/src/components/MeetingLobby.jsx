@@ -1,7 +1,7 @@
 import WorkspaceDashboard from './WorkspaceDashboard';
 import OfficeDiorama from './OfficeDiorama';
-import './landing.css';
-import { WorkspaceArt } from './WorkspaceArt';
+import dashboardStyles from './dashboardShell.css?inline';
+import { AvatarPortrait, WorkspaceArt } from './WorkspaceArt';
 import { useState, useEffect, useRef } from 'react';
 import { SERVER_URL } from '../config';
 import { spatialAudio } from '../services/spatialAudio';
@@ -216,22 +216,29 @@ export default function MeetingLobby({
 
   const host=()=>user?setShowHostModal(true):onRequestAuth();
   return (
-    <div className="landing" id="top">
-      <header className="landing-nav wrap">
-        <a href="#top" className="wordmark"><img src="/favicon.svg" alt="" width="34" height="34"/>ProxiSpeak</a>
-        <nav aria-label="Main navigation"><button onClick={()=>setActiveModal('spatial-audio')}>Spatial audio</button><a href="#workspaces">Workspaces</a><button onClick={onOpenOrgHub}>Organizations</button></nav>
-        <button className="nav-account" onClick={user?onLogout:onRequestAuth}>{user?'Sign out':'Sign in'} <span aria-hidden="true">&#8599;</span></button>
-      </header>
-      <main>
-        <div className="wrap dashboard-wrap"><WorkspaceDashboard key={user?.id || user?.username || 'guest'} user={user} activeOrg={activeOrg} onSelectOrg={onSelectOrg}
+    <div className="desk-app" id="top">
+      <style>{dashboardStyles}</style>
+      <aside className="desk-rail">
+        <a href="#top" className="desk-brand"><img src="/favicon.svg" alt="" width="32" height="32"/>ProxiSpeak</a>
+        <nav aria-label="Workspace navigation">
+          <a href="#overview"><span className="material-symbols-outlined" aria-hidden="true">dashboard</span>Overview</a>
+          <a href="#workspaces"><span className="material-symbols-outlined" aria-hidden="true">domain</span>Workspaces</a>
+          <button onClick={onOpenOrgHub}><span className="material-symbols-outlined" aria-hidden="true">corporate_fare</span>Organizations</button>
+          <a href="#drafts"><span className="material-symbols-outlined" aria-hidden="true">architecture</span>Layout drafts</a>
+        </nav>
+        <div className="desk-account"><AvatarPortrait name={user.username} color={user.avatarColor}/><div><strong>{user.username}</strong><button onClick={onLogout}>Sign out</button></div></div>
+      </aside>
+      <main className="desk-main" id="overview">
+        <div className="desk-top"><strong>Workspace overview</strong><button onClick={()=>setActiveModal('hardware')}><span className="material-symbols-outlined" aria-hidden="true">headphones</span>Audio setup</button></div>
+        <div className="dashboard-wrap"><WorkspaceDashboard key={user?.id || user?.username || 'guest'} user={user} activeOrg={activeOrg} onSelectOrg={onSelectOrg}
           onOpenHub={onDashboardHub} onDesign={onOpenDesigner} onResume={onResumeDraft} onHost={host} onJoinCode={()=>inputRef.current?.focus()}/></div>
-        <section className="arrival"><div className="wrap arrival-grid"><div><h2>Have an invite?</h2><p>Enter a room code or paste your meeting link.</p></div>
+        <section className="arrival"><div className="arrival-grid"><div><h2>Join a meeting</h2><p>Use a room code or invite link.</p></div>
           <form onSubmit={handleJoinByCode}><label className="sr-only" htmlFor="lobby-code">Meeting code or invite link</label>
             <input ref={inputRef} id="lobby-code" value={joinCode} onChange={e=>{setJoinCode(e.target.value);setJoinError('');}} placeholder="Room code or invite link" aria-invalid={!!joinError}/>
             <button>Join room <span aria-hidden="true">&#8594;</span></button>{joinError&&<small role="alert">{joinError}</small>}
           </form></div></section>
         <section className="directory" id="workspaces"><div className="wrap">
-          <div className="directory-heading"><div><div className="section-label"><i/> Workspace directory</div><h2>Choose your space.</h2></div><button className="solid-action" onClick={host}>+ Host a meeting</button></div>
+          <div className="directory-heading"><div><h2>Workspace directory</h2></div><button className="solid-action" onClick={host}>+ Host a meeting</button></div>
           <div className="directory-tools"><div role="group" aria-label="Filter workspaces">{['all','office','conference','lounge'].map(key=><button key={key} aria-pressed={selectedThemeFilter===key} onClick={()=>setSelectedThemeFilter(key)}>{key==='all'?'All spaces':key}</button>)}</div>
             <input type="search" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} aria-label="Search workspaces" placeholder="Search workspaces"/><button aria-label="Refresh directory" onClick={()=>setRefresh(v=>v+1)}>&#8635;</button>
           </div>
@@ -242,11 +249,9 @@ export default function MeetingLobby({
           </article>)}</div>
           {!filteredWorkspaces.length&&<p role="status">{loadingRooms?'Loading directory…':'No workspaces match your search.'}</p>}
         </div></section>
-        <section className="design-invite wrap"><div><h2>Build your own floor.</h2><p>Place desks, set up meeting rooms and create a layout for the way your team works.</p></div>
-          <button className="line-action" onClick={()=>onOpenDesigner(activeOrg)}>Open layout designer &#8599;</button></section>
+
+        <footer className="desk-footer"><button onClick={()=>setActiveModal('spatial-audio')}>Spatial audio guide</button><button onClick={()=>setActiveModal('docs')}>Documentation</button></footer>
       </main>
-      <footer className="landing-foot"><div className="wrap"><a href="#top" className="wordmark"><img src="/favicon.svg" width="28" height="28" alt=""/>ProxiSpeak</a><nav aria-label="Resources">
-        <button onClick={onOpenOrgHub}>Organizations</button><button onClick={()=>setActiveModal('hardware')}>Audio setup</button><button onClick={()=>setActiveModal('docs')}>Documentation</button></nav></div></footer>
       {/* Host New Meeting Modal */}
       {showHostModal && (
         <div
