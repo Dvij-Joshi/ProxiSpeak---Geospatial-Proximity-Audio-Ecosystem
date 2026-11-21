@@ -396,7 +396,35 @@ ooftop), with custom templates created via the in-app Office Designer.
     * Generated brand geometric spatial soundwave favicon in SVG and binary ICO formats, linked in `index.html` with `image/svg+xml` and `alternate icon`, eliminating 404 console errors.
   * **Render Cold-Start Room Fetch Auto-Retry (`client/src/components/MeetingLobby.jsx`):**
     * Added automatic 3-second retry logic to `fetchRooms()` so network disruptions or connection resets during Render free-tier container cold starts recover automatically without requiring user page reload.
-* **Latest Milestone:** WebRTC Per-Peer SDP Serialization, Glare Resolution & Meeting Room Acoustics (Commit `ccfe3b0`)
+* **Latest Milestone:** Multi-Tier Personalized User Dashboard & Email Domain Categorization Engine
+  * **Architectural Rationale & User Differentiation:**
+    * Implemented a dedicated personalized dashboard engine that detects user account categories and serves distinct experiences based on organization membership and email domain type:
+      * **Organization User (Company Email / Org Member):** Tailored for enterprise teams with corporate email domains (e.g., `@google.com`, `@microsoft.com`, `@<org-slug>.com`) or users belonging to an organization. Features Company Headquarters 1-click launch, team calendar and scheduled meetings log, colleague directory with role badges (`Owner`, `Admin`, `Member`), custom architectural layouts, and corporate soundstage telemetry (-18 dB soundproof doors, 850px boardroom audio).
+      * **Normal / Personal User (Consumer Webmail):** Tailored for standard accounts using consumer email domains (e.g., `@gmail.com`, `@yahoo.com`, `@outlook.com`). Features a personal audio station with live microphone input meter, speaker audio chime tester, instant personal room generator, quick code/URL join, featured spatial workspaces directory, and an enterprise upgrade invitation to create a company headquarters.
+    * Integrated an interactive view mode preview toggle (`Auto`, `Personal`, `Enterprise`) allowing users and evaluators to preview both dashboard perspectives on demand.
+  * **Frontend Implementation (`client/src/components/Dashboard.jsx`, `client/src/App.jsx`, `client/src/components/MeetingLobby.jsx`):**
+    * Created [`client/src/components/Dashboard.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/components/Dashboard.jsx) with code-split Vite chunking (33.8 kB).
+    * Created [`client/src/utils/userType.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/utils/userType.js) providing `isCompanyEmail` and `classifyUserAccount` helpers.
+    * Added `currentView` routing in [`client/src/App.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/App.jsx) supporting `/dashboard` and query parameters.
+    * Added navigation links and interactive profile button in [`client/src/components/MeetingLobby.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/components/MeetingLobby.jsx).
+  * **Backend API Endpoint (`server/index.js`):**
+    * Added `GET /api/user/dashboard-summary` endpoint returning verified user profile data, organization membership, upcoming meetings, custom layouts, and live room counts.
+  * **Automated Unit Testing (`client/tests/dashboard.test.js`):**
+    * Added automated test suite verifying domain classification, user account classification, and edge-case handling (all 4 tests passing).
+* **Prior Milestone:** WebRTC TURN Relay Integration & Signaling State Guards for Cross-Network Audio (Commit `5c95f3d`)
+  * **Root Cause Diagnosis (Cross-Network Voice Cutoff):**
+    * Production environment previously only had STUN servers configured. While STUN successfully resolves public IP addresses for direct peer-to-peer UDP connections, it fails to traverse symmetric NAT, carrier-grade NAT (CGNAT), and enterprise/firewalled networks (~70-80% of real-world internet connections).
+    * As a result, users on separate Wi-Fi or cellular networks could establish signaling via Socket.IO but could not exchange WebRTC media packets, resulting in silence in meetings.
+  * **Metered OpenRelay TURN Integration:**
+    * Integrated Metered OpenRelay TURN servers across UDP, TCP, and TLS (ports 80 and 443) as fallback servers in both [`client/src/services/webrtc.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/services/webrtc.js) (`DEFAULT_ICE_SERVERS`) and [`server/index.js`](file:///e:/portfolio-projects/ProxiSpeak/server/index.js) (`/api/ice-servers`).
+    * Guarantees relay audio connectivity across disparate networks and restrictive firewalls.
+  * **Stale PeerConnection & Signaling State Guards (`client/src/services/webrtc.js`):**
+    * Added PC reference validation (`this.peers.get(from) === pc`) after every async boundary in offer processing (`setRemoteDescription`, `replaceTrack`) to prevent executing operations against stale connections.
+    * Added `pc.signalingState === 'have-remote-offer'` check before creating answers, eliminating runtime crashes (`setLocalDescription called in wrong state`).
+    * Invalidate peer negotiation queues on connection teardown (`removePeer()`), discarding pending async operations.
+  * **Multi-Branch Synchronization:**
+    * Synchronized commits `f3b7233`, `9b1039a`, `ccfe3b0`, and `5c95f3d` across `branch-dvij`, `dev`, and `main`.
+* **Prior Milestone:** WebRTC Per-Peer SDP Serialization, Glare Resolution & Meeting Room Acoustics (Commit `ccfe3b0`)
   * **SDP Negotiation Serialization (`client/src/services/webrtc.js`):**
     * Implemented `_queueNegotiation(peerId, operation)` queueing mechanism across `webrtc-offer`, `webrtc-answer`, and `initiateOffer`.
     * Eliminates race conditions and WebRTC negotiation glare when simultaneous offers are exchanged across peers during audio startup or mic unmuting.

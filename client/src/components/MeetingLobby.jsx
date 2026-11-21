@@ -105,6 +105,7 @@ export default function MeetingLobby({
   onRequestAuth,
   onOpenDesigner,
   onOpenOrgHub,
+  onOpenDashboard,
   activeOrg,
 }) {
   const [rooms, setRooms] = useState([]);
@@ -311,6 +312,20 @@ export default function MeetingLobby({
 
           {/* Navigation Links */}
           <nav className="hidden lg:flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                if (!user) {
+                  onRequestAuth?.();
+                } else {
+                  onOpenDashboard?.();
+                }
+              }}
+              className="font-label text-label text-muted-light hover:text-on-primary px-3.5 py-1.5 transition-colors cursor-pointer flex items-center gap-1.5 rounded-full hover:bg-surface-container-highest/20"
+              title="Open My Dashboard"
+            >
+              <span className="material-symbols-outlined text-[15px]">dashboard</span>
+              <span>Dashboard</span>
+            </button>
             <a
               href="#workspaces"
               className="font-label transition-colors bg-surface-container-highest/20 text-on-primary rounded-full py-1.5 px-3.5"
@@ -358,12 +373,16 @@ export default function MeetingLobby({
             </button>
             {user ? (
               <>
-                <div className="hidden sm:flex items-center gap-2 pl-3 pr-4 py-1.5 bg-surface-container-highest/15 rounded-full">
+                <button
+                  onClick={onOpenDashboard}
+                  className="hidden sm:flex items-center gap-2 pl-3 pr-4 py-1.5 bg-surface-container-highest/15 hover:bg-surface-container-highest/30 transition-colors rounded-full cursor-pointer text-left"
+                  title="Open My Dashboard"
+                >
                   <span className="w-2 h-2 rounded-full bg-accent-orange animate-pulse" />
                   <span className="font-label text-label text-on-primary tracking-normal">
                     {user.email || user.username}
                   </span>
-                </div>
+                </button>
                 <button
                   onClick={onLogout}
                   className="hidden md:inline-flex items-center font-label-caps text-label-caps tracking-widest text-muted hover:text-on-primary transition-colors py-1 cursor-pointer"
@@ -371,8 +390,9 @@ export default function MeetingLobby({
                   SIGN OUT
                 </button>
                 <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-sm ring-2 ring-white/20"
-
+                  onClick={onOpenDashboard}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-sm ring-2 ring-white/20 cursor-pointer hover:ring-white/40 transition-all"
+                  title="Open My Dashboard"
                 >
                   <AvatarPortrait color={user.avatarColor} name={user.username} />
                 </div>

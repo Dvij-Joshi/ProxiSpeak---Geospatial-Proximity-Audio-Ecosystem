@@ -812,6 +812,158 @@ app.get('/api/auth/me', async (req, res) => {
   }
 });
 
+// ── Dashboard Summary Endpoint (Differentiates Normal vs Organization Email Users) ────
+app.get('/api/user/dashboard-summary', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized. Token required.' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    let account = null;
+    if (isDbConnected()) {
+      try {
+        if (mongoose.Types.ObjectId.isValid(decoded.id)) {
+          account = await Account.findById(decoded.id).select('-passwordHash');
+        }
+        if (!account && decoded.username) {
+          account = await Account.findByCredentials(decoded.username).select('-passwordHash');
+        }
+      } catch (_e) {}
+    }
+
+    if (!account) {
+      for (const acc of memoryAccounts.values()) {
+        if (
+          acc.id === decoded.id ||
+          acc.username.toLowerCase() === decoded.username?.toLowerCase() ||
+          acc.email?.toLowerCase() === decoded.email?.toLowerCase()
+        ) {
+          account = acc;
+          break;
+        }
+      }
+    }
+
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    const email = (account.email || '').toLowerCase().trim();
+    const username = account.username;
+    const emailDomain = email.includes('@') ? email.split('@')[1] : '';
+
+    const publicDomains = new Set([
+      'gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com',
+      'outlook.com', 'hotmail.com', 'live.com', 'msn.com',
+      'icloud.com', 'me.com', 'mac.com', 'aol.com',
+      'proton.me', 'protonmail.com', 'zoho.com', 'mail.com',
+      'gmx.com', 'yandex.com', 'fastmail.com',
+    ]);
+    const isCompanyDomain = Boolean(emailDomain && !publicDomains.has(emailDomain));
+
+    // Look up organizations for this user
+    let userOrgs = [];
+    if (isDbConnected()) {
+      try {
+        userOrgs = await Organization.find({
+          $or: [
+            { owner: { $regex: new RegExp(`^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+            { ownerEmail: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+            { 'members.username': { $regex: new RegExp(`^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+            { 'members.email': { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+          ],
+        }).sort({ createdAt: -1 }).lean();
+      } catch (_e) {}
+    }
+
+    if (!userOrgs || userOrgs.length === 0) {
+      userOrgs = Array.from(memoryOrgs.values()).filter((org) => {
+        if (!org) return false;
+        if (org.owner?.toLowerCase() === username.toLowerCase() || org.ownerEmail?.toLowerCase() === email) return true;
+        return (org.members || []).some(
+          (m) => m.username?.toLowerCase() === username.toLowerCase() || m.email?.toLowerCase() === email
+        );
+      });
+    }
+
+    const primaryOrg = userOrgs[0] || null;
+    const isOrgUser = Boolean(primaryOrg || isCompanyDomain);
+    const userRole = primaryOrg
+      ? (primaryOrg.owner?.toLowerCase() === username.toLowerCase() || primaryOrg.ownerEmail?.toLowerCase() === email
+          ? 'owner'
+          : (primaryOrg.members?.find((m) => m.username?.toLowerCase() === username.toLowerCase() || m.email?.toLowerCase() === email)?.role || 'member'))
+      : (isCompanyDomain ? 'enterprise_prospect' : 'personal');
+
+    let meetings = { all: [], active: [], upcoming: [], history: [] };
+    let layouts = [];
+    if (primaryOrg) {
+      if (isDbConnected()) {
+        try {
+          const dbMeetings = await Meeting.find({ orgId: primaryOrg.orgId }).sort({ scheduledAt: -1, createdAt: -1 }).lean();
+          if (dbMeetings && dbMeetings.length > 0) {
+            meetings.all = dbMeetings;
+            meetings.active = dbMeetings.filter((m) => m.status === 'active');
+            meetings.upcoming = dbMeetings.filter((m) => m.status === 'scheduled');
+            meetings.history = dbMeetings.filter((m) => m.status === 'completed' || m.status === 'cancelled');
+          }
+          layouts = await OfficeLayout.find({ orgId: primaryOrg.orgId }).sort({ createdAt: -1 }).lean();
+        } catch (_e) {}
+      }
+      if (meetings.all.length === 0) {
+        const memMeetings = Array.from(memoryMeetings.values()).filter((m) => m.orgId === primaryOrg.orgId);
+        meetings.all = memMeetings;
+        meetings.active = memMeetings.filter((m) => m.status === 'active');
+        meetings.upcoming = memMeetings.filter((m) => m.status === 'scheduled');
+        meetings.history = memMeetings.filter((m) => m.status === 'completed' || m.status === 'cancelled');
+      }
+      if (layouts.length === 0) {
+        layouts = Array.from(memoryLayouts.values()).filter((l) => l.orgId === primaryOrg.orgId);
+      }
+    }
+
+    // Get live rooms count & public directory for personal users
+    const activeRooms = Array.from(rooms.values()).map((r) => ({
+      roomId: r.roomId,
+      name: r.name,
+      theme: r.theme,
+      occupantCount: r.peers ? r.peers.size : 0,
+    }));
+
+    res.json({
+      accountType: isOrgUser ? 'organization' : 'personal',
+      isCompanyDomain,
+      emailDomain,
+      user: {
+        id: account._id ? account._id.toString() : account.id,
+        username: account.username,
+        email: account.email,
+        avatarColor: account.avatarColor,
+        createdAt: account.createdAt,
+      },
+      userRole,
+      primaryOrg,
+      allOrgs: userOrgs,
+      meetings,
+      layouts,
+      stats: {
+        totalOrganizations: userOrgs.length,
+        totalColleagues: primaryOrg?.members ? primaryOrg.members.length : 0,
+        activeMeetingsCount: meetings.active.length,
+        upcomingMeetingsCount: meetings.upcoming.length,
+        totalLayouts: layouts.length,
+        activePublicRoomsCount: activeRooms.length,
+      },
+      activeRooms,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate dashboard summary: ' + err.message });
+  }
+});
+
 // ── Rooms Endpoints ───────────────────────────────────────────────────────────
 
 // List all active and public rooms

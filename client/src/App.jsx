@@ -9,6 +9,7 @@ import { SERVER_URL } from './config';
 
 const OfficeDesigner = lazy(() => import('./components/OfficeDesigner'));
 const WorldCanvas = lazy(() => import('./WorldCanvas'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
 
 function LoadingScreen() {
   return <div className="boot-screen" role="status">
@@ -20,6 +21,7 @@ function LoadingScreen() {
 export default function App() {
   const [user, setUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [currentView, setCurrentView] = useState('lobby'); // 'lobby' | 'dashboard'
   const [currentRoom, setCurrentRoom] = useState(null);
   const [inviteRoomId, setInviteRoomId] = useState(null);
   const [isDesigningOffice, setIsDesigningOffice] = useState(false);
@@ -48,6 +50,9 @@ export default function App() {
       }
       if (params.get('designer') === 'true' || window.location.pathname === '/designer') {
         setIsDesigningOffice(true);
+      }
+      if (params.get('dashboard') === 'true' || params.get('view') === 'dashboard' || window.location.pathname === '/dashboard') {
+        setCurrentView('dashboard');
       }
     } catch (_e) {}
   }, []);
@@ -205,6 +210,67 @@ export default function App() {
     );
   }
 
+  // Personalized Dashboard View (Tailored for Normal vs Organization Users)
+  if (currentView === 'dashboard') {
+    return (
+      <Suspense fallback={<LoadingScreen />}>
+        <Dashboard
+          user={user}
+          activeOrg={activeOrg}
+          onJoinRoom={handleJoinRoom}
+          onOpenDesigner={(org) => {
+            setDesignerOrg(org || activeOrg);
+            setIsDesigningOffice(true);
+          }}
+          onOpenOrgHub={() => setShowOrgHub(true)}
+          onBackToLobby={() => setCurrentView('lobby')}
+          onLogout={handleLogout}
+          onRequestAuth={() => setShowAuthModal(true)}
+        />
+
+        {/* Organization & Office Layouts Hub Modal */}
+        {showOrgHub && (
+          <OrganizationHub
+            user={user}
+            currentOrg={activeOrg}
+            onSelectOrg={(org) => setActiveOrg(org)}
+            onOpenDesigner={(org) => {
+              setShowOrgHub(false);
+              setDesignerOrg(org || activeOrg);
+              setIsDesigningOffice(true);
+            }}
+            onLaunchOffice={(officeData) => {
+              setShowOrgHub(false);
+              handleJoinRoom(officeData);
+            }}
+            onLogout={handleLogout}
+            onAuthSuccess={(authData) => {
+              if (authData?.token) localStorage.setItem('proxispeak_token', authData.token);
+              if (authData?.user) {
+                localStorage.setItem('proxispeak_user', JSON.stringify(authData.user));
+                setUser(authData.user);
+              }
+            }}
+            onRequestAuth={() => setShowAuthModal(true)}
+            onClose={() => setShowOrgHub(false)}
+          />
+        )}
+
+        {/* Auth Modal Dialog */}
+        {showAuthModal && (
+          <AuthModal
+            defaultRoomName={inviteRoomId}
+            onClose={() => setShowAuthModal(false)}
+            onAuthSuccess={(authenticatedUser) => {
+              setUser(authenticatedUser);
+              setShowAuthModal(false);
+            }}
+          />
+        )}
+      </Suspense>
+    );
+  }
+
   // Workspace directory
   return (
     <>
@@ -218,6 +284,7 @@ export default function App() {
           setIsDesigningOffice(true);
         }}
         onOpenOrgHub={() => setShowOrgHub(true)}
+        onOpenDashboard={() => setCurrentView('dashboard')}
         activeOrg={activeOrg}
       />
 
