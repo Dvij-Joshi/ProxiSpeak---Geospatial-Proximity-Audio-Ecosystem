@@ -310,111 +310,6 @@ export function calculateAcoustics(localPos, remotePos, doorStates = {}, theme =
   return { distance, wallHits: 0, localRoom, remoteRoom, targetGain, filterFreq, status, dx, dy };
 }
 
-export function playKnockSound() {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const now = ctx.currentTime;
-
-    for (let i = 0; i < 3; i++) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(220 + i * 35, now + i * 0.14);
-      osc.frequency.exponentialRampToValueAtTime(80, now + i * 0.14 + 0.07);
-
-      gain.gain.setValueAtTime(0.45, now + i * 0.14);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.14 + 0.09);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + i * 0.14);
-      osc.stop(now + i * 0.14 + 0.1);
-    }
-    setTimeout(() => ctx.close().catch(() => {}), 600);
-  } catch (_e) {}
-}
-
-export function playUiChime(type) {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const now = ctx.currentTime;
-
-    if (type === 'mute') {
-      // Soft downward two-tone beep (mute)
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(480, now);
-      osc.frequency.exponentialRampToValueAtTime(280, now + 0.12);
-      gain.gain.setValueAtTime(0.18, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.15);
-    } else if (type === 'unmute') {
-      // Crisp upward chime (unmute)
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(320, now);
-      osc.frequency.exponentialRampToValueAtTime(640, now + 0.12);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.15);
-    } else if (type === 'deafen') {
-      // Low dual frequency tone
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(300, now);
-      osc.frequency.linearRampToValueAtTime(150, now + 0.18);
-      gain.gain.setValueAtTime(0.22, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.22);
-    } else if (type === 'undeafen') {
-      // Gentle twin bell chime
-      for (let i = 0; i < 2; i++) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(i === 0 ? 440 : 660, now + i * 0.08);
-        gain.gain.setValueAtTime(0.16, now + i * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.15);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + i * 0.08);
-        osc.stop(now + i * 0.08 + 0.16);
-      }
-    } else if (type === 'peer-enter') {
-      // Welcoming bell ping when a peer enters earshot
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, now);
-      osc.frequency.setValueAtTime(880, now + 0.08);
-      gain.gain.setValueAtTime(0.14, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.25);
-    }
-
-    setTimeout(() => ctx.close().catch(() => {}), 450);
-  } catch (_e) {}
-}
-
 class SpatialAudioManager {
   constructor() {
     this.audioCtx = null;
@@ -493,8 +388,7 @@ class SpatialAudioManager {
           peer._playPending = true;
           peer.audioEl.play().catch(() => {}).finally(() => { peer._playPending = false; });
         }
-        // On iOS, ensure audio element is not stuck muted
-        if (this._isIOS && !peer.usingWebAudio) {
+        if (!this.isDeafened) {
           peer.audioEl.muted = false;
         }
       }
@@ -517,8 +411,9 @@ class SpatialAudioManager {
       const newTrack = mediaStream.getAudioTracks()[0];
       if (existingTrack && newTrack && existingTrack.id === newTrack.id && existingTrack.readyState === 'live') {
         console.log(`[SpatialAudio] Track ${newTrack.id} already active for ${peerId}`);
-        if (existing.audioEl && existing.audioEl.paused) {
-          existing.audioEl.play().catch(() => {});
+        if (existing.audioEl) {
+          if (existing.audioEl.paused) existing.audioEl.play().catch(() => {});
+          if (!this.isDeafened) existing.audioEl.muted = false;
         }
         return;
       }
@@ -527,99 +422,45 @@ class SpatialAudioManager {
     this.removePeerStream(peerId);
 
     try {
-      // Detect iOS for audio element volume workarounds
-      // iOS Safari ignores volume values < 1.0 and treats near-zero as silent
-      const isiOS = this._isIOS;
-
-      // 1. HTMLAudioElement — keeps Chromium RTP decoder active; primary output on iOS
+      // HTMLAudioElement — the primary, 100% reliable hardware-accelerated playback engine across all platforms
+      // Provides crystal-clear audio with native browser echo cancellation and hardware decoding.
+      // Proximity volume attenuation (distance falloff & door isolation) is dynamically applied in updatePositions().
       const audioEl = document.createElement('audio');
       audioEl.srcObject = mediaStream;
       audioEl.autoplay = true;
       audioEl.playsInline = true;
       audioEl.setAttribute('playsinline', 'true');
       audioEl.muted = false;
-      // iOS: must set volume=1.0 so the audio element actually decodes & plays.
-      // Non-iOS: 0.0001 keeps the decoder alive without audible echo while Web Audio handles output.
-      audioEl.volume = isiOS ? 1.0 : 0.0001;
+      audioEl.volume = 1.0;
       document.body.appendChild(audioEl);
 
       audioEl.play().catch((err) => {
         console.warn(`[SpatialAudio] Autoplay pending user interaction for ${peerId}:`, err.message);
       });
 
-      // 2. Web Audio API pipeline (spatial panning, distance attenuation, wall muffling)
+      // Web Audio Analyser (for live voice activity detection & intensity meter)
       let source = null;
-      let filterNode = null;
-      let gainNode = null;
-      let pannerNode = null;
       let analyser = null;
-      let usingWebAudio = false;
 
       if (ctx && ctx.state !== 'closed') {
         try {
           source = ctx.createMediaStreamSource(mediaStream);
-
-          filterNode = ctx.createBiquadFilter();
-          filterNode.type = 'lowpass';
-          filterNode.frequency.setValueAtTime(20000, ctx.currentTime);
-          filterNode.Q.setValueAtTime(1.0, ctx.currentTime);
-
-          gainNode = ctx.createGain();
-          gainNode.gain.setValueAtTime(0, ctx.currentTime);
-
           analyser = ctx.createAnalyser();
           analyser.fftSize = 64;
           source.connect(analyser);
-
-          source.connect(filterNode);
-          filterNode.connect(gainNode);
-
-          if (typeof ctx.createStereoPanner === 'function') {
-            pannerNode = ctx.createStereoPanner();
-            pannerNode.pan.setValueAtTime(0, ctx.currentTime);
-            gainNode.connect(pannerNode);
-            // On iOS Safari, Web Audio API output is muted by the hardware silent switch
-            // and WebKit createMediaStreamSource often outputs silence.
-            // Therefore, on iOS, HTMLAudioElement is the primary audible output.
-            if (!isiOS) {
-              pannerNode.connect(ctx.destination);
-            }
-          } else {
-            if (!isiOS) {
-              gainNode.connect(ctx.destination);
-            }
-          }
-
-          usingWebAudio = !isiOS;
-
-          // On iOS, keep audioEl UNMUTED as primary audio engine
-          if (isiOS) {
-            audioEl.muted = false;
-            audioEl.volume = 1.0;
-          }
         } catch (webaudioErr) {
-          console.warn('[SpatialAudio] Web Audio setup skipped, using native audio fallback:', webaudioErr.message);
-          usingWebAudio = false;
-          // Restore iOS audio element to full volume for direct playback
-          if (isiOS) {
-            audioEl.muted = false;
-            audioEl.volume = 1.0;
-          }
+          console.warn('[SpatialAudio] Web Audio analyser setup skipped:', webaudioErr.message);
         }
       }
 
       this.peers.set(peerId, {
         source,
-        filterNode,
-        gainNode,
-        pannerNode,
         analyser,
         stream: mediaStream,
         audioEl,
-        usingWebAudio,
       });
 
-      console.log(`[SpatialAudio] Audio pipeline active for ${peerId} (WebAudio: ${usingWebAudio}, iOS: ${isiOS})`);
+      console.log(`[SpatialAudio] Audio pipeline active for ${peerId} (direct HTML5 playback + VAD analyser)`);
     } catch (err) {
       console.error(`[SpatialAudio] Failed to attach stream for ${peerId}:`, err);
     }
@@ -634,10 +475,6 @@ class SpatialAudioManager {
       return { inEarshotCount: 0, peerVolumes: {}, peerIntensities: {}, peerAcoustics: {}, localRoom: getRoomAt(0, 0, theme) };
     }
 
-    const ctx = this.audioCtx;
-    const now = ctx ? ctx.currentTime : 0;
-    const isWebAudioLive = Boolean(ctx && ctx.state === 'running');
-
     let inEarshotCount = 0;
     const peerVolumes = {};
     const peerIntensities = {};
@@ -649,8 +486,7 @@ class SpatialAudioManager {
       if (!remotePos) return;
 
       const acoustic = calculateAcoustics(localPos, remotePos, doorStates, theme);
-      let targetGain = this.isDeafened ? 0 : acoustic.targetGain;
-      const targetFilterFreq = this.isDeafened ? 350 : acoustic.filterFreq;
+      const targetGain = this.isDeafened || remotePos.penaltyUntil > Date.now() ? 0 : acoustic.targetGain;
 
       peerVolumes[peerId] = targetGain;
       peerAcoustics[peerId] = {
@@ -664,50 +500,23 @@ class SpatialAudioManager {
 
       const peer = this.peers.get(peerId);
       if (peer) {
-        if (peer.usingWebAudio && peer.gainNode && isWebAudioLive) {
-          peer.gainNode.gain.setTargetAtTime(targetGain, now, 0.03);
-
-          if (peer.filterNode) {
-            peer.filterNode.frequency.setTargetAtTime(targetFilterFreq, now, 0.03);
-          }
-
-          if (peer.pannerNode) {
-            const panValue = Math.max(-1, Math.min(1, acoustic.dx / (MAX_DISTANCE * 0.75)));
-            peer.pannerNode.pan.setTargetAtTime(panValue, now, 0.03);
-          }
-
-          // In Web Audio mode, audioEl keeps decoder alive
-          if (peer.audioEl) {
-            if (this._isIOS) {
-              // iOS: audioEl is the primary playback device! Control muted status by distance
-              peer.audioEl.volume = 1.0;
-              peer.audioEl.muted = this.isDeafened || targetGain < 0.04;
-            } else {
-              peer.audioEl.muted = false;
-              peer.audioEl.volume = targetGain > 0.04 ? 0.0001 : 0;
-            }
-            if (peer.audioEl.paused && targetGain > 0.04 && !peer._playPending) {
-              peer._playPending = true;
-              peer.audioEl.play().catch(() => {}).finally(() => { peer._playPending = false; });
-            }
-          }
-        } else if (peer.audioEl) {
-          // Direct audio element fallback if Web Audio is suspended/unsupported
-          peer.audioEl.muted = this.isDeafened;
-          if (this._isIOS) {
-            // iOS ignores fractional volume; use muted property for on/off control
-            peer.audioEl.volume = 1.0;
-            peer.audioEl.muted = this.isDeafened || targetGain < 0.04;
-          } else {
+        if (peer.audioEl) {
+          // Direct, robust, hardware-accelerated playback with proximity volume attenuation
+          peer.audioEl.muted = this.isDeafened || targetGain < 0.04;
+          if (!this._isIOS) {
             peer.audioEl.volume = this.isDeafened ? 0 : Math.max(0, Math.min(1, targetGain));
+          } else {
+            // iOS Safari ignores fractional volume; muted property provides presence control
+            peer.audioEl.volume = 1.0;
           }
+
           if (targetGain > 0.04 && peer.audioEl.paused && !peer._playPending) {
             peer._playPending = true;
             peer.audioEl.play().catch(() => {}).finally(() => { peer._playPending = false; });
           }
         }
 
-        // Live voice intensity measurement
+        // Live voice intensity measurement for avatar speech ring
         if (peer.analyser) {
           const data = new Uint8Array(peer.analyser.fftSize);
           peer.analyser.getByteTimeDomainData(data);

@@ -7,12 +7,13 @@ function shape(ctx,points,fill) {
   ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=1.5; ctx.stroke();
 }
 
-export function drawCharacter(ctx,x,y,color,{moving=false,facing=1,back=false,time=0}={}) {
+export function drawCharacter(ctx,x,y,color,{moving=false,facing=1,back=false,time=0,seat,raised,red}={}) {
   ctx.save();
   ctx.translate(x,y);
   ctx.fillStyle='rgba(32,51,52,.25)';
   ctx.beginPath(); ctx.ellipse(3,1,13,5,-.08,0,Math.PI*2); ctx.fill();
   ctx.scale(facing<0?-1:1,1);
+  if (seat) { ctx.translate(0,-5*seat); ctx.scale(1,1-.16*seat); }
   const step=moving?Math.sin(time/95)*3.4:0;
   ctx.translate(0,-Math.abs(step)*.27);
   // High-top boots, cuffed trousers, colour-block jacket, face and swept hair.
@@ -22,13 +23,15 @@ export function drawCharacter(ctx,x,y,color,{moving=false,facing=1,back=false,ti
   }
   shape(ctx,[[-10,-24],[-5,-29],[5,-29],[10,-24],[8,-10],[-8,-10]],color||'#429a8a');
   shape(ctx,[[-10,-24],[-6,-24],[-6,-14],[-10,-11],[-13,-14]],color||'#429a8a');
-  shape(ctx,[[6,-26],[11,-24],[13,-14],[9,-12],[6,-17]],color||'#429a8a');
+  ctx.save(); ctx.translate(8,-24); ctx.rotate(-2.65*(raised || 0));
+  shape(ctx,[[-2,-2],[3,0],[5,10],[1,12],[-2,7]],color||'#429a8a');
+  ctx.restore();
   if (back) {
     shape(ctx,[[-6,-26],[1,-23],[7,-26],[6,-22],[0,-20],[-6,-22]],'#526764');
     shape(ctx,[[-8,-38],[-6,-42],[3,-44],[8,-40],[9,-34],[6,-29],[-2,-28],[-7,-31]],'#394348');
   } else {
     shape(ctx,[[-5,-28],[1,-24],[5,-28],[2,-16]],'#f1daba');
-  shape(ctx,[[-7,-38],[-2,-42],[6,-40],[9,-36],[9,-31],[5,-27],[-1,-27],[-7,-32]],'#c79271');
+  shape(ctx,[[-7,-38],[-2,-42],[6,-40],[9,-36],[9,-31],[5,-27],[-1,-27],[-7,-32]],red ? '#d64839' : '#c79271');
   shape(ctx,[[-9,-36],[-8,-41],[-3,-44],[4,-43],[8,-41],[10,-37],[4,-38],[0,-35],[-3,-36],[-4,-31],[-7,-32]],'#394348');
   ctx.fillStyle=INK; ctx.fillRect(5,-34,1.8,1.7);
   }
@@ -55,7 +58,16 @@ export function drawPlayer(ctx,p,time) {
     ctx.beginPath(); ctx.ellipse(x,y,18+phase*10,8+phase*5,0,0,Math.PI*2); ctx.stroke();
     ctx.globalAlpha=1;
   }
-  drawCharacter(ctx,x,y,color,{moving,facing,back:p.back,time});
+  if (p.selected) {
+    ctx.strokeStyle='#d94b32'; ctx.lineWidth=3;
+    ctx.strokeRect(x-19,y-46,38,48);
+  }
+  const pose = (active,since) => {
+    const progress = Math.min(1,(time-(since ?? -Infinity))/180);
+    return active ? progress : 1-progress;
+  };
+  drawCharacter(ctx,x,y,color,{moving,facing,back:p.back&&!p.seat&&!p.red,time,
+    seat:pose(p.seat,p.seatAt),raised:pose(p.raised,p.handAt),red:p.red});
   ctx.restore();
 }
 
@@ -63,7 +75,7 @@ export function drawName(ctx,p) {
   const {x,y,name,muted,speaking,intensity,acoustic,volume,local}=p;
   const live=!muted && (speaking||intensity>.05);
   ctx.save(); ctx.textAlign='center'; ctx.font='bold 11px Arial';
-  const label=String(name||'Guest').slice(0,26);
+  const label=(p.raised ? '\u270b ' : '') + String(name||'Guest').slice(0,26);
   const width=ctx.measureText(label).width+26;
   ctx.fillStyle=INK; ctx.fillRect(x-width/2,y-64,width,16);
   ctx.fillStyle='#fff3d4'; ctx.fillText(label,x+5,y-52.5);
