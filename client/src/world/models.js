@@ -93,7 +93,7 @@ export function drawSpawn(ctx, {x,y,color = TEAL,variation}, {selected=false}={}
 
 // Models and collision share one rotated floor footprint. Local (u,v) are
 // fractions of that footprint, z is elevation in world units.
-export function drawModel(ctx, model, {selected=false,ghost=false,open=false,opening=open?1:0}={}) {
+export function drawModel(ctx, model, {selected=false,backrestOnly=false,ghost=false,open=false,opening=open?1:0}={}) {
   const {kind,x,y,w,h,rotation=0,variation=''} = model;
   if (!(w>0 && h>0)) return;
   ctx.save();
@@ -122,6 +122,11 @@ export function drawModel(ctx, model, {selected=false,ghost=false,open=false,ope
   const oval=(u,v,rx,ry)=>OVAL_VERTICES.map(([dx,dy])=>[u+rx*dx,v+ry*dy]);
   const color=model.color;
   const roundTable = variation==='racetrack_oval' || variation==='circular_round';
+  if (backrestOnly) {
+    box(.003,.06,.994,.15,15,12,color||TEAL);
+    ctx.restore();
+    return;
+  }
   const footprint=(roundTable && !model.seats ? oval(.5,.5,.5,.5) : rect(0,0,1,1)).map(([u,v])=>point(u,v));
   if(kind!=='door'||!open) polygon(ctx,footprint.map(([i,j])=>[i+4,j+5]),'rgba(32,51,52,.19)',null);
   function monitor(u,v,b,d,z) {

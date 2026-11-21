@@ -7,17 +7,32 @@ function shape(ctx,points,fill) {
   ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=1.5; ctx.stroke();
 }
 
-export function drawCharacter(ctx,x,y,color,{moving=false,facing=1,back=false,time=0,seat,raised,red}={}) {
+export function drawCharacter(ctx,x,y,color,{moving=false,facing=1,back=false,time=0,seat=0,raised,red,chair}={}) {
   ctx.save();
   ctx.translate(x,y);
   ctx.fillStyle='rgba(32,51,52,.25)';
   ctx.beginPath(); ctx.ellipse(3,1,13,5,-.08,0,Math.PI*2); ctx.fill();
-  ctx.scale(facing<0?-1:1,1);
-  if (seat) { ctx.translate(0,-5*seat); ctx.scale(1,1-.16*seat); }
+  const forwardX = chair ? -Math.sin(chair.angle) : 0;
+  const forwardY = chair ? Math.cos(chair.angle) : 1;
+  const sign = seat>.5 && Math.abs(forwardX)>.12 ? Math.sign(forwardX) : seat>.5 ? 1 : facing<0?-1:1;
+  ctx.scale(sign,1);
+  if (seat && chair) {
+    // Project the hip onto the cushion with the same elevation shear as the chair mesh.
+    ctx.translate(-.28*chair.height*sign*seat,(11-.8*chair.height)*seat);
+  }
   const step=moving?Math.sin(time/95)*3.4:0;
   ctx.translate(0,-Math.abs(step)*.27);
   // High-top boots, cuffed trousers, colour-block jacket, face and swept hair.
   for(const [offset,stride] of [[-7,-step],[3,step]]) {
+    if (seat && chair) {
+      const hipX = offset+3, hipY = -11;
+      const kneeX = hipX+sign*forwardX*12*seat;
+      const kneeY = hipY+forwardY*9*seat+6*(1-seat);
+      const ankleY = kneeY+8;
+      shape(ctx,[[hipX-3,hipY-2],[hipX+3,hipY-2],[kneeX+3,kneeY],[kneeX+3,ankleY],[kneeX-3,ankleY],[kneeX-3,kneeY+2],[hipX-3,hipY+4]],'#465660');
+      shape(ctx,[[kneeX-3,ankleY-1],[kneeX+3,ankleY-1],[kneeX+5,ankleY+2],[kneeX-3,ankleY+2]],'#eee0b8');
+      continue;
+    }
     shape(ctx,[[offset,-13],[offset+7,-13],[offset+6,stride-2],[offset+8,stride],[offset+8,stride+2],[offset-1,stride+2]],'#465660');
     shape(ctx,[[offset-1,stride-2],[offset+6,stride-2],[offset+10,stride],[offset+9,stride+2],[offset-1,stride+2]],'#eee0b8');
   }
@@ -45,9 +60,13 @@ export function drawEarshot(ctx,x,y) {
   ctx.restore();
 }
 
-export function drawPlayer(ctx,p,time) {
+export function drawPlayer(ctx,p,time,chair) {
   const {x,y,color,moving,local,muted,speaking,intensity,facing}=p;
   ctx.save();
+  const transition = Math.max(0,1-(time-(p.seatAt ?? -Infinity))/280);
+  if (transition && Number.isFinite(p.previousX)) {
+    ctx.translate((p.previousX-x)*transition**2,(p.previousY-y)*transition**2);
+  }
   const live=!muted && (speaking || intensity>.05);
   ctx.strokeStyle=live?'#327b64':local?'#f8edb7':'#55675d';
   ctx.lineWidth=local||live?3:1.4;
@@ -66,7 +85,7 @@ export function drawPlayer(ctx,p,time) {
     const progress = Math.min(1,(time-(since ?? -Infinity))/180);
     return active ? progress : 1-progress;
   };
-  drawCharacter(ctx,x,y,color,{moving,facing,back:p.back&&!p.seat&&!p.red,time,
+  drawCharacter(ctx,x,y,color,{moving,facing,chair,back:p.seat && chair ? Math.cos(chair.angle)<-.3 : p.back,time,
     seat:pose(p.seat,p.seatAt),raised:pose(p.raised,p.handAt),red:p.red});
   ctx.restore();
 }

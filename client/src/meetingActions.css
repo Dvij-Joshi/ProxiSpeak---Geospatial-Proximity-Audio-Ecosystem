@@ -4,8 +4,13 @@
 .meeting-actions button:disabled {opacity:.75}
 .meeting-actions output {width:100%;text-align:center;background:#ffe2ce}
 .tomato-exit {position:fixed;inset:0;z-index:9999;background:#60271ff5;color:#fff3da;display:grid;place-content:center;text-align:center;font:bold clamp(24px,5vw,66px) system-ui}
-.tomato-exit strong {position:relative;text-shadow:2px 3px #462720}
-.splash-field {position:absolute;inset:0;overflow:hidden}
-.splash-field i {position:absolute;width:19vmin;height:16vmin;background:#dd513a;border-radius:41% 59% 46% 54%;box-shadow:6vmin -5vmin 0 -4vmin #ee6948,-10vmin 4vmin 0 -5vmin #dd513a,3vmin 8vmin 0 -5vmin #ee6948;animation:tomato-splash .4s ease-out both}
-@keyframes tomato-splash {from {transform:scale(.65) rotate(-9deg)} to {transform:scale(1.3) rotate(8deg)}}
-@media(prefers-reduced-motion:reduce){.splash-field i{animation:none}}
+.tomato-exit {background:radial-gradient(ellipse at center,#78382c,#352625);justify-items:center;padding:1.5rem}
+.tomato-exit strong {position:relative;text-shadow:2px 3px #462720;font-family:var(--display),sans-serif}
+.tomato-pile {width:min(70vw,480px);overflow:visible}
+.fruit-drop,.juice-flecks,.tomato-puddle {transform-box:fill-box;transform-origin:bottom center}
+.fruit-drop {animation:fruit-land .52s cubic-bezier(.3,.05,.6,1) both}
+.fruit-late {animation-delay:.18s}
+.tomato-puddle,.juice-flecks {animation:juice-spread .4s .26s ease-out both}
+@keyframes fruit-land {0%{opacity:0;transform:translateY(-110px) rotate(-10deg)} 60%{opacity:1;transform:scale(1.12,.78)} 82%{transform:scale(.97,1.04)} 100%{transform:none}}
+@keyframes juice-spread {from{opacity:0;transform:scale(.45,.25)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.fruit-drop,.juice-flecks,.tomato-puddle{animation:none}}

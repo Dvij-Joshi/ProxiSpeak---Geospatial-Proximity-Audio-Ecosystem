@@ -70,7 +70,7 @@ export function prepareScene(scene) {
   ctx.scale(radar.width/W,radar.height/H);
   ctx.drawImage(floor,0,0);
   objects.forEach(o=>ctx.drawImage(o.image,o.x,o.y));
-  return {floor,objects,radar,seatDepth:new Map(scene.chairs.map(c => [c.id,c.depth]))};
+  return {floor,objects,radar,chairs:new Map(scene.chairs.map(c => [c.id,c]))};
 }
 
 export function paintScene(ctx,scene,prepared,players,states,camera,vw,vh,zoom,time,throws=[]) {
@@ -83,7 +83,7 @@ export function paintScene(ctx,scene,prepared,players,states,camera,vw,vh,zoom,t
   if(me) drawEarshot(ctx,me.x,me.y);
   const actors=[
     ...scene.doors.map(door=>({door,depth:door.y+door.h})),
-    ...players.map(player=>({player,depth:prepared.seatDepth.get(player.seat) ?? player.y}))
+    ...players.map(player=>({player,depth:prepared.chairs.get(player.seat)?.depth ?? player.y}))
   ].sort((a,b)=>a.depth-b.depth);
   let next=0;
   function actor({door,player}) {
@@ -92,7 +92,13 @@ export function paintScene(ctx,scene,prepared,players,states,camera,vw,vh,zoom,t
       const elapsed = Math.min(1,(time-(states[door.key]?.changedAt ?? -Infinity))/220);
       drawModel(ctx,door,{open,opening:open?elapsed:1-elapsed});
     }
-    else drawPlayer(ctx,player,time);
+    else {
+      const chair = prepared.chairs.get(player.seat || player.lastSeat);
+      drawPlayer(ctx,player,time,chair);
+      if (player.seat && chair?.model && Math.cos(chair.angle)<-.15) {
+        drawModel(ctx,chair.model,{backrestOnly:true});
+      }
+    }
   }
   for(const obj of prepared.objects) {
     while(next<actors.length && actors[next].depth<obj.depth) actor(actors[next++]);

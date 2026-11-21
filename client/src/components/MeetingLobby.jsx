@@ -1,3 +1,4 @@
+import WorkspaceDashboard from './WorkspaceDashboard';
 import { WorkspaceArt, AvatarPortrait } from './WorkspaceArt';
 import { useState, useEffect, useRef } from 'react';
 import { SERVER_URL } from '../config';
@@ -104,6 +105,7 @@ export default function MeetingLobby({
   onLogout,
   onRequestAuth,
   onOpenDesigner,
+  onResumeDraft, onSelectOrg, onDashboardHub,
   onOpenOrgHub,
   activeOrg,
 }) {
@@ -396,7 +398,10 @@ export default function MeetingLobby({
       <main className="relative z-10 w-full pt-28 bg-transparent min-h-screen">
         <div className="flex flex-col w-full">
           <div className="relative z-10 w-full max-w-[1400px] mx-auto px-margin-mobile lg:px-margin pb-space-xl">
-            <section className="workspace-hero">
+            <WorkspaceDashboard key={user?.id || user?.username || 'guest'} user={user} activeOrg={activeOrg} onSelectOrg={onSelectOrg}
+              onOpenHub={onDashboardHub} onDesign={onOpenDesigner} onResume={onResumeDraft}
+              onHost={()=>user?setShowHostModal(true):onRequestAuth()} onJoinCode={()=>inputRef.current?.focus()}/>
+            {!user && <section className="workspace-hero">
               <div className="hero-copy">
                 <h1>Find your<br /><em>workspace.</em></h1>
                 <p>Pick a floor and walk over to your team. Nearby voices come into focus as you move.</p>
@@ -422,7 +427,7 @@ export default function MeetingLobby({
               </div>
               </div>
               <div className="hero-art"><WorkspaceArt theme="office" /></div>
-            </section>
+            </section>}
 
             {/* 2. Primary Action Cards Grid (Host a Meeting vs Join via Code) */}
             <section className="w-full mt-4 mb-space-lg">
@@ -591,7 +596,7 @@ export default function MeetingLobby({
 
                   {/* Design Office Button */}
                   <button
-                    onClick={onOpenDesigner}
+                    onClick={()=>onOpenDesigner(null)}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#277970] text-white font-label text-label hover:bg-[#205e57] transition-all shadow-sm cursor-pointer"
                     title="Design a custom office layout with walls, soundproof doors, and furniture"
                   >

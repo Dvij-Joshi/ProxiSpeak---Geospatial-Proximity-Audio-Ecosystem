@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { storeDraft, clearDraft } from '../services/layoutDrafts';
+import { useLayoutEffect, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
 import { SERVER_URL } from '../config';
 
@@ -344,6 +345,7 @@ export default function OfficeDesigner({
   organization,
 
   initialLayout,
+  draftId,
 
   onBackToLobby,
 
@@ -584,6 +586,41 @@ export default function OfficeDesigner({
   ]);
 
   const [spawnPoint, setSpawnPoint] = useState(initialLayout?.spawnPoint || { x: 1100, y: 720 });
+
+  const [localId] = useState(() => draftId || (globalThis.crypto.randomUUID?.() ?? Date.now().toString(36)+Math.random().toString(36).slice(2)));
+  const [draftStatus,setDraftStatus] = useState('Saving draft');
+  const snapshot = useMemo(() => ({name:officeName,theme,width:WORLD_W,height:WORLD_H,
+    spawnPoint,walls,doors,furniture,soundZones}),[officeName,theme,spawnPoint,walls,doors,furniture,soundZones]);
+  const latestLayout = useRef(snapshot);
+  latestLayout.current = snapshot;
+  const pending = useRef(null);
+  const flushDraft = useCallback(() => {
+    if (!pending.current) return;
+    try {
+      storeDraft(user,{id:localId, orgId:organization?.orgId || null, orgName:organization?.name || null,
+        updatedAt:Date.now(), layout:pending.current});
+      pending.current = null;
+      setDraftStatus('Draft saved on this device');
+    } catch {
+      setDraftStatus('Draft could not be saved on this device');
+    }
+  },[localId,user,organization]);
+  useLayoutEffect(() => {
+    pending.current = snapshot;
+    setDraftStatus('Saving draft');
+    const timer = setTimeout(flushDraft,350);
+    return () => clearTimeout(timer);
+  },[snapshot,flushDraft]);
+  useLayoutEffect(() => {
+    const onHide = () => { if (document.hidden) flushDraft(); };
+    window.addEventListener('pagehide',flushDraft);
+    document.addEventListener('visibilitychange',onHide);
+    return () => {
+      flushDraft();
+      window.removeEventListener('pagehide',flushDraft);
+      document.removeEventListener('visibilitychange',onHide);
+    };
+  },[flushDraft]);
 
   const [selectedItem, setSelectedItem] = useState(null); // { type: 'wall'|'door'|'furniture'|'zone'|'spawn', index: number }
 
@@ -1517,7 +1554,7 @@ export default function OfficeDesigner({
 
     setIsSaving(true);
 
-    const orgId = organization?.orgId || 'acme-corp';
+    const orgId = organization?.orgId || ('personal-' + encodeURIComponent(user?.id || user?.username || localId));
 
     const payload = {
 
@@ -1558,6 +1595,11 @@ export default function OfficeDesigner({
       if (res.ok) {
 
         const saved = await res.json();
+        if (latestLayout.current === snapshot) {
+          pending.current = null;
+          clearDraft(user,localId);
+          setDraftStatus('Published');
+        }
 
         setSaveToast({
 
@@ -1579,13 +1621,14 @@ export default function OfficeDesigner({
 
     } catch (_err) {
 
+      flushDraft();
       setSaveToast({
 
         type: 'warn',
 
-        msg: 'Office layout saved locally to workspace cache!',
+        msg: 'Publishing failed. Check the draft status before closing.',
 
-        layout: payload,
+
 
       });
 
@@ -1720,6 +1763,7 @@ export default function OfficeDesigner({
 
           </button>
 
+          <small role="status" className="text-xs text-[#405f55]">{draftStatus}</small>
           <div className="h-4 w-[1px] bg-[#a7ab99]" />
 
           <div className="flex items-center gap-1.5">

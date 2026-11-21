@@ -1,4 +1,5 @@
 import './meetingActions.css';
+import TomatoExit from './components/TomatoExit';
 import { AvatarPortrait } from './components/WorkspaceArt';
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
@@ -426,11 +427,11 @@ export default function WorldCanvas({
 
       if (Math.abs(dx) > .2) peer.facing = Math.sign(dx);
       if (peerMoving) peer.back = dy < -Math.abs(dx)*.5;
-      players.push({ selected:targetRef.current===peerId, seatAt:peer.seatAt, handAt:peer.handAt, seat:peer.seat, raised:peer.raised, red:peer.penaltyUntil>Date.now(), x: peer.x, y: peer.y, color: peer.avatarColor, name: peer.username,
+      players.push({ selected:targetRef.current===peerId, lastSeat:peer.lastSeat, previousX:peer.previousX, previousY:peer.previousY, seatAt:peer.seatAt, handAt:peer.handAt, seat:peer.seat, raised:peer.raised, red:peer.penaltyUntil>Date.now(), x: peer.x, y: peer.y, color: peer.avatarColor, name: peer.username,
         moving: peerMoving, facing: peer.facing, back: peer.back, muted: peer.isMuted, speaking: peerSpeaking,
         volume: vol, intensity, acoustic });
     }
-    players.push({ seatAt:s.seatAt, handAt:s.handAt, seat:s.seat, raised:s.raised, red:s.penaltyUntil>Date.now(), x:s.x,y:s.y,color:avatarColor,name:username,moving:s.moving,facing:s.facing,back:s.back,
+    players.push({ lastSeat:s.lastSeat, previousX:s.previousX, previousY:s.previousY, seatAt:s.seatAt, handAt:s.handAt, seat:s.seat, raised:s.raised, red:s.penaltyUntil>Date.now(), x:s.x,y:s.y,color:avatarColor,name:username,moving:s.moving,facing:s.facing,back:s.back,
       local:true,muted:isMutedRef.current,speaking:isSpeakingRef.current,volume:1,
       intensity:localIntensityRef.current,acoustic:{localRoom:localRoomRef.current} });
     const time = performance.now();
@@ -676,7 +677,7 @@ export default function WorldCanvas({
         if (mine) selectTarget(null);
       } else if (actor) {
         if (event.action === 'hand') Object.assign(actor,{raised:event.raised,handAt:performance.now()});
-        else Object.assign(actor,{seatAt:performance.now(),seat:event.seat,x:event.x,y:event.y,targetX:event.x,targetY:event.y,renderX:event.x,renderY:event.y});
+        else Object.assign(actor,{lastSeat:actor.seat,previousX:actor.x,previousY:actor.y,seatAt:performance.now(),seat:event.seat,x:event.x,y:event.y,targetX:event.x,targetY:event.y,renderX:event.x,renderY:event.y});
         playUiChime(event.action==='hand'&&!event.raised?'lower':event.action);
       }
       setPeersVersion(v=>v+1);
@@ -1977,7 +1978,7 @@ export default function WorldCanvas({
             }}
           />
 
-          {removed && <div className="tomato-exit" role="alert"><div className="splash-field" aria-hidden="true">{[0,1,2,3,4,5].map(i=><i key={i} style={{left:(8+(i*33)%87)+'%',top:(10+(i*27)%80)+'%',animationDelay:i*.09+'s'}}/>)}</div><strong>You have been thrown out!</strong></div>}
+          {removed && <TomatoExit/>}
           <div className="meeting-actions" role="toolbar" aria-label="Meeting interactions">
             {penalty>0 && <output>Warning {stateRef.current.hits}/3 &middot; Mic muted for {penalty}s{stateRef.current.hits===2 && ' / Next hit removes you'}</output>}
             {(chair || stateRef.current.seat) && <button onClick={()=>action(stateRef.current.seat?'stand':'sit',{seat:chair})}>{stateRef.current.seat?'Stand up':'Sit'}</button>}

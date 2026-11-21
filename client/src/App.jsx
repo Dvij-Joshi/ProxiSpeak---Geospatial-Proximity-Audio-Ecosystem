@@ -23,9 +23,12 @@ export default function App() {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [inviteRoomId, setInviteRoomId] = useState(null);
   const [isDesigningOffice, setIsDesigningOffice] = useState(false);
+  const [initialLayout,setInitialLayout] = useState(null);
+  const [draftId,setDraftId] = useState(null);
+  const [hubTab,setHubTab] = useState('overview');
   const [designerOrg, setDesignerOrg] = useState(null);
   const [showOrgHub, setShowOrgHub] = useState(false);
-  const [activeOrg, setActiveOrg] = useState(null);
+  const [activeOrg, setActiveOrg] = useState(undefined);
 
   useEffect(() => {
     const onClick = event => {
@@ -159,8 +162,18 @@ export default function App() {
     localStorage.removeItem('proxispeak_token');
     localStorage.removeItem('proxispeak_user');
     setUser(null);
+    setActiveOrg(null);
+    setDesignerOrg(null);
     setCurrentRoom(null);
     window.history.pushState({}, '', window.location.pathname);
+  };
+
+  const openDesigner = (org=null,layout=null,id=null) => {
+    setActiveOrg(org); setDesignerOrg(org); setInitialLayout(layout); setDraftId(id);
+    setShowOrgHub(false); setIsDesigningOffice(true);
+  };
+  const openHub = (org,tab='overview') => {
+    setActiveOrg(org || null); setHubTab(tab); setShowOrgHub(true);
   };
 
   if(authChecking) return <LoadingScreen />;
@@ -170,8 +183,11 @@ export default function App() {
     return (
       <Suspense fallback={<LoadingScreen />}><OfficeDesigner
         user={user}
-        organization={designerOrg || activeOrg}
-        onBackToLobby={() => setIsDesigningOffice(false)}
+        organization={designerOrg} initialLayout={initialLayout} draftId={draftId}
+        onBackToLobby={() => {
+          setIsDesigningOffice(false);
+          window.history.replaceState({},'',window.location.pathname==='/designer'?'/':window.location.pathname);
+        }}
         onLaunchOffice={(officeData) => {
           setIsDesigningOffice(false);
           handleJoinRoom(officeData);
@@ -213,11 +229,11 @@ export default function App() {
         onJoinRoom={handleJoinRoom}
         onLogout={handleLogout}
         onRequestAuth={() => setShowAuthModal(true)}
-        onOpenDesigner={(org) => {
-          setDesignerOrg(org || activeOrg);
-          setIsDesigningOffice(true);
-        }}
-        onOpenOrgHub={() => setShowOrgHub(true)}
+        onOpenDesigner={openDesigner}
+        onResumeDraft={(draft,org)=>openDesigner(org,draft.layout,draft.id)}
+        onSelectOrg={setActiveOrg}
+        onDashboardHub={openHub}
+        onOpenOrgHub={()=>openHub(activeOrg)}
         activeOrg={activeOrg}
       />
 
@@ -227,11 +243,8 @@ export default function App() {
           user={user}
           currentOrg={activeOrg}
           onSelectOrg={(org) => setActiveOrg(org)}
-          onOpenDesigner={(org) => {
-            setShowOrgHub(false);
-            setDesignerOrg(org || activeOrg);
-            setIsDesigningOffice(true);
-          }}
+          initialTab={hubTab}
+          onOpenDesigner={openDesigner}
           onLaunchOffice={(officeData) => {
             setShowOrgHub(false);
             handleJoinRoom(officeData);

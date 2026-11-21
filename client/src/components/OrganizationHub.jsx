@@ -1,3 +1,4 @@
+import { organizationRole } from '../services/organizationRole';
 import { AvatarPortrait } from './WorkspaceArt';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { SERVER_URL } from '../config';
@@ -45,6 +46,7 @@ const DEFAULT_TEMPLATES = [
 export default function OrganizationHub({
   user,
   currentOrg,
+  initialTab = 'overview',
   onSelectOrg,
   onOpenDesigner,
   onLaunchOffice,
@@ -55,7 +57,7 @@ export default function OrganizationHub({
 }) {
   const [organizations, setOrganizations] = useState([]);
   const [selectedOrg, setSelectedOrg] = useState(currentOrg || null);
-  const [activeTab, setActiveTab] = useState('overview'); // overview, meetings, members, templates, settings
+  const [activeTab, setActiveTab] = useState(initialTab); // overview, meetings, members, templates, settings
   const [layouts, setLayouts] = useState([]);
   const [meetings, setMeetings] = useState({ all: [], active: [], upcoming: [], history: [] });
   const [loading, setLoading] = useState(true);
@@ -143,22 +145,12 @@ export default function OrganizationHub({
   // Determine current user's role in the selected organization
   const myUsername = (user?.username || '').trim().toLowerCase();
   const myEmail = (user?.email || '').trim().toLowerCase();
-  const isOwner = Boolean(
-    selectedOrg && (
-      (selectedOrg.owner && selectedOrg.owner.trim().toLowerCase() === myUsername) ||
-      (selectedOrg.ownerEmail && selectedOrg.ownerEmail.trim().toLowerCase() === myEmail)
-    )
-  );
   const myMemberRecord = (selectedOrg?.members || []).find((m) => {
     const mUser = (m.username || '').trim().toLowerCase();
     const mEmail = (m.email || '').trim().toLowerCase();
     return (myUsername && mUser === myUsername) || (myEmail && mEmail === myEmail);
   });
-  const isAdmin = Boolean(
-    isOwner ||
-    myMemberRecord?.role === 'admin' ||
-    myMemberRecord?.role === 'owner'
-  );
+  const isAdmin = organizationRole(user,selectedOrg) === 'admin';
 
   // Fetch organizations scoped strictly to authenticated user
   const fetchOrgs = async () => {
