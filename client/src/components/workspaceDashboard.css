@@ -1,22 +1,15 @@
-.workspace-dashboard .overview-banner{position:relative;isolation:isolate;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,40%);align-items:center;min-height:200px;border-radius:16px;background:linear-gradient(110deg,#17463e 10%,#346c56 100%);color:#fff9e6}
-.overview-copy{padding:24px clamp(18px,3vw,42px)}
-.overview-copy small{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:#d4e4b6;font-weight:600}
-.overview-copy h1{font:800 clamp(2.8rem,4.2vw,4.5rem)/1.06 var(--display);overflow-wrap:anywhere;margin:4px 0 8px}
-.overview-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:.82rem;color:#deebdf}
-.workspace-switch{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.77rem;margin-top:14px;color:#e1e8dc}
-.workspace-switch select{border:1px solid #98b29c;background:#fffcee;color:#214639;font-size:.84rem;border-radius:5px;padding:4px 8px;max-width:100%}
-.overview-art{position:relative;align-self:stretch;display:grid;align-items:center;background:repeating-linear-gradient(25deg,transparent 0 24px,#d6e2c514 24px 25px),repeating-linear-gradient(-25deg,transparent 0 24px,#d6e2c514 24px 25px);mask-image:linear-gradient(90deg,transparent,#000 14%)}
-.overview-art canvas{display:block;width:100%;height:215px;object-fit:contain}
-.dashboard-columns{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin-top:18px}
-.dashboard-panel{border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:clamp(16px,2vw,25px);min-width:0}
-.dashboard-panel h2{display:flex;align-items:center;gap:10px}.dashboard-panel h2 .material-symbols-outlined{border-radius:7px;background:var(--mint);color:#37715c;padding:7px;font-size:20px}
-.dashboard-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
-.dashboard-links :is(button,a),.dashboard-panel li button{padding:7px 11px;border:1px solid #bdcfc0;color:#285d49;background:#f8fbf4;border-radius:6px;font-size:.82rem;font-weight:600}
-.dashboard-agenda{margin-top:16px;border-top:1px solid var(--border);padding-top:13px;font-size:.87rem;color:var(--muted)}.dashboard-agenda h3{color:var(--fg);margin-bottom:7px}
-.dashboard-agenda button,.draft-heading,.dashboard-panel li{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.dashboard-agenda button{width:100%;padding:8px 0;text-align:left}.dashboard-agenda span,.dashboard-panel li small{color:var(--muted);font-size:.78rem}
-.draft-heading button{padding:7px 10px}.draft-empty{display:grid;place-content:center;justify-items:center;text-align:center;margin-top:15px;padding:16px;background:#f5f7ef;border:1px dashed #becbb9;border-radius:8px}
-.draft-empty>.material-symbols-outlined{color:#788f76;font-size:27px}.draft-empty strong{font-size:.87rem;margin:3px 0}.draft-empty p{color:var(--muted);font-size:.8rem}
-.dashboard-panel li{border-top:1px solid var(--border);margin-top:12px;padding:10px 0}.dashboard-panel li strong,.dashboard-panel li small{display:block;overflow-wrap:anywhere}
-@media(max-width:940px){.dashboard-columns{grid-template-columns:1fr 1fr}.draft-heading{flex-wrap:wrap}}
-@media(max-width:760px){.dashboard-columns{grid-template-columns:1fr}.workspace-dashboard .overview-banner{grid-template-columns:minmax(0,1fr) 34%;min-height:160px}.overview-art canvas{width:160%;max-width:none;height:150px;transform:translateX(-16%)}.overview-copy{padding:17px}.overview-copy h1{font-size:2.6rem}.workspace-switch{gap:3px}.dashboard-agenda button{flex-wrap:wrap}}
+.hub-heading,.meeting-board,.hub-columns,.hub-card header,.hub-row,.account-identity,.setting-row,.agenda-list button{display:flex;align-items:center;gap:16px}
+.hub-heading,.hub-card header,.setting-row,.hub-row,.draft-list li{justify-content:space-between}
+.hub-heading small,.scope-picker span{font-weight:600;letter-spacing:.06em;text-transform:uppercase}.scope-picker{display:grid;gap:5px;max-width:48%}
+.meeting-board{position:relative;overflow:hidden;isolation:isolate;justify-content:space-between;background:#214c3e;color:white;border-radius:12px;border-left:6px solid #dfc969;min-height:190px}
+.meeting-board>div:first-child{padding:clamp(20px,3vw,42px)}.desk-main .meeting-board h2{font:800 clamp(2.6rem,4vw,4rem)/1 var(--display)}.desk-main .meeting-board p{color:#dbe5d8;margin:8px 0 16px}
+.board-art{align-self:stretch;width:35%;flex:none;display:grid;place-items:center;background:repeating-linear-gradient(27deg,transparent 0 25px,#b9cba920 25px 26px),repeating-linear-gradient(-27deg,transparent 0 25px,#b9cba920 25px 26px)}
+.board-art canvas{width:100%;height:190px;object-fit:contain}.desk-main .meeting-board .primary{background:#e7d586;color:#203a30;border-color:#e7d586}.hub-actions button{color:#214635}
+.hub-columns{display:grid;grid-template-columns:1.25fr 1fr;align-items:stretch;margin-top:18px;gap:18px}
+.hub-card,.hub-empty{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:clamp(18px,2.2vw,32px);min-width:0}
+.hub-card header{margin-bottom:14px}.hub-card header button{font-size:.77rem}.desk-main .hub-row,.agenda-list button{width:100%;text-align:left;background:transparent;border:0;border-radius:0;border-top:1px solid var(--line);padding:12px 0;font-size:.9rem;font-weight:600}
+.hub-row span{color:#517c62}.agenda-list button small{margin-left:auto}.agenda-list .material-symbols-outlined,.hub-empty>.material-symbols-outlined{background:#e7ecdd;padding:8px;border-radius:7px}
+.hub-empty{text-align:center;padding-block:50px}.hub-empty h2{margin:12px}.hub-empty p{font-size:.9rem}.draft-list li{padding:16px 22px}
+.hub-account,.hub-guide{max-width:850px}.account-identity canvas{width:62px;height:62px;border-radius:12px}.setting-row{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}.desk-main [role=switch][aria-checked=true]{background:var(--green);color:white}
+.hub-guide details+details{border-top:1px solid var(--line)}.hub-guide summary{padding:16px 0;cursor:pointer;font-weight:600}.hub-guide p{padding:0 0 16px}
+@media(max-width:760px){.hub-columns{grid-template-columns:1fr}.hub-heading{align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}.hub-heading h1{margin-bottom:8px}.board-art{width:26%;overflow:hidden}.board-art canvas{width:170%;max-width:none}.meeting-board>div:first-child{padding:17px}.hub-actions{flex-wrap:wrap}.scope-picker{max-width:100%}.setting-row{flex-wrap:wrap}.agenda-list button{flex-wrap:wrap}}

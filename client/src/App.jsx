@@ -237,7 +237,7 @@ export default function App() {
   // Workspace directory
   return (
     <>
-      {user && <MeetingLobby
+      {user && !showOrgHub && <MeetingLobby
         user={user}
         onJoinRoom={handleJoinRoom}
         onLogout={handleLogout}
@@ -262,7 +262,11 @@ export default function App() {
             setShowOrgHub(false);
             handleJoinRoom(officeData);
           }}
-          onLogout={handleLogout}
+          onLogout={()=>{
+            localStorage.removeItem('proxispeak_token');
+            localStorage.removeItem('proxispeak_user');
+            setUser(null);setActiveOrg(null);setDesignerOrg(null);
+          }}
           onAuthSuccess={(authData) => {
             if (authData?.token) localStorage.setItem('proxispeak_token', authData.token);
             if (authData?.user) {

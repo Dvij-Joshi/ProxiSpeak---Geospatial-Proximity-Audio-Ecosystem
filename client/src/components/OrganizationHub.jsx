@@ -1,3 +1,5 @@
+import { DialogFrame } from '../dashboard/Dialog';
+import styles from '../dashboard/organization.css?inline';
 import { organizationRole } from '../services/organizationRole';
 import { AvatarPortrait } from './WorkspaceArt';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -61,6 +63,8 @@ export default function OrganizationHub({
   const [layouts, setLayouts] = useState([]);
   const [meetings, setMeetings] = useState({ all: [], active: [], upcoming: [], history: [] });
   const [loading, setLoading] = useState(true);
+  const [detailsState,setDetailsState]=useState('loading');
+  const [reload,setReload]=useState(0);
   const [feedback, setFeedback] = useState(null);
 
   // Modals state
@@ -185,34 +189,25 @@ export default function OrganizationHub({
   };
 
   useEffect(() => {
-    fetchOrgs();
+    if (!createdAdminCredentials) fetchOrgs();
   }, [user?.username, user?.email]);
 
-  // Fetch layouts & meetings for selected org
-  const fetchOrgDetails = async (orgId) => {
-    if (!orgId) return;
-    try {
-      // Fetch custom layouts
-      const resLayouts = await fetch(`${SERVER_URL}/api/organizations/${orgId}/layouts`);
-      if (resLayouts.ok) {
-        const ldata = await resLayouts.json();
-        setLayouts(ldata);
-      }
-
-      // Fetch meetings
-      const resMeetings = await fetch(`${SERVER_URL}/api/organizations/${orgId}/meetings`);
-      if (resMeetings.ok) {
-        const mdata = await resMeetings.json();
-        setMeetings(mdata);
-      }
-    } catch (_err) {}
-  };
-
   useEffect(() => {
-    if (selectedOrg?.orgId) {
-      fetchOrgDetails(selectedOrg.orgId);
-    }
-  }, [selectedOrg?.orgId]);
+    const id=selectedOrg?.orgId;
+    if (!id) return;
+    const controller=new AbortController();
+    const load=async resource=>{
+      const res=await fetch(SERVER_URL+'/api/organizations/'+encodeURIComponent(id)+'/'+resource,{signal:controller.signal});
+      if (!res.ok) throw Error();
+      return res.json();
+    };
+    setDetailsState('loading');
+    setLayouts([]);setMeetings({all:[],active:[],upcoming:[],history:[]});
+    Promise.all([load('layouts'),load('meetings')]).then(([rooms,events])=>{
+      if (!controller.signal.aborted) {setLayouts(rooms);setMeetings(events);setDetailsState('ready');}
+    }).catch(()=>{if (!controller.signal.aborted)setDetailsState('error');});
+    return ()=>controller.abort();
+  },[selectedOrg?.orgId,reload]);
 
   // Derived real-time email preview for Add User modal
   const derivedUserHandle = useMemo(() => {
@@ -306,7 +301,7 @@ export default function OrganizationHub({
         setSelectedOrg(created);
         setCreatedAdminCredentials(creds);
         showToast(`Organization "${created.name}" created! Review your official Admin credentials.`, 'success');
-        fetchOrgDetails(created.orgId);
+
       } else {
         const err = await res.json();
         showToast(err.error || 'Failed to create organization', 'error');
@@ -484,6 +479,10 @@ export default function OrganizationHub({
       return;
     }
 
+    if (scheduledDateTime <= new Date()) {
+      showToast('Choose a meeting time in the future.', 'error');
+      return;
+    }
     setIsScheduling(true);
     try {
       const res = await fetch(`${SERVER_URL}/api/organizations/${selectedOrg.orgId}/meetings`, {
@@ -544,7 +543,8 @@ export default function OrganizationHub({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-3 md:p-6 select-none animate-in fade-in duration-200">
+    <div className="org-workbench">
+      <style>{styles}</style>
       <div className="org-panel w-full max-w-6xl bg-[#f4edda] rounded-[28px] border border-[#9bab99] shadow-[0_32px_80px_-16px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col h-[90vh] max-h-[920px]">
         {/* ─── Top Main Navigation Bar ────────────────────────────────────────── */}
         <div className="px-6 py-4 border-b border-[#EBEAE5] flex items-center justify-between bg-[#f4edda] shrink-0">
@@ -740,7 +740,7 @@ export default function OrganizationHub({
             ) : (
               <>
             {/* Dashboard Navigation Tabs */}
-            <div className="px-6 pt-3 border-b border-[#e2dcc5] flex items-center gap-1 bg-[#f4edda] overflow-x-auto shrink-0">
+            <nav aria-label="Organization pages" className="org-pages px-6 pt-3 border-b border-[#e2dcc5] flex items-center gap-1 bg-[#f4edda] overflow-x-auto shrink-0">
               {[
                 { id: 'overview', label: 'Overview', icon: 'dashboard' },
                 { id: 'meetings', label: 'Meetings & Schedule', icon: 'calendar_month', count: meetings.upcoming?.length || 0 },
@@ -750,7 +750,7 @@ export default function OrganizationHub({
                 const isActive = activeTab === tab.id;
                 return (
                   <button
-                    key={tab.id}
+                    key={tab.id} aria-current={isActive?'page':undefined}
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-semibold transition-all border-b-2 -mb-px whitespace-nowrap ${
                       isActive
@@ -772,10 +772,12 @@ export default function OrganizationHub({
                   </button>
                 );
               })}
-            </div>
+            </nav>
 
             {/* Dashboard Tab Content Body */}
-            <div className="flex-1 p-6 overflow-y-auto bg-white flex flex-col gap-6">
+            <div className="org-page-content flex-1 p-6 overflow-y-auto bg-white flex flex-col gap-6">
+              {detailsState==='error' && <div role="alert" className="org-response">Schedules and layouts could not be loaded. <button onClick={()=>setReload(v=>v+1)}>Retry</button></div>}
+              {detailsState==='loading' && <p role="status">Loading workspace details…</p>}
               {/* ─── TAB 1: OVERVIEW ────────────────────────────────────────── */}
               {activeTab === 'overview' && (
                 <div className="flex flex-col gap-6">
@@ -1371,7 +1373,8 @@ export default function OrganizationHub({
 
       {/* ─── MODAL 1: CREATE NEW ORGANIZATION & PROVISION ADMIN ─────────────── */}
       {showCreateOrgModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <DialogFrame className="org-dialog" title="Create organization" onClose={()=>setShowCreateOrgModal(false)} busy={isCreatingOrg}>
+          {feedback?.type==='error' && <p className="org-response" role="alert">{feedback.msg}</p>}
           <div className="w-full max-w-lg bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
             {/* Studio Header */}
             <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
@@ -1538,12 +1541,13 @@ export default function OrganizationHub({
               </div>
             </form>
           </div>
-        </div>
+        </DialogFrame>
       )}
 
       {/* ─── MODAL 1.5: ADMIN CREDENTIALS GENERATED (1-CLICK ADMIN LOGIN) ───── */}
       {createdAdminCredentials && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <DialogFrame className="org-dialog" title="Administrator credentials" onClose={()=>setCreatedAdminCredentials(null)} busy={false}>
+          {feedback?.type==='error' && <p className="org-response" role="alert">{feedback.msg}</p>}
           <div className="w-full max-w-lg bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
             <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1666,12 +1670,13 @@ export default function OrganizationHub({
               </div>
             </div>
           </div>
-        </div>
+        </DialogFrame>
       )}
 
       {/* ─── MODAL 2: ADD USER (ADMIN ONLY) ─────────────────────────────────── */}
       {showAddUserModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <DialogFrame className="org-dialog" title="Organization member" onClose={()=>setShowAddUserModal(false)} busy={isAddingUser}>
+          {feedback?.type==='error' && <p className="org-response" role="alert">{feedback.msg}</p>}
           <div className="w-full max-w-lg bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
             <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1866,12 +1871,13 @@ export default function OrganizationHub({
               </form>
             )}
           </div>
-        </div>
+        </DialogFrame>
       )}
 
       {/* ─── MODAL 3: EDIT USER (ADMIN ONLY) ─────────────────────────────────── */}
       {editingMember && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <DialogFrame className="org-dialog" title="Edit member" onClose={()=>setEditingMember(null)} busy={isEditingMember}>
+          {feedback?.type==='error' && <p className="org-response" role="alert">{feedback.msg}</p>}
           <div className="w-full max-w-md bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
             <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1955,12 +1961,13 @@ export default function OrganizationHub({
               </div>
             </form>
           </div>
-        </div>
+        </DialogFrame>
       )}
 
       {/* ─── MODAL 4: DELETE USER CONFIRMATION ──────────────────────────────── */}
       {deletingMember && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <DialogFrame className="org-dialog" title="Remove member" onClose={()=>setDeletingMember(null)} busy={isDeletingMember}>
+          {feedback?.type==='error' && <p className="org-response" role="alert">{feedback.msg}</p>}
           <div className="w-full max-w-sm bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
             <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -2009,12 +2016,13 @@ export default function OrganizationHub({
               </div>
             </div>
           </div>
-        </div>
+        </DialogFrame>
       )}
 
       {/* ─── MODAL 5: START INSTANT MEETING (TEMPLATE SELECTOR) ─────────────── */}
       {showStartMeetingModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <DialogFrame className="org-dialog" title="Start meeting" onClose={()=>setShowStartMeetingModal(false)} busy={isStartingMeeting}>
+          {feedback?.type==='error' && <p className="org-response" role="alert">{feedback.msg}</p>}
           <div className="w-full max-w-2xl bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
             <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -2139,12 +2147,13 @@ export default function OrganizationHub({
               </div>
             </div>
           </div>
-        </div>
+        </DialogFrame>
       )}
 
       {/* ─── MODAL 6: SCHEDULE MEETING (ADMIN & MEMBERS) ────────────────────── */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <DialogFrame className="org-dialog" title="Schedule meeting" onClose={()=>setShowScheduleModal(false)} busy={isScheduling}>
+          {feedback?.type==='error' && <p className="org-response" role="alert">{feedback.msg}</p>}
           <div className="w-full max-w-lg bg-[#f4edda] rounded-[26px] border border-[#9bab99] shadow-[0_24px_60px_-12px_rgba(20,20,19,0.22)] overflow-hidden flex flex-col">
             <div className="px-6 py-5 bg-[#f4edda] border-b border-[#EBEAE5] flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -2261,7 +2270,7 @@ export default function OrganizationHub({
               </div>
             </form>
           </div>
-        </div>
+        </DialogFrame>
       )}
     </div>
   );
