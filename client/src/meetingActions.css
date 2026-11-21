@@ -1,0 +1,11 @@
+.meeting-actions {position:absolute;bottom:76px;left:50%;transform:translateX(-50%);display:flex;justify-content:center;flex-wrap:wrap;gap:4px;width:max-content;max-width:95%;z-index:20}
+.meeting-actions button,.meeting-actions output {background:#fff4d8;color:#203334;border:2px solid #203334;border-radius:4px;padding:5px 9px;font:600 13px system-ui}
+.meeting-actions button[aria-pressed=true] {background:#a4d8c2}
+.meeting-actions button:disabled {opacity:.75}
+.meeting-actions output {width:100%;text-align:center;background:#ffe2ce}
+.tomato-exit {position:fixed;inset:0;z-index:9999;background:#60271ff5;color:#fff3da;display:grid;place-content:center;text-align:center;font:bold clamp(24px,5vw,66px) system-ui}
+.tomato-exit strong {position:relative;text-shadow:2px 3px #462720}
+.splash-field {position:absolute;inset:0;overflow:hidden}
+.splash-field i {position:absolute;width:19vmin;height:16vmin;background:#dd513a;border-radius:41% 59% 46% 54%;box-shadow:6vmin -5vmin 0 -4vmin #ee6948,-10vmin 4vmin 0 -5vmin #dd513a,3vmin 8vmin 0 -5vmin #ee6948;animation:tomato-splash .4s ease-out both}
+@keyframes tomato-splash {from {transform:scale(.65) rotate(-9deg)} to {transform:scale(1.3) rotate(8deg)}}
+@media(prefers-reduced-motion:reduce){.splash-field i{animation:none}}

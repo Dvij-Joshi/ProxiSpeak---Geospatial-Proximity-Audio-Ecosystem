@@ -4,6 +4,7 @@ import MeetingLobby from './components/MeetingLobby';
 
 
 import OrganizationHub from './components/OrganizationHub';
+import { playUiChime } from './services/meetingSounds';
 import { SERVER_URL } from './config';
 
 const OfficeDesigner = lazy(() => import('./components/OfficeDesigner'));
@@ -25,6 +26,14 @@ export default function App() {
   const [designerOrg, setDesignerOrg] = useState(null);
   const [showOrgHub, setShowOrgHub] = useState(false);
   const [activeOrg, setActiveOrg] = useState(null);
+
+  useEffect(() => {
+    const onClick = event => {
+      if (event.target.closest?.('button:not(:disabled)')) playUiChime('click');
+    };
+    document.addEventListener('click',onClick,true);
+    return () => document.removeEventListener('click',onClick,true);
+  }, []);
 
   // Check URL query parameters (?room=roomId)
   useEffect(() => {

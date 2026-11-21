@@ -93,7 +93,7 @@ export function drawSpawn(ctx, {x,y,color = TEAL,variation}, {selected=false}={}
 
 // Models and collision share one rotated floor footprint. Local (u,v) are
 // fractions of that footprint, z is elevation in world units.
-export function drawModel(ctx, model, {selected=false,ghost=false,open=false}={}) {
+export function drawModel(ctx, model, {selected=false,ghost=false,open=false,opening=open?1:0}={}) {
   const {kind,x,y,w,h,rotation=0,variation=''} = model;
   if (!(w>0 && h>0)) return;
   ctx.save();
@@ -147,10 +147,11 @@ export function drawModel(ctx, model, {selected=false,ghost=false,open=false}={}
     const surface=color || (glass?'#a1d1cb':kind==='door'?GOLD:'#809997');
     const height=kind==='door'?18:24;
     const segment=(start,length,z,rise,tint)=>vertical?box(0,start,1,length,z,rise,tint):box(start,0,length,1,z,rise,tint);
-    if(open && kind==='door') {
+    if(opening>0 && kind==='door') {
       segment(0,DOOR_POST,0,18,TEAL);
       segment(1-DOOR_POST,DOOR_POST,0,18,TEAL);
       segment(.09,.82,0,0,'#b4cead');
+      if (opening < 1) segment(.08,.84*(1-opening),0,height,surface);
     } else {
       segment(0,1,0,height,surface);
       if(glass) {

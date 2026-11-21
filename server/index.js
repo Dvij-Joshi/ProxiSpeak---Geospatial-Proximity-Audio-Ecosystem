@@ -1,3 +1,6 @@
+import { makeScene, THEMES } from '../client/src/world/scenes.js';
+import { installMeetingActions, meetingHistory, expireEmptyMeeting } from './meetingActions.js';
+import { countWallIntersections } from '../client/src/services/spatialAudio.js';
 import { zoneForDoor } from '../client/src/world/roomGeometry.js';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -840,6 +843,7 @@ app.get('/api/rooms', async (_req, res) => {
 
     // 3. DB rooms
     for (const r of dbRooms) {
+      memoryRooms.set(r.roomId,r);
       allRoomsMap.set(r.roomId, {
         roomId: r.roomId,
         name: r.name,
@@ -927,6 +931,7 @@ app.get('/api/rooms/:roomId', async (req, res) => {
       try {
         const dbRoom = await Room.findOne({ roomId }).lean();
         if (dbRoom) {
+          memoryRooms.set(roomId,dbRoom);
           return res.json({
             roomId: dbRoom.roomId,
             name: dbRoom.name,
@@ -2027,7 +2032,13 @@ io.on('connection', (socket) => {
       const spawnY = (typeof y === 'number' && Number.isFinite(y) && y > 0)
         ? y
         : 720 + Math.floor((Math.random() - 0.5) * 60);
-      const userMuted = typeof isMuted === 'boolean' ? isMuted : true;
+      const history = meetingHistory(roomId, username);
+      if (history.hits >= 3) {
+        socket.emit('meeting-removed');
+        expireEmptyMeeting(roomId, getRoomUsers(roomId));
+        return socket.disconnect(true);
+      }
+      const userMuted = history.penaltyUntil > Date.now() || isMuted !== false;
 
       const roomUsers = getRoomUsers(roomId);
 
@@ -2052,7 +2063,8 @@ io.on('connection', (socket) => {
         }
       }
 
-      roomUsers.set(socket.id, { username, avatarColor, x: spawnX, y: spawnY, isMuted: userMuted });
+      if (roomUsers.has(socket.id)) return;
+      roomUsers.set(socket.id, { ...history, username, avatarColor, x: spawnX, y: spawnY, isMuted: userMuted });
 
       socket.join(roomId);
       socket.data.roomId  = roomId;
@@ -2061,19 +2073,21 @@ io.on('connection', (socket) => {
       socket.data.y = spawnY;
 
       socket.emit('room-state', {
-        selfId: socket.id,
+        serverTime: Date.now(), selfId: socket.id,
         users: [...roomUsers.entries()].map(([id, u]) => ({
           id,
           username:    u.username,
           avatarColor: u.avatarColor,
           x: u.x,
           y: u.y,
+          throwCount: u.throwCount || 0, cooldownUntil: u.cooldownUntil || 0, seat: u.seat, raised: !!u.raised, hits: u.hits || 0, penaltyUntil: u.penaltyUntil || 0,
           isMuted:     typeof u.isMuted === 'boolean' ? u.isMuted : true,
         })),
         doors: Object.fromEntries(getRoomDoors(roomId)),
       });
 
       socket.to(roomId).emit('user-joined', {
+        penaltyRemaining: Math.max(0,history.penaltyUntil-Date.now()),
         id: socket.id,
         username,
         avatarColor,
@@ -2105,11 +2119,22 @@ io.on('connection', (socket) => {
   });
 
   // ── move (Anti-Spam Throttled at 45/sec) ─────────────────────────────────────
+  installMeetingActions(socket, io, getRoomUsers, (roomId, actor) => {
+    const layout = memoryLayouts.get(roomId);
+    const theme = memoryRooms.get(roomId)?.theme || layout?.theme || 'office';
+    const scene = makeScene(THEMES[theme] || THEMES.office, layout);
+    const doors = Object.fromEntries(getRoomDoors(roomId));
+    return scene.chairs.filter(chair => Math.hypot(actor.x-chair.x,actor.y-chair.y) <= 52 &&
+      !countWallIntersections(actor.x,actor.y,chair.x,chair.y,doors,scene));
+  });
+
   socket.on('move', ({ x, y, roomId = 'main-office' }) => {
     if (!checkThrottle('move', 45, 1000)) {
       return; // Discard movement packets beyond 45/sec
     }
 
+    if (socket.data.roomId !== roomId || getRoomUsers(roomId).get(socket.id)?.seat ||
+        !Number.isFinite(x) || !Number.isFinite(y)) return;
     socket.data.x = x;
     socket.data.y = y;
     const user = getRoomUsers(roomId).get(socket.id);
@@ -2167,7 +2192,8 @@ io.on('connection', (socket) => {
     const targetRoomId = (roomId && roomId !== 'main-office') ? roomId : (socket.data.roomId || roomId || 'main-office');
     const roomUsers = getRoomUsers(targetRoomId);
     const user = roomUsers.get(socket.id);
-    const mutedBool = Boolean(isMuted);
+    if (!user || socket.data.roomId !== targetRoomId) return;
+    const mutedBool = user.penaltyUntil > Date.now() || Boolean(isMuted);
     if (user) {
       user.isMuted = mutedBool;
     }
@@ -2478,6 +2504,7 @@ io.on('connection', (socket) => {
       if (rId) {
         const roomUsers = getRoomUsers(rId);
         roomUsers.delete(socket.id);
+        expireEmptyMeeting(rId, roomUsers);
         socket.leave(rId);
         io.to(rId).emit('user-left', { id: socket.id });
         console.log(`[Room] "${username}" left room "${rId}" | online: ${roomUsers.size}`);
@@ -2496,6 +2523,7 @@ io.on('connection', (socket) => {
       if (roomId) {
         const roomUsers = getRoomUsers(roomId);
         roomUsers.delete(socket.id);
+        expireEmptyMeeting(roomId, roomUsers);
         io.to(roomId).emit('user-left', { id: socket.id });
         console.log(`[Room] "${username}" left "${roomId}" | online: ${roomUsers.size}`);
 

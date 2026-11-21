@@ -94,6 +94,21 @@ export function makeScene(base,layout,name) {
     doors:base.doors.map(d=>({...d})),
     models:base.models.map(m=>({...m})),
   };
+  scene.chairs = scene.models.flatMap(m => {
+    if (m.kind !== 'chair' && !(m.kind === 'table' && m.seats)) return [];
+    const angle = (m.rotation||0)*Math.PI/180;
+    const depth = m.y + (m.h+Math.abs(m.w*Math.sin(angle))+Math.abs(m.h*Math.cos(angle)))/2;
+    if (m.kind === 'chair') return [{id:m.x+','+m.y, x:m.x+m.w/2, y:m.y+m.h, depth}];
+    const count = Math.min(16,Math.floor(m.seats)), back = Math.ceil(count/2);
+    return Array.from({length:count},(_,i) => {
+      const rear = i<back;
+      const u = .06 + .88*((rear?i:i-back)+.5)/(rear?back:count-back);
+      const dx = (u-.5)*m.w, dy = (rear?-.425:.425)*m.h;
+      return {id:m.x+','+m.y+':'+i,depth,
+        x:m.x+m.w/2+Math.cos(angle)*dx-Math.sin(angle)*dy,
+        y:m.y+m.h/2+Math.sin(angle)*dx+Math.cos(angle)*dy};
+    });
+  });
   scene.barriers=scene.models.filter(m=>m.kind==='wall'||m.kind==='window');
   scene.zones=scene.zones.map(z=>{
     const door=scene.doors.find(d=>zoneForDoor(scene.zones,d)===z);

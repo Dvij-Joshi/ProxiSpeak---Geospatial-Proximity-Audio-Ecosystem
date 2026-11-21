@@ -1,7 +1,9 @@
+import './meetingActions.css';
 import { AvatarPortrait } from './components/WorkspaceArt';
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
-import { spatialAudio, MAX_DISTANCE, W, H, isDoorOpen, getRoomAt, playKnockSound, playUiChime } from './services/spatialAudio';
+import { spatialAudio, MAX_DISTANCE, W, H, countWallIntersections, isDoorOpen, getRoomAt } from './services/spatialAudio';
+import { playKnockSound, playUiChime } from './services/meetingSounds';
 import { webrtc } from './services/webrtc';
 import { SERVER_URL } from './config';
 import { THEMES, makeScene } from './world/scenes';
@@ -72,6 +74,34 @@ export default function WorldCanvas({
   const socketRef   = useRef(null);
   const lastEmitRef = useRef(0);
 
+  const shots = useRef([]);
+  const targetRef = useRef(null);
+  const [target, setTarget] = useState(null);
+  const selectTarget = value => { targetRef.current = value; setTarget(value); };
+  const [removed,setRemoved] = useState(false);
+  const [sfx,setSfx] = useState(() => localStorage.getItem('meeting-sfx') !== 'off');
+  const [chair,setChair] = useState(null);
+  const [cooldown,setCooldown] = useState(0);
+  const [penalty,setPenalty] = useState(0);
+  const action = (type, data={}) => {
+    if (socketRef.current?.connected) socketRef.current.timeout(5000).emit('meeting-action',{action:type,...data},
+      (_error,message) => { if (message) showToast(message,'warn'); });
+  };
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const me = stateRef.current, now = Date.now();
+      const occupied = new Set(Object.values(peersRef.current).map(p => p.seat));
+      let closest = null, distance = 50;
+      for (const c of themeRef.current.chairs) {
+        const d = Math.hypot(me.x-c.x,me.y-c.y);
+        if (d < distance && !occupied.has(c.id) && !countWallIntersections(me.x,me.y,c.x,c.y,doorsRef.current,themeRef.current)) { closest=c.id; distance=d; }
+      }
+      setChair(closest);
+      setCooldown(Math.max(0,Math.ceil(((me.cooldownUntil||0)-now)/1000)));
+      setPenalty(Math.max(0,Math.ceil(((me.penaltyUntil||0)-now)/1000)));
+    },200);
+    return () => clearInterval(timer);
+  }, []);
   // Door States & Toast Notifications
   const [doors, setDoors] = useState({
     'meeting-room': { isOpen: true, accessed: false, changedBy: 'System' },
@@ -242,6 +272,7 @@ export default function WorldCanvas({
   // Leave room / End call handler
   const handleLeaveCall = useCallback(() => {
     try {
+      playUiChime('leave');
       webrtc.closeAll();
       spatialAudio.destroy();
       if (socketRef.current) {
@@ -395,14 +426,16 @@ export default function WorldCanvas({
 
       if (Math.abs(dx) > .2) peer.facing = Math.sign(dx);
       if (peerMoving) peer.back = dy < -Math.abs(dx)*.5;
-      players.push({ x: peer.x, y: peer.y, color: peer.avatarColor, name: peer.username,
+      players.push({ selected:targetRef.current===peerId, seatAt:peer.seatAt, handAt:peer.handAt, seat:peer.seat, raised:peer.raised, red:peer.penaltyUntil>Date.now(), x: peer.x, y: peer.y, color: peer.avatarColor, name: peer.username,
         moving: peerMoving, facing: peer.facing, back: peer.back, muted: peer.isMuted, speaking: peerSpeaking,
         volume: vol, intensity, acoustic });
     }
-    players.push({ x:s.x,y:s.y,color:avatarColor,name:username,moving:s.moving,facing:s.facing,back:s.back,
+    players.push({ seatAt:s.seatAt, handAt:s.handAt, seat:s.seat, raised:s.raised, red:s.penaltyUntil>Date.now(), x:s.x,y:s.y,color:avatarColor,name:username,moving:s.moving,facing:s.facing,back:s.back,
       local:true,muted:isMutedRef.current,speaking:isSpeakingRef.current,volume:1,
       intensity:localIntensityRef.current,acoustic:{localRoom:localRoomRef.current} });
-    paintScene(ctx,activeTheme,sceneArtRef.current,players,doorsRef.current,cameraRef.current,vw,vh,z,performance.now());
+    const time = performance.now();
+    if (shots.current.length) shots.current = shots.current.filter(shot => time-shot.start<720);
+    paintScene(ctx,activeTheme,sceneArtRef.current,players,doorsRef.current,cameraRef.current,vw,vh,z,time,shots.current);
     ctx.save();
     ctx.font='bold 11px Arial';
     const connected=socketRef.current?.connected;
@@ -422,6 +455,7 @@ export default function WorldCanvas({
 
   // Audio Control Handlers
   const handleToggleMic = async () => {
+    if (stateRef.current.penaltyUntil > Date.now()) return;
     spatialAudio.resumeAll();
     setAudioUnlocked(true);
 
@@ -430,8 +464,8 @@ export default function WorldCanvas({
         const audioCtx = spatialAudio.ensureContext();
         await webrtc.startMicrophone(audioCtx);
         setMicActive(true);
-        isMutedRef.current = false;
-        setIsMuted(false);
+        isMutedRef.current = webrtc.isMuted;
+        setIsMuted(webrtc.isMuted);
         playUiChime('unmute');
         await refreshAudioInputDevices();
         showToast('Microphone active. Connected to meeting voice.', 'success');
@@ -603,8 +637,52 @@ export default function WorldCanvas({
       });
     });
 
+    const timers = new Set();
+    const later = (callback,delay) => {
+      const timer = setTimeout(() => { timers.delete(timer); callback(); },delay);
+      timers.add(timer);
+    };
+    const removeMember = () => {
+      setRemoved(true);
+      webrtc.closeAll();
+      later(handleLeaveCall,2200);
+    };
+    const muteForPenalty = until => {
+      webrtc.enforcePenalty(until);
+      isPttActiveRef.current = false;
+      setIsPttActive(false);
+      isMutedRef.current = true;
+      setIsMuted(true);
+    };
+    socket.on('meeting-removed',removeMember);
+    socket.on('meeting-update', event => {
+      const mine = event.id === socket.id;
+      const actor = mine ? stateRef.current : peersRef.current[event.id];
+      if (event.action === 'throw') {
+        const victim = event.target === socket.id ? stateRef.current : peersRef.current[event.target];
+        if (mine) stateRef.current.throwCount = event.throwCount;
+        if (mine) stateRef.current.cooldownUntil = Date.now()+event.cooldownUntil-event.serverTime;
+        if (victim) Object.assign(victim,{hits:event.hits,isMuted:true,penaltyUntil:Date.now()+event.penaltyUntil-event.serverTime});
+        shots.current.push({...event,start:performance.now()});
+        playUiChime('throw');
+        later(() => {
+          playUiChime('impact');
+          if (victim === stateRef.current) later(()=>playUiChime(event.hits===3?'removed':'warning'),130);
+        },400);
+        if (victim === stateRef.current) {
+          muteForPenalty(victim.penaltyUntil);
+          if (event.hits === 3) removeMember();
+        }
+        if (mine) selectTarget(null);
+      } else if (actor) {
+        if (event.action === 'hand') Object.assign(actor,{raised:event.raised,handAt:performance.now()});
+        else Object.assign(actor,{seatAt:performance.now(),seat:event.seat,x:event.x,y:event.y,targetX:event.x,targetY:event.y,renderX:event.x,renderY:event.y});
+        playUiChime(event.action==='hand'&&!event.raised?'lower':event.action);
+      }
+      setPeersVersion(v=>v+1);
+    });
     // Populate existing peers and initiate WebRTC connections
-    socket.on('room-state', ({ selfId, users, doors: initialDoors }) => {
+    socket.on('room-state', ({ selfId, users, doors: initialDoors, serverTime = Date.now() }) => {
       if (initialDoors) {
         setDoors((prev) => {
           const next = { ...prev };
@@ -626,10 +704,17 @@ export default function WorldCanvas({
       peersRef.current = {};
       const myNameNorm = username?.trim().toLowerCase();
       for (const u of users) {
+        u.penaltyUntil = Date.now()+((u.penaltyUntil||0)-serverTime);
+        if (u.id === selfId) {
+          Object.assign(stateRef.current,{throwCount:u.throwCount, seat:u.seat, raised:u.raised, hits:u.hits, penaltyUntil:u.penaltyUntil,
+            cooldownUntil:Date.now()+((u.cooldownUntil||0)-serverTime)});
+          if (u.penaltyUntil > Date.now()) muteForPenalty(u.penaltyUntil);
+          playUiChime('join');
+        }
         const uNameNorm = u.username?.trim().toLowerCase();
         if (u.id !== selfId && (!myNameNorm || uNameNorm !== myNameNorm)) {
           peersRef.current[u.id] = {
-            x: u.x,
+            ...u, x: u.x,
             y: u.y,
             targetX: u.x,
             targetY: u.y,
@@ -660,9 +745,11 @@ export default function WorldCanvas({
             changedBy: changedBy || 'Member',
           },
         };
+        next[key].changedAt = performance.now();
         doorsRef.current = next;
         return next;
       });
+      playUiChime(isOpen?'open':'close');
       const dName = themeRef.current.doorLookup[key]?.name || key;
       showToastRef.current?.(`${changedBy || 'Member'} ${isOpen ? 'opened' : 'closed'} the ${dName} door`, isOpen ? 'success' : 'warn');
     });
@@ -727,13 +814,15 @@ export default function WorldCanvas({
     });
 
     // Existing user gets notified of new peer
-    socket.on('user-joined', ({ id, username: uname, avatarColor: ucolor, x, y, isMuted: peerMuted }) => {
+    socket.on('user-joined', ({ id, username: uname, avatarColor: ucolor, x, y, isMuted: peerMuted, penaltyRemaining=0 }) => {
       const myNameNorm = username?.trim().toLowerCase();
       const uNameNorm = uname?.trim().toLowerCase();
       if (id === socket.id || (myNameNorm && uNameNorm === myNameNorm)) {
         return;
       }
+      playUiChime('join');
       peersRef.current[id] = {
+        penaltyUntil: Date.now()+penaltyRemaining,
         x,
         y,
         targetX: x,
@@ -771,6 +860,8 @@ export default function WorldCanvas({
 
     // Peer leaves
     socket.on('user-left', ({ id }) => {
+      playUiChime('leave');
+      if (targetRef.current===id) selectTarget('pick');
       delete peersRef.current[id];
       delete peerVolumesRef.current[id];
       delete peerIntensitiesRef.current[id];
@@ -815,12 +906,12 @@ export default function WorldCanvas({
       }
 
       // Hotkey: Spacebar (held) -> Push-To-Talk Walkie-Talkie
-      if (e.key === ' ' && !e.repeat && isMutedRef.current) {
+      if (e.key === ' ' && !e.repeat && webrtc.localStream && isMutedRef.current && !(stateRef.current.penaltyUntil>Date.now())) {
         isPttActiveRef.current = true;
         setIsPttActive(true);
         webrtc.toggleMute(roomId);
-        isMutedRef.current = false;
-        setIsMuted(false);
+        isMutedRef.current = webrtc.isMuted;
+        setIsMuted(webrtc.isMuted);
         playUiChime('unmute');
       }
     };
@@ -872,6 +963,7 @@ export default function WorldCanvas({
         dy = speed * t.dy / t.length;
       }
 
+      if (s.seat) { dx = 0; dy = 0; }
       const prevX = s.x, prevY = s.y;
       if (dx && !blocked(activeTheme, s.x + dx, s.y, doorsRef.current)) s.x += dx;
       if (dy && !blocked(activeTheme, s.x, s.y + dy, doorsRef.current)) s.y += dy;
@@ -1006,6 +1098,7 @@ export default function WorldCanvas({
       window.removeEventListener('pointerdown', unlockAudio);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       cancelAnimationFrame(rafRef.current);
+      timers.forEach(clearTimeout);
       clearInterval(keepAliveTimer);
       if (doorAutoCloseTimerRef.current) clearTimeout(doorAutoCloseTimerRef.current);
       socket.disconnect();
@@ -1833,7 +1926,7 @@ export default function WorldCanvas({
             aria-label="Office map. Move with WASD, arrow keys, or touch and drag. Tap a door to operate it."
             onPointerDown={e => {
               draggedRef.current = false;
-              if (e.pointerType === 'mouse') return;
+              if (target !== null || e.pointerType === 'mouse') return;
               e.currentTarget.setPointerCapture(e.pointerId);
               touchRef.current = {id:e.pointerId,x:e.clientX,y:e.clientY,length:0};
             }}
@@ -1855,6 +1948,12 @@ export default function WorldCanvas({
               const wx = (sx - canvas.width / 2) / z + cameraRef.current.x;
               const wy = (sy - canvas.height / 2) / z + cameraRef.current.y;
 
+              if (target !== null) {
+                const hit = Object.entries(peersRef.current).find(([,p]) =>
+                  Math.abs(wx-p.x)<22 && wy>=p.y-65 && wy<=p.y+6);
+                selectTarget(hit?.[0] || 'pick');
+                return;
+              }
               // Check if user clicked a door to toggle
               if (activeTheme.hasDoors) {
                 for (const [key, d] of Object.entries(doorLookup)) {
@@ -1878,6 +1977,18 @@ export default function WorldCanvas({
             }}
           />
 
+          {removed && <div className="tomato-exit" role="alert"><div className="splash-field" aria-hidden="true">{[0,1,2,3,4,5].map(i=><i key={i} style={{left:(8+(i*33)%87)+'%',top:(10+(i*27)%80)+'%',animationDelay:i*.09+'s'}}/>)}</div><strong>You have been thrown out!</strong></div>}
+          <div className="meeting-actions" role="toolbar" aria-label="Meeting interactions">
+            {penalty>0 && <output>Warning {stateRef.current.hits}/3 &middot; Mic muted for {penalty}s{stateRef.current.hits===2 && ' / Next hit removes you'}</output>}
+            {(chair || stateRef.current.seat) && <button onClick={()=>action(stateRef.current.seat?'stand':'sit',{seat:chair})}>{stateRef.current.seat?'Stand up':'Sit'}</button>}
+            <button aria-pressed={!!stateRef.current.raised} onClick={()=>action('hand',{raised:!stateRef.current.raised})}>&#9995; {stateRef.current.raised?'Lower':'Raise'} hand</button>
+            <button disabled={cooldown>0 || target==='pick'} onClick={()=>{
+              if (target) action('throw',{target,sequence:(stateRef.current.throwCount||0)+1});
+              else selectTarget('pick');
+            }}><span aria-hidden="true">&#127813; </span>{cooldown?cooldown+'s':target==='pick'?'Select an avatar':target?'Throw at '+(peersRef.current[target]?.username||'participant'):'Throw tomato'}</button>
+            {target && <button onClick={()=>selectTarget(null)}>Cancel</button>}
+            <button aria-pressed={sfx} onClick={()=>{localStorage.setItem('meeting-sfx',sfx?'off':'on');setSfx(!sfx);}}>Sounds {sfx?'on':'off'}</button>
+          </div>
           {/* Floating Audio Controls HUD (Bottom-Center) */}
           <div className="world-audio"
             style={{
@@ -1900,7 +2011,7 @@ export default function WorldCanvas({
             }}
           >
             {/* Microphone Toggle Button */}
-            <button
+            <button disabled={penalty>0}
               onClick={(e) => {
                 e.currentTarget.blur();
                 canvasRef.current?.focus();
@@ -2965,8 +3076,8 @@ export default function WorldCanvas({
                         const audioCtx = spatialAudio.ensureContext();
                         await webrtc.switchAudioInputDevice(devId);
                         setMicActive(true);
-                        isMutedRef.current = false;
-                        setIsMuted(false);
+                        isMutedRef.current = webrtc.isMuted;
+                        setIsMuted(webrtc.isMuted);
                         showToast('Switched microphone device', 'success');
                         await refreshAudioInputDevices();
                         refreshDiagnostics();
@@ -3088,8 +3199,8 @@ export default function WorldCanvas({
                           const audioCtx = spatialAudio.ensureContext();
                           await webrtc.startMicrophone(audioCtx);
                           setMicActive(true);
-                          isMutedRef.current = false;
-                          setIsMuted(false);
+                          isMutedRef.current = webrtc.isMuted;
+                          setIsMuted(webrtc.isMuted);
                           await refreshAudioInputDevices();
                           refreshDiagnostics();
                           showToast('Microphone re-acquired and unmuted', 'success');

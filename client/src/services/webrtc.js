@@ -46,6 +46,7 @@ class WebRTCManager {
     this.peerMeta = new Map();
     this.negotiations = new Map();
     this.iceCandidateQueues = new Map();
+    this.mediaSession = 0;
     this.isMuted = true;
     this.currentRoomId = 'main-office';
     this.iceServers = DEFAULT_ICE_SERVERS;
@@ -325,6 +326,16 @@ class WebRTCManager {
    * Progressive getUserMedia: tries ideal constraints first, falls back to basic.
    */
   async _acquireMicStream(preferredDeviceId = null) {
+    const session = this.mediaSession;
+    const stream = await this._requestMicStream(preferredDeviceId);
+    if (session !== this.mediaSession) {
+      stream.getTracks().forEach(track => track.stop());
+      throw new Error('Meeting ended while opening the microphone');
+    }
+    return stream;
+  }
+
+  async _requestMicStream(preferredDeviceId) {
     const targetDevId = preferredDeviceId || this.selectedMicDeviceId;
     const audioConstraints = {
       echoCancellation: { ideal: true },
@@ -492,6 +503,7 @@ class WebRTCManager {
       this.audioContext = sharedAudioContext;
     }
 
+    if (this.penaltyUntil > Date.now()) throw new Error("Microphone penalty is active");
     // If already have a live stream, just unmute and hot-swap
     if (this.localStream) {
       const existingTrack = this.localStream.getAudioTracks()[0];
@@ -510,6 +522,10 @@ class WebRTCManager {
 
     try {
       const stream = await this._acquireMicStream();
+      if (this.penaltyUntil > Date.now()) {
+        stream.getTracks().forEach(track => track.stop());
+        throw new Error("Microphone penalty is active");
+      }
       this.localStream = stream;
       this.isMuted = false;
 
@@ -831,7 +847,16 @@ class WebRTCManager {
   /**
    * Toggles microphone mute state.
    */
+  enforcePenalty(until) {
+    this.penaltyUntil = until;
+    if (until > Date.now()) {
+      this.isMuted = true;
+      this.localStream?.getAudioTracks().forEach(track => { track.enabled = false; });
+    }
+  }
+
   toggleMute(roomId) {
+    if (this.penaltyUntil > Date.now()) return true;
     this.isMuted = !this.isMuted;
     const targetRoom = roomId || this.currentRoomId;
     this.currentRoomId = targetRoom;
@@ -1061,6 +1086,9 @@ class WebRTCManager {
    * Cleans up all media streams and peer connections.
    */
   closeAll() {
+    this.mediaSession++;
+    this.isMuted = true;
+    this.penaltyUntil = 0;
     this._offerRetryTimers.forEach((timer) => clearTimeout(timer));
     this._offerRetryTimers.clear();
 

@@ -70,10 +70,10 @@ export function prepareScene(scene) {
   ctx.scale(radar.width/W,radar.height/H);
   ctx.drawImage(floor,0,0);
   objects.forEach(o=>ctx.drawImage(o.image,o.x,o.y));
-  return {floor,objects,radar};
+  return {floor,objects,radar,seatDepth:new Map(scene.chairs.map(c => [c.id,c.depth]))};
 }
 
-export function paintScene(ctx,scene,prepared,players,states,camera,vw,vh,zoom,time) {
+export function paintScene(ctx,scene,prepared,players,states,camera,vw,vh,zoom,time,throws=[]) {
   if(!prepared) return;
   const left=camera.x-vw/(2*zoom),top=camera.y-vh/(2*zoom),right=2*camera.x-left,bottom=2*camera.y-top;
   ctx.fillStyle=INK;ctx.fillRect(0,0,vw,vh);
@@ -83,11 +83,15 @@ export function paintScene(ctx,scene,prepared,players,states,camera,vw,vh,zoom,t
   if(me) drawEarshot(ctx,me.x,me.y);
   const actors=[
     ...scene.doors.map(door=>({door,depth:door.y+door.h})),
-    ...players.map(player=>({player,depth:player.y}))
+    ...players.map(player=>({player,depth:prepared.seatDepth.get(player.seat) ?? player.y}))
   ].sort((a,b)=>a.depth-b.depth);
   let next=0;
   function actor({door,player}) {
-    if(door) drawModel(ctx,door,{open:isDoorOpen(states,door.key)});
+    if(door) {
+      const open = isDoorOpen(states,door.key);
+      const elapsed = Math.min(1,(time-(states[door.key]?.changedAt ?? -Infinity))/220);
+      drawModel(ctx,door,{open,opening:open?elapsed:1-elapsed});
+    }
     else drawPlayer(ctx,player,time);
   }
   for(const obj of prepared.objects) {
@@ -97,6 +101,20 @@ export function paintScene(ctx,scene,prepared,players,states,camera,vw,vh,zoom,t
     }
   }
   while(next<actors.length) actor(actors[next++]);
+  for(const shot of throws) {
+    const progress = Math.min(1,(time-shot.start)/400);
+    const x = shot.from.x+(shot.to.x-shot.from.x)*progress;
+    const y = shot.from.y+(shot.to.y-shot.from.y)*progress-26-55*Math.sin(progress*Math.PI);
+    ctx.fillStyle='#d84532';
+    if (progress < 1) {
+      ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill(); ctx.strokeStyle=INK; ctx.stroke();
+    } else {
+      const spread = Math.min(1,(time-shot.start-400)/300);
+      for(let i=0;i<8;i++) {
+        ctx.beginPath(); ctx.arc(x+Math.cos(i*2.4)*spread*23,y+Math.sin(i*2.4)*spread*16,5-3*spread,0,Math.PI*2); ctx.fill();
+      }
+    }
+  }
   for(const p of players) drawName(ctx,p);
   ctx.restore();
 }
