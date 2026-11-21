@@ -1,81 +1,16 @@
 import WorkspaceDashboard from './WorkspaceDashboard';
-import { WorkspaceArt, AvatarPortrait } from './WorkspaceArt';
+import OfficeDiorama from './OfficeDiorama';
+import SpatialPreview from './SpatialPreview';
+import './landing.css';
+import { WorkspaceArt } from './WorkspaceArt';
 import { useState, useEffect, useRef } from 'react';
 import { SERVER_URL } from '../config';
 import { spatialAudio } from '../services/spatialAudio';
 
 const OFFICIAL_WORKSPACES = [
-  {
-    roomId: 'main-office',
-    name: 'Corporate Office',
-    theme: 'office',
-    subtitle: 'Acoustic Boardroom',
-    description: 'Executive suites, natural acoustic timber tables, and spatial team desks.',
-    onlineCount: 3,
-    avatars: [
-      { initials: 'AK', bg: 'bg-accent-purple/20', text: 'text-accent-purple' },
-      { initials: 'DJ', bg: 'bg-accent-orange/20', text: 'text-accent-orange' },
-      { initials: 'SL', bg: 'bg-primary', text: 'text-on-primary' },
-    ],
-  },
-  {
-    roomId: 'conference-hall',
-    name: 'Conference & Breakout',
-    theme: 'conference',
-    subtitle: 'Keynote Auditorium',
-    description: 'Stepped acoustic wooden hall, presentation stage, and zoned breakouts.',
-    onlineCount: 0,
-    avatars: [],
-  },
-  {
-    roomId: 'rooftop-lounge',
-    name: 'Rooftop Social Lounge',
-    theme: 'lounge',
-    subtitle: 'Open-Air Terrace',
-    description: 'Ambient evening terrace, sofa booths, and low-attenuation coffee syncs.',
-    onlineCount: 5,
-    avatars: [
-      { initials: 'MR', bg: 'bg-accent-rose/20', text: 'text-accent-rose' },
-      { initials: 'TN', bg: 'bg-accent-purple/20', text: 'text-accent-purple' },
-      { initials: '+3', bg: 'bg-surface-container', text: 'text-on-surface' },
-    ],
-  },
-  {
-    roomId: 'singam-is-back-ok14',
-    name: 'Singam is Back',
-    theme: 'office',
-    subtitle: 'Private Executive Suite',
-    description: 'Dedicated leadership pod with high-isolation acoustic boundary.',
-    onlineCount: 1,
-    avatars: [
-      { initials: 'SG', bg: 'bg-accent-amber/20', text: 'text-accent-amber' },
-    ],
-  },
-  {
-    roomId: 'project-disc-05ig',
-    name: 'Project Discussion',
-    theme: 'conference',
-    subtitle: 'Collaborative Hub',
-    description: 'Open timber tables, collaborative screens, and cross-team voice pods.',
-    onlineCount: 2,
-    avatars: [
-      { initials: 'VL', bg: 'bg-primary', text: 'text-on-primary' },
-      { initials: 'EK', bg: 'bg-accent-purple/20', text: 'text-accent-purple' },
-    ],
-  },
-  {
-    roomId: 'design-lab',
-    name: 'Design Critique Lab',
-    theme: 'office',
-    subtitle: 'Acoustic Sound Lab',
-    description: 'Studio monitors, diffuser walls, spatial screen sharing, and pairing pods.',
-    onlineCount: 4,
-    avatars: [
-      { initials: 'JY', bg: 'bg-accent-rose/20', text: 'text-accent-rose' },
-      { initials: 'NW', bg: 'bg-accent-amber/20', text: 'text-accent-amber' },
-      { initials: '+2', bg: 'bg-surface-container', text: 'text-on-surface' },
-    ],
-  },
+  {roomId:'main-office',name:'Corporate Office',theme:'office',description:'Shared desks, private offices and a boardroom.'},
+  {roomId:'conference-hall',name:'Conference & Breakout',theme:'conference',description:'A keynote stage with space for smaller discussions.'},
+  {roomId:'rooftop-lounge',name:'Rooftop Social Lounge',theme:'lounge',description:'Coffee, lounge seating and an open-air terrace.'},
 ];
 
 const THEME_OPTIONS = [
@@ -113,7 +48,7 @@ export default function MeetingLobby({
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
-  const [isRotating, setIsRotating] = useState(false);
+
   const [selectedThemeFilter, setSelectedThemeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -140,56 +75,43 @@ export default function MeetingLobby({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Fetch dynamic rooms from backend API with automatic retry on cold start
-  const fetchRooms = async (isRetry = false) => {
-    setIsRotating(true);
-    setLoadingRooms(true);
-    try {
-      const res = await fetch(`${SERVER_URL}/api/rooms`);
-      if (res.ok) {
-        const data = await res.json();
-        setRooms(Array.isArray(data) ? data : []);
-      } else if (!isRetry) {
-        setTimeout(() => fetchRooms(true), 3000);
-      }
-    } catch (err) {
-      console.warn('[Lobby] Failed to fetch dynamic rooms:', err.message);
-      if (!isRetry) {
-        // Automatically retry in 3 seconds to recover cleanly from Render free-tier cold start
-        setTimeout(() => fetchRooms(true), 3000);
-      }
-    } finally {
-      setLoadingRooms(false);
-      setTimeout(() => setIsRotating(false), 600);
-    }
-  };
-
+  const [refresh,setRefresh] = useState(0);
+  const [directoryOffline,setDirectoryOffline] = useState(false);
   useEffect(() => {
-    fetchRooms();
-    const interval = setInterval(fetchRooms, 15000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Combine official workspaces with any user-created rooms
-  const allWorkspaces = [...OFFICIAL_WORKSPACES];
-  if (Array.isArray(rooms)) {
-    rooms.forEach((apiRoom) => {
-      const exists = allWorkspaces.some((w) => w.roomId === apiRoom.roomId);
-      if (!exists) {
-        allWorkspaces.push({
-          roomId: apiRoom.roomId,
-          name: apiRoom.name,
-          theme: apiRoom.theme || 'office',
-          subtitle: `Created by ${apiRoom.createdBy || 'Team'}`,
-          description: apiRoom.description || 'Custom interactive spatial workspace with real-time audio.',
-          onlineCount: apiRoom.occupants?.length || 1,
-          avatars: [
-            { initials: (apiRoom.createdBy || 'US').slice(0, 2).toUpperCase(), bg: 'bg-primary', text: 'text-on-primary' },
-          ],
-        });
+    let stopped=false, controller, timer;
+    async function load() {
+      controller=new AbortController();
+      const deadline=setTimeout(()=>controller.abort(),10000);
+      setLoadingRooms(true);
+      let next = 15000;
+      try {
+        const res = await fetch(SERVER_URL+'/api/rooms',{signal:controller.signal});
+        if (!res.ok) throw Error();
+        const data = await res.json();
+        if (!Array.isArray(data)) throw Error();
+        if (!stopped) { setRooms(data); setDirectoryOffline(false); }
+      } catch {
+        if (!stopped) setDirectoryOffline(true);
+        next = 5000;
+      } finally {
+        clearTimeout(deadline);
+        if (!stopped) {
+          setLoadingRooms(false);
+          timer = setTimeout(load,next);
+        }
       }
-    });
+    }
+    load();
+    return ()=>{stopped=true;controller.abort();clearTimeout(timer);};
+  },[refresh]);
+  const directory = new Map(OFFICIAL_WORKSPACES.map(room=>[room.roomId,room]));
+  for (const room of rooms) {
+    if (!room?.roomId || !room.name) continue;
+    const base = directory.get(room.roomId);
+    directory.set(room.roomId,{...base,...room,theme:room.theme || base?.theme || 'office',
+      description:room.description || base?.description || 'A shared team workspace.'});
   }
+  const allWorkspaces = [...directory.values()];
 
   const filteredWorkspaces = allWorkspaces.filter((w) => {
     const matchesTheme = selectedThemeFilter === 'all' || w.theme === selectedThemeFilter;
@@ -198,7 +120,6 @@ export default function MeetingLobby({
       !q ||
       w.name.toLowerCase().includes(q) ||
       w.roomId.toLowerCase().includes(q) ||
-      w.subtitle.toLowerCase().includes(q) ||
       w.description.toLowerCase().includes(q);
     return matchesTheme && matchesSearch;
   });
@@ -294,553 +215,59 @@ export default function MeetingLobby({
     }
   };
 
-  const totalPeers = filteredWorkspaces.reduce((acc, w) => acc + (w.onlineCount || 0), 0) + 15;
-
+  const [preview,setPreview] = useState('office');
+  const host=()=>user?setShowHostModal(true):onRequestAuth();
   return (
-    <div className="workspace-lobby min-h-screen bg-page-bg font-body-md text-on-surface antialiased selection:bg-accent-orange selection:text-white relative overflow-x-hidden">
-      <header className="fixed top-6 inset-x-0 z-50 flex justify-center px-4">
-        <div className="h-14 w-full max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 bg-primary/95 text-on-primary rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-2xl">
-          {/* Logo & Brand */}
-          <div
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          >
-            <div className="w-8 h-8 rounded-full bg-surface-container-highest/20 flex items-center justify-center text-on-primary">
-              <span className="material-symbols-outlined text-[18px]">graphic_eq</span>
-            </div>
-            <span className="font-h3 text-[17px] tracking-tight text-on-primary font-semibold">ProxiSpeak</span>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-1.5">
-            <a
-              href="#workspaces"
-              className="font-label transition-colors bg-surface-container-highest/20 text-on-primary rounded-full py-1.5 px-3.5"
-            >
-              Workspaces
-            </a>
-            <button
-              onClick={() => setActiveModal('spatial-audio')}
-              className="font-label text-label text-muted-light hover:text-on-primary px-3.5 py-1.5 transition-colors cursor-pointer"
-            >
-              Spatial Audio
-            </button>
-            <button
-              onClick={() => setActiveModal('hardware')}
-              className="font-label text-label text-muted-light hover:text-on-primary px-3.5 py-1.5 transition-colors cursor-pointer"
-            >
-              Hardware
-            </button>
-            <button
-              onClick={() => setActiveModal('docs')}
-              className="font-label text-label text-muted-light hover:text-on-primary px-3.5 py-1.5 transition-colors cursor-pointer"
-            >
-              Docs
-            </button>
-            <button
-              onClick={onOpenOrgHub}
-              className="font-label text-[11px] font-semibold text-[#277970] hover:text-white px-3 py-1 bg-[#277970]/10 hover:bg-[#277970] rounded-full transition-all cursor-pointer flex items-center gap-1.5 border border-[#277970]/20"
-              title="Organizations and Office Layouts"
-            >
-              <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
-              <span>{activeOrg ? activeOrg.name : 'Organizations'}</span>
-            </button>
-          </nav>
-
-          {/* User Controls & Profile */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Header Org Hub Quick Button */}
-            <button
-              onClick={onOpenOrgHub}
-              className="inline-flex lg:hidden items-center gap-1 px-2.5 py-1 rounded-full bg-[#277970]/15 text-[#277970] text-[11px] font-semibold border border-[#277970]/20 cursor-pointer"
-              title="Organizations"
-            >
-              <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
-              <span>Orgs</span>
-            </button>
-            {user ? (
-              <>
-                <div className="hidden sm:flex items-center gap-2 pl-3 pr-4 py-1.5 bg-surface-container-highest/15 rounded-full">
-                  <span className="w-2 h-2 rounded-full bg-accent-orange animate-pulse" />
-                  <span className="font-label text-label text-on-primary tracking-normal">
-                    {user.email || user.username}
-                  </span>
-                </div>
-                <button
-                  onClick={onLogout}
-                  className="hidden md:inline-flex items-center font-label-caps text-label-caps tracking-widest text-muted hover:text-on-primary transition-colors py-1 cursor-pointer"
-                >
-                  SIGN OUT
-                </button>
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-sm ring-2 ring-white/20"
-
-                >
-                  <AvatarPortrait color={user.avatarColor} name={user.username} />
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onRequestAuth}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-accent-orange text-white text-xs font-semibold hover:bg-accent-orange/90 transition-all shadow-sm cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[14px]">lock</span>
-                  <span>Sign In / Register</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+    <div className="landing" id="top">
+      <header className="landing-nav wrap">
+        <a href="#top" className="wordmark"><img src="/favicon.svg" alt="" width="34" height="34"/>ProxiSpeak</a>
+        <nav aria-label="Main navigation"><a href="#experience">How it works</a><a href="#workspaces">Workspaces</a><button onClick={onOpenOrgHub}>Organizations</button></nav>
+        <button className="nav-account" onClick={user?onLogout:onRequestAuth}>{user?'Sign out':'Sign in'} <span aria-hidden="true">&#8599;</span></button>
       </header>
-
-      {/* Main Page Content */}
-      <main className="relative z-10 w-full pt-28 bg-transparent min-h-screen">
-        <div className="flex flex-col w-full">
-          <div className="relative z-10 w-full max-w-[1400px] mx-auto px-margin-mobile lg:px-margin pb-space-xl">
-            <WorkspaceDashboard key={user?.id || user?.username || 'guest'} user={user} activeOrg={activeOrg} onSelectOrg={onSelectOrg}
-              onOpenHub={onDashboardHub} onDesign={onOpenDesigner} onResume={onResumeDraft}
-              onHost={()=>user?setShowHostModal(true):onRequestAuth()} onJoinCode={()=>inputRef.current?.focus()}/>
-            {!user && <section className="workspace-hero">
-              <div className="hero-copy">
-                <h1>Find your<br /><em>workspace.</em></h1>
-                <p>Pick a floor and walk over to your team. Nearby voices come into focus as you move.</p>
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-3 z-10">
-                <button
-                  onClick={onOpenOrgHub}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#277970] hover:bg-[#205e57] text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
-                  title="Open Organization Headquarters & Team Workspace Switcher"
-                >
-                  <span className="material-symbols-outlined text-[18px]">corporate_fare</span>
-                  <span>{activeOrg ? `Organization: ${activeOrg.name}` : 'Organizations & Workspaces'}</span>
-                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                </button>
-
-                <button
-                  onClick={() => onOpenDesigner && onOpenDesigner(activeOrg)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white hover:bg-soft-card text-[#203334] border border-[#849388] text-xs font-semibold shadow-sm transition-all cursor-pointer"
-                  title="Design custom office layouts with walls, soundproof doors, and furniture"
-                >
-                  <span className="material-symbols-outlined text-[18px] text-[#277970]">draw</span>
-                  <span>Design Custom Office</span>
-                </button>
-              </div>
-              </div>
-              <div className="hero-art"><WorkspaceArt theme="office" /></div>
-            </section>}
-
-            {/* 2. Primary Action Cards Grid (Host a Meeting vs Join via Code) */}
-            <section className="w-full mt-4 mb-space-lg">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter lg:gap-gutter-lg items-stretch">
-                {/* Card 1: Host a New Meeting */}
-                <div className="lg:col-span-6 rounded-lg bg-white-card shadow-[4px_4px_0_#203334] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden group border border-line">
-                  <div>
-                    <div className="flex items-center justify-between mb-8">
-                      <div className="w-14 h-14 rounded-full bg-accent-orange flex items-center justify-center text-on-primary shadow-md">
-                        <span className="material-symbols-outlined text-[26px]">spatial_audio_off</span>
-                      </div>
-                      <span className="px-3.5 py-1 rounded-full bg-soft-card-2 font-label-caps text-label-caps tracking-widest text-on-surface uppercase border border-line">
-                        Instant Soundstage
-                      </span>
-                    </div>
-                    <h2 className="font-h2 text-h2 text-on-surface mb-3 tracking-tight font-semibold">
-                      Host a New Meeting
-                    </h2>
-                    <p className="font-body-md text-body-md text-on-surface-variant max-w-lg mb-8">
-                      Create a customized spatial meeting room. Choose from Corporate Office, Auditorium, or Lounge canvas layouts with instant acoustic positioning.
-                    </p>
-
-                  </div>
-
-                  {/* CTA Button */}
-                  <div className="pt-4 flex items-center justify-between">
-                    <button
-                      onClick={() => setShowHostModal(true)}
-                      className="inline-flex items-center justify-center gap-3 px-8 py-3.5 rounded-full bg-primary text-on-primary font-label-caps text-label-caps tracking-widest uppercase hover:bg-on-surface transition-all shadow-md active:scale-95 cursor-pointer"
-                    >
-                      <span>+ Host Meeting Room</span>
-                      <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                    </button>
-
-                  </div>
-                </div>
-
-                {/* Card 2: Join with Code or Link */}
-                <div className="lg:col-span-6 rounded-lg bg-white-card shadow-[4px_4px_0_#203334] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden border border-line">
-                  <div className="absolute -right-20 -bottom-20 w-72 h-72 rounded-full bg-gradient-to-tl from-accent-purple/15 to-transparent blur-2xl pointer-events-none" />
-                  <div>
-                    <div className="flex items-center justify-between mb-8">
-                      <div className="w-14 h-14 rounded-full bg-soft-card-2 flex items-center justify-center text-on-surface shadow-sm">
-                        <span className="material-symbols-outlined text-[26px]">connect_without_contact</span>
-                      </div>
-                      <span className="px-3.5 py-1 rounded-full bg-soft-card-2 font-label-caps text-label-caps tracking-widest text-on-surface uppercase border border-line">
-                        Direct Ingestion
-                      </span>
-                    </div>
-                    <h2 className="font-h2 text-h2 text-on-surface mb-3 tracking-tight font-semibold">
-                      Join with Code or Link
-                    </h2>
-                    <p className="font-body-md text-body-md text-on-surface-variant max-w-lg mb-8">
-                      Invited to a call? Enter the meeting code or paste the shared invite URL below to instantly bridge into the persistent spatial soundstage.
-                    </p>
-
-                    {/* Join Error Banner */}
-                    {joinError && (
-                      <div className="mb-4 px-4 py-2.5 rounded-DEFAULT bg-error-container text-error text-xs font-semibold flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[16px]">warning</span>
-                        <span>{joinError}</span>
-                      </div>
-                    )}
-
-                    {/* Input Box */}
-                    <form onSubmit={handleJoinByCode} className="relative mb-8">
-                      <div className="flex items-center rounded-DEFAULT bg-soft-card-2 px-4 py-3.5 focus-within:bg-surface-container-lowest transition-colors shadow-inner border border-line">
-                        <span className="material-symbols-outlined text-muted text-[20px] mr-3">link</span>
-                        <input
-                          ref={inputRef}
-                          id="workspaceInput"
-                          type="text"
-                          value={joinCode}
-                          onChange={(e) => {
-                            setJoinCode(e.target.value);
-                            if (joinError) setJoinError('');
-                          }}
-                          placeholder="e.g. main-office or https://proxispeak.app/r/..."
-                          className="w-full bg-transparent font-body-md text-body-md text-on-surface placeholder:text-muted focus:outline-none"
-                        />
-                        <kbd className="hidden sm:inline-flex items-center px-2 py-0.5 rounded bg-surface-container text-muted font-label text-label shadow-sm ml-2">
-                          ⌘K
-                        </kbd>
-                      </div>
-                    </form>
-                  </div>
-
-                  {/* CTA Button */}
-                  <div className="pt-4 flex items-center justify-between">
-                    <button
-                      id="joinMeetingBtn"
-                      onClick={handleJoinByCode}
-                      className="inline-flex items-center justify-center gap-3 px-8 py-3.5 rounded-full bg-soft-card text-on-surface hover:bg-primary hover:text-on-primary font-label-caps text-label-caps tracking-widest uppercase transition-all active:scale-95 cursor-pointer shadow-sm"
-                    >
-                      <span>Join Meeting</span>
-                      <span className="material-symbols-outlined text-[16px]">east</span>
-                    </button>
-                    <span className="font-label text-label text-muted">Auto-routes to closest node</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* 3. Workspace Telemetry & Live Spatial Audio Status Strip */}
-            <section className="w-full mb-space-lg" id="spatial-audio">
-              <div className="rounded-DEFAULT bg-soft-card/60 backdrop-blur-xl px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm border border-line/30">
-                <div className="flex items-center gap-3">
-                  <div className="w-2.5 h-2.5 rounded-full bg-accent-orange animate-ping" />
-                  <span className="font-label-caps text-label-caps uppercase tracking-wider text-on-surface font-bold">
-                    Node SF-01 Online
-                  </span>
-                  <span className="text-line text-sm">•</span>
-                  <span className="font-label text-label text-on-surface-variant">48kHz Spatial Ingestion Grid</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-6 sm:gap-10">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-muted text-[18px]">speed</span>
-                    <span className="font-label text-label text-muted">Peer Latency:</span>
-                    <span className="font-label text-label text-on-surface font-semibold">12ms</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-muted text-[18px]">headphones</span>
-                    <span className="font-label text-label text-muted">Binaural Synthesis:</span>
-                    <span className="font-label text-label text-on-surface font-semibold">Active (HRTF)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-muted text-[18px]">group</span>
-                    <span className="font-label text-label text-muted">Global Peers:</span>
-                    <span className="font-label text-label text-on-surface font-semibold">{totalPeers} Connected</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* 4. Active & Official Workspaces Directory */}
-            <section className="w-full mb-space-lg" id="workspaces">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
-                <div>
-                  <span className="font-label-caps text-label-caps uppercase tracking-widest text-muted block mb-2">
-                    Team Architecture
-                  </span>
-                  <h2 className="font-h2 text-h2 text-on-surface tracking-tight font-semibold">
-                    Active & Official Workspaces
-                  </h2>
-                  <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-                    Jump directly into persistent company canvases with live spatial acoustics.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* Theme Filter Pills */}
-                  <div className="hidden md:flex items-center gap-1.5 p-1 bg-soft-card-2 rounded-full border border-line">
-                    {['all', 'office', 'conference', 'lounge'].map((th) => (
-                      <button
-                        key={th}
-                        onClick={() => setSelectedThemeFilter(th)}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all cursor-pointer ${
-                          selectedThemeFilter === th
-                            ? 'bg-primary text-on-primary shadow-sm'
-                            : 'text-on-surface-variant hover:text-on-surface'
-                        }`}
-                      >
-                        {th === 'all' ? 'All' : th}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Design Office Button */}
-                  <button
-                    onClick={()=>onOpenDesigner(null)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#277970] text-white font-label text-label hover:bg-[#205e57] transition-all shadow-sm cursor-pointer"
-                    title="Design a custom office layout with walls, soundproof doors, and furniture"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">draw</span>
-                    <span>Design Office</span>
-                  </button>
-
-                  {/* Refresh Grid Button */}
-                  <button
-                    id="refreshGridBtn"
-                    onClick={fetchRooms}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white-card shadow-sm text-on-surface font-label text-label hover:bg-soft-card transition-colors border border-line cursor-pointer"
-                  >
-                    <span
-                      id="refreshIcon"
-                      className={`material-symbols-outlined text-[16px] transition-transform duration-500 ${
-                        isRotating ? 'rotate-180' : ''
-                      }`}
-                    >
-                      refresh
-                    </span>
-                    <span>Refresh Grid</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Workspaces Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-                {filteredWorkspaces.map((ws) => (
-                  <div
-                    key={ws.roomId}
-                    className="rounded-DEFAULT bg-white-card shadow-sm hover:shadow-[3px_3px_0_#203334] transition-all flex flex-col justify-between group overflow-hidden border border-line"
-                  >
-                    <div className="relative h-44 w-full overflow-hidden">
-                      <WorkspaceArt theme={ws.theme} />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                      <div className="absolute top-3 right-3">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/80 backdrop-blur-md text-on-primary font-label text-label">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              ws.onlineCount > 0 ? 'bg-accent-orange animate-pulse' : 'bg-muted'
-                            }`}
-                          />
-                          <span>{ws.onlineCount} online</span>
-                        </span>
-                      </div>
-                      <div className="absolute bottom-3 left-4 text-on-primary font-mono text-xs opacity-90">
-                        #{ws.roomId}
-                      </div>
-                    </div>
-
-                    <div className="p-6 flex flex-col justify-between flex-1">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-label-caps text-label-caps tracking-wider uppercase text-muted">
-                            {ws.subtitle}
-                          </span>
-                        </div>
-                        <h3 className="font-h3 text-h3 text-on-surface mb-2 font-semibold">{ws.name}</h3>
-                        <p className="font-body-md text-body-md text-on-surface-variant mb-5">{ws.description}</p>
-                      </div>
-
-                      <div className="pt-4 flex items-center justify-between border-t border-line">
-                        {ws.avatars && ws.avatars.length > 0 ? (
-                          <div className="flex -space-x-2">
-                            {ws.avatars.map((av, idx) => (
-                              <div
-                                key={idx}
-                                className={`w-7 h-7 rounded-full ${av.bg} ${av.text} flex items-center justify-center font-label text-label font-bold ring-2 ring-white-card`}
-                              >
-                                {av.initials.startsWith('+') ? av.initials : <AvatarPortrait color={['#399c92', '#e47b57', '#eed46d'][idx % 3]} name={av.initials} />}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="font-label text-label text-muted">Empty soundstage</span>
-                        )}
-
-                        <button
-                          onClick={() => handleEnterWorkspace(ws)}
-                          className="inline-flex items-center gap-1.5 font-label-caps text-label-caps tracking-widest uppercase text-on-surface font-bold hover:text-accent-orange transition-colors cursor-pointer"
-                        >
-                          <span>Enter Canvas</span>
-                          <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* 5. Spatial Audio Physics Micro-Feature Banner (Lumio Style) */}
-            <section className="w-full" id="mechanics">
-              <div className="rounded-lg bg-soft-card-2 p-8 lg:p-12 shadow-sm relative overflow-hidden border border-line">
-                <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 pb-6 border-b border-line/30 gap-4">
-                  <div>
-                    <span className="font-label-caps text-label-caps uppercase tracking-widest text-muted block mb-2">
-                      Acoustic Foundation & Architecture
-                    </span>
-                    <h3 className="font-h2 text-h2 text-on-surface tracking-tight font-semibold">
-                      Spatial Audio Mechanics
-                    </h3>
-                  </div>
-                  <div className="font-mono text-xs text-muted flex items-center gap-4">
-                    <span>CALIBRATED TO ISO-3382 ACOUSTIC STANDARDS</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-orange" />
-                    <span>48kHz LOSSLESS MESH</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  {/* Mechanics Card 1 */}
-                  <div className="flex flex-col gap-3 p-6 rounded bg-white-card shadow-sm border border-line/10">
-                    <div className="w-10 h-10 rounded-full bg-soft-card flex items-center justify-center text-accent-orange">
-                      <span className="material-symbols-outlined text-[20px]">volume_down</span>
-                    </div>
-                    <h4 className="font-h3 text-[19px] text-on-surface font-semibold">Proximity Attenuation</h4>
-                    <p className="font-body-md text-body-md text-on-surface-variant">
-                      Sound fades naturally using inverse-square acoustic curves calibrated to physical office materials, creating organic breakout zones without artificial barriers.
-                    </p>
-                    <span className="font-mono text-xs text-muted mt-2">SPEC: -6dB per doubling distance</span>
-                  </div>
-
-                  {/* Mechanics Card 2 */}
-                  <div className="flex flex-col gap-3 p-6 rounded bg-white-card shadow-sm border border-line/10">
-                    <div className="w-10 h-10 rounded-full bg-soft-card flex items-center justify-center text-accent-purple">
-                      <span className="material-symbols-outlined text-[20px]">360</span>
-                    </div>
-                    <h4 className="font-h3 text-[19px] text-on-surface font-semibold">360° Binaural Directionality</h4>
-                    <p className="font-body-md text-body-md text-on-surface-variant">
-                      Hear accurately whether a teammate speaks over your left shoulder or across a 12-person oak table via high-resolution Head-Related Transfer Functions.
-                    </p>
-                    <span className="font-mono text-xs text-muted mt-2">SPEC: KEMAR HRTF 1° spatial resolution</span>
-                  </div>
-
-                  {/* Mechanics Card 3 */}
-                  <div className="flex flex-col gap-3 p-6 rounded bg-white-card shadow-sm border border-line/10">
-                    <div className="w-10 h-10 rounded-full bg-soft-card flex items-center justify-center text-on-surface">
-                      <span className="material-symbols-outlined text-[20px]">bolt</span>
-                    </div>
-                    <h4 className="font-h3 text-[19px] text-on-surface font-semibold">Sub-15ms Spatial Sync</h4>
-                    <p className="font-body-md text-body-md text-on-surface-variant">
-                      P2P WebRTC audio mesh routed through edge colocation nodes delivers microsecond phase alignment so conversations preserve natural human cadence.
-                    </p>
-                    <span className="font-mono text-xs text-muted mt-2">SPEC: Edge node jitter &lt;2ms</span>
-                  </div>
-                </div>
-              </div>
-            </section>
+      <main>
+        <div className="wrap dashboard-wrap"><WorkspaceDashboard key={user?.id || user?.username || 'guest'} user={user} activeOrg={activeOrg} onSelectOrg={onSelectOrg}
+          onOpenHub={onDashboardHub} onDesign={onOpenDesigner} onResume={onResumeDraft} onHost={host} onJoinCode={()=>inputRef.current?.focus()}/></div>
+        {!user && <section className="landing-hero wrap">
+          <div className="hero-intro"><div className="section-label"><i/> Spatial voice workspace</div>
+            <h1>Walk in.<br/>Talk <em>naturally.</em></h1>
+            <p>A virtual office where conversations happen by proximity. Move your avatar closer to join in, or find a quiet corner with your team.</p>
+            <div className="hero-actions"><a className="solid-action" href="#workspaces">Explore workspaces <span aria-hidden="true">&#8599;</span></a><button className="line-action" onClick={()=>inputRef.current?.focus()}>Join by code</button></div>
           </div>
-        </div>
+          <figure className="studio-preview" onPointerMove={e=>{
+            if(e.pointerType!=='mouse')return;
+            const rect=e.currentTarget.getBoundingClientRect();
+            e.currentTarget.style.setProperty('--shift',((e.clientX-rect.left)/rect.width*8-4)+'px');
+          }} onPointerLeave={e=>e.currentTarget.style.removeProperty('--shift')}>
+            <figcaption><span><b className="signal-bars" aria-hidden="true"><i/><i/><i/></b> Office preview</span><span>{preview==='office'?'Shared studio':preview==='lounge'?'Social lounge':'Auditorium'}</span></figcaption>
+            <OfficeDiorama theme={preview} animated/>
+            <div className="scene-switch" role="group" aria-label="Preview environment">{['office','conference','lounge'].map(key=><button key={key} aria-pressed={preview===key} onClick={()=>setPreview(key)}>{key}</button>)}</div>
+          </figure>
+        </section>}
+        <section className="arrival"><div className="wrap arrival-grid"><div><h2>Have an invite?</h2><p>Enter a room code or paste your meeting link.</p></div>
+          <form onSubmit={handleJoinByCode}><label className="sr-only" htmlFor="lobby-code">Meeting code or invite link</label>
+            <input ref={inputRef} id="lobby-code" value={joinCode} onChange={e=>{setJoinCode(e.target.value);setJoinError('');}} placeholder="Room code or invite link" aria-invalid={!!joinError}/>
+            <button>Join room <span aria-hidden="true">&#8594;</span></button>{joinError&&<small role="alert">{joinError}</small>}
+          </form></div></section>
+        <section id="experience" className="experience wrap"><SpatialPreview/><div className="experience-copy"><div className="section-label"><i/> Spatial audio</div>
+          <h2>One floor.<br/><em>Many conversations.</em></h2><p>Walk up to a teammate and their voice comes into focus. Move away and it fades. Try changing the distance in the preview.</p>
+          <button className="text-action" onClick={()=>setActiveModal('spatial-audio')}>Explore the acoustics &#8599;</button></div></section>
+        <section className="directory" id="workspaces"><div className="wrap">
+          <div className="directory-heading"><div><div className="section-label"><i/> Workspace directory</div><h2>Choose your space.</h2></div><button className="solid-action" onClick={host}>+ Host a meeting</button></div>
+          <div className="directory-tools"><div role="group" aria-label="Filter workspaces">{['all','office','conference','lounge'].map(key=><button key={key} aria-pressed={selectedThemeFilter===key} onClick={()=>setSelectedThemeFilter(key)}>{key==='all'?'All spaces':key}</button>)}</div>
+            <input type="search" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} aria-label="Search workspaces" placeholder="Search workspaces"/><button aria-label="Refresh directory" onClick={()=>setRefresh(v=>v+1)}>&#8635;</button>
+          </div>
+          {directoryOffline&&<p role="status">Live room updates are temporarily unavailable.</p>}
+          <div className="room-gallery">{filteredWorkspaces.map(ws=><article className="room-card" key={ws.roomId}>
+            <div className={'room-art room-'+ws.theme}><OfficeDiorama theme={ws.theme}/></div>
+            <div className="room-info"><h3>{ws.name}</h3><p>{ws.description}</p><div><small>{Number.isFinite(ws.activeUsers)&&!directoryOffline?ws.activeUsers+' online':ws.theme+' workspace'}</small><button aria-label={'Enter '+ws.name} onClick={()=>handleEnterWorkspace(ws)}>Enter &#8599;</button></div></div>
+          </article>)}</div>
+          {!filteredWorkspaces.length&&<p role="status">{loadingRooms?'Loading directory…':'No workspaces match your search.'}</p>}
+        </div></section>
+        <section className="design-invite wrap"><div><h2>Build your own floor.</h2><p>Place desks, set up meeting rooms and create a layout for the way your team works.</p></div>
+          <button className="line-action" onClick={()=>onOpenDesigner(activeOrg)}>Open layout designer &#8599;</button></section>
       </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 w-full bg-primary text-on-primary mt-space-section" id="docs">
-        <div className="max-w-[1400px] mx-auto px-margin-mobile lg:px-margin pt-space-lg pb-space-md">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter lg:gap-gutter-lg pb-space-md border-b border-surface-container-highest/15">
-            <div className="md:col-span-6 flex flex-col justify-between gap-6">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-surface-container-highest/20 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-[18px]">graphic_eq</span>
-                </div>
-                <span className="font-h3 text-h3 tracking-tight font-semibold">ProxiSpeak</span>
-              </div>
-              <p className="font-body-lg text-body-lg text-surface-container-high max-w-md">
-                ProxiSpeak — The spatial audio operating system for distributed teams.
-              </p>
-              <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-surface-container-highest/10 w-fit">
-                <span className="w-2 h-2 rounded-full bg-accent-orange" />
-                <span className="font-label text-label text-muted-light">
-                  All audio nodes operational • 48kHz spatial grid
-                </span>
-              </div>
-            </div>
-
-            <div className="md:col-span-2 flex flex-col gap-3">
-              <span className="font-label-caps text-label-caps uppercase tracking-widest text-muted">Architecture</span>
-              <a
-                href="#workspaces"
-                className="font-label text-label text-muted-light hover:text-on-primary transition-colors"
-              >
-                Workspaces
-              </a>
-              <button
-                onClick={() => setActiveModal('spatial-audio')}
-                className="font-label text-label text-muted-light hover:text-on-primary transition-colors text-left cursor-pointer"
-              >
-                HRTF Modeling
-              </button>
-              <button
-                onClick={() => setActiveModal('hardware')}
-                className="font-label text-label text-muted-light hover:text-on-primary transition-colors text-left cursor-pointer"
-              >
-                Low Latency Nodes
-              </button>
-            </div>
-
-            <div className="md:col-span-2 flex flex-col gap-3">
-              <span className="font-label-caps text-label-caps uppercase tracking-widest text-muted">Ecosystem</span>
-              <button
-                onClick={() => setActiveModal('docs')}
-                className="font-label text-label text-muted-light hover:text-on-primary transition-colors text-left cursor-pointer"
-              >
-                Documentation
-              </button>
-              <button
-                onClick={() => setActiveModal('hardware')}
-                className="font-label text-label text-muted-light hover:text-on-primary transition-colors text-left cursor-pointer"
-              >
-                Certified Hardware
-              </button>
-              <button
-                onClick={() => setActiveModal('docs')}
-                className="font-label text-label text-muted-light hover:text-on-primary transition-colors text-left cursor-pointer"
-              >
-                WebAudio SDK
-              </button>
-            </div>
-
-            <div className="md:col-span-2 flex flex-col gap-3">
-              <span className="font-label-caps text-label-caps uppercase tracking-widest text-muted">
-                Security & Trust
-              </span>
-              <span className="font-label text-label text-muted-light">Audio Privacy</span>
-              <span className="font-label text-label text-muted-light">SOC2 Type II</span>
-              <span className="font-label text-label text-muted-light">Zero-Retention Voice</span>
-            </div>
-          </div>
-
-          <div className="pt-space-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-muted">
-            <span className="font-label text-label">© 2025 ProxiSpeak Technologies Inc. All rights reserved.</span>
-            <div className="flex items-center gap-6">
-              <span className="font-label-caps text-label-caps tracking-widest text-muted-light">
-                SPATIAL ENGINE 2.4.1
-              </span>
-              <span className="font-label-caps text-label-caps tracking-widest text-muted-light">
-                SAN FRANCISCO • TOKYO • ZURICH
-              </span>
-            </div>
-          </div>
-        </div>
-      </footer>
-
+      <footer className="landing-foot"><div className="wrap"><a href="#top" className="wordmark"><img src="/favicon.svg" width="28" height="28" alt=""/>ProxiSpeak</a><nav aria-label="Resources">
+        <button onClick={onOpenOrgHub}>Organizations</button><button onClick={()=>setActiveModal('hardware')}>Audio setup</button><button onClick={()=>setActiveModal('docs')}>Documentation</button></nav></div></footer>
       {/* Host New Meeting Modal */}
       {showHostModal && (
         <div

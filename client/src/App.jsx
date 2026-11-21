@@ -3,7 +3,7 @@ import AuthModal from './components/AuthModal';
 import MeetingLobby from './components/MeetingLobby';
 
 
-import OrganizationHub from './components/OrganizationHub';
+const OrganizationHub = lazy(() => import('./components/OrganizationHub'));
 import { playUiChime } from './services/meetingSounds';
 import { SERVER_URL } from './config';
 
@@ -55,23 +55,18 @@ export default function App() {
     } catch (_e) {}
   }, []);
 
-  // Validate existing JWT session on boot with smooth boot sequence
+  // Restore the account before resolving private entry points.
   useEffect(() => {
-    const token = localStorage.getItem('proxispeak_token');
-    const cachedUser = localStorage.getItem('proxispeak_user');
-    const bootStartTime = Date.now();
-    const minBootTimeMs = 800; // Guarantees a smooth, visible luxury boot sequence
-
-    const finishBoot = () => {
-      const elapsed = Date.now() - bootStartTime;
-      const remaining = Math.max(0, minBootTimeMs - elapsed);
-      setTimeout(() => {
-        setAuthChecking(false);
-      }, remaining);
-    };
-
+    let token, cachedUser;
+    try {
+      token = localStorage.getItem('proxispeak_token');
+      cachedUser = localStorage.getItem('proxispeak_user');
+    } catch {
+      setAuthChecking(false);
+      return;
+    }
     if (!token) {
-      finishBoot();
+      setAuthChecking(false);
       return;
     }
 
@@ -82,11 +77,15 @@ export default function App() {
       } catch (_e) {}
     }
 
-    // Verify token with backend
+    const controller = new AbortController();
+    const deadline = setTimeout(()=>controller.abort(),6000);
+    let mounted = true;
+    // Bound the initial session check during a backend cold start.
     fetch(`${SERVER_URL}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      signal:controller.signal, headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
+        if (!mounted) return;
         if (res.ok) {
           const data = await res.json();
           setUser(data.user);
@@ -105,8 +104,10 @@ export default function App() {
         console.warn('[Auth] Token check network error, retaining cached session:', err.message);
       })
       .finally(() => {
-        finishBoot();
+        clearTimeout(deadline);
+        if (mounted) setAuthChecking(false);
       });
+    return () => { mounted=false; clearTimeout(deadline); controller.abort(); };
   }, []);
 
   // If user is authenticated and there is an invite room in the URL, auto-join it
@@ -137,16 +138,22 @@ export default function App() {
     }
   }, [user, inviteRoomId, currentRoom]);
 
+  const [requestedRoom,setRequestedRoom] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Sync current room with browser URL history
   const handleJoinRoom = (room) => {
     // If not authenticated, require registration or sign in
     if (!user) {
+      setRequestedRoom(room);
       setShowAuthModal(true);
       return;
     }
 
+    enterRoom(room);
+  };
+
+  const enterRoom = room => {
     setCurrentRoom(room);
     const newUrl = `${window.location.pathname}?room=${encodeURIComponent(room.roomId)}`;
     window.history.pushState({ roomId: room.roomId }, '', newUrl);
@@ -239,7 +246,7 @@ export default function App() {
 
       {/* Organization & Office Layouts Hub Modal */}
       {showOrgHub && (
-        <OrganizationHub
+        <Suspense fallback={<LoadingScreen/>}><OrganizationHub
           user={user}
           currentOrg={activeOrg}
           onSelectOrg={(org) => setActiveOrg(org)}
@@ -259,17 +266,18 @@ export default function App() {
           }}
           onRequestAuth={() => setShowAuthModal(true)}
           onClose={() => setShowOrgHub(false)}
-        />
+        /></Suspense>
       )}
 
       {/* Auth Modal Dialog */}
       {showAuthModal && (
         <AuthModal
-          defaultRoomName={inviteRoomId}
-          onClose={() => setShowAuthModal(false)}
+          defaultRoomName={requestedRoom?.roomId || inviteRoomId}
+          onClose={() => {setRequestedRoom(null);setShowAuthModal(false);}}
           onAuthSuccess={(authenticatedUser) => {
             setUser(authenticatedUser);
             setShowAuthModal(false);
+            if (requestedRoom) { enterRoom(requestedRoom); setRequestedRoom(null); }
           }}
         />
       )}

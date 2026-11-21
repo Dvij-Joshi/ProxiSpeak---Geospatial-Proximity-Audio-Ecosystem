@@ -53,16 +53,17 @@ export function WorkspaceArt({ theme = 'office' }) {
   return <canvas ref={ref} width={880} height={500} className="workspace-art" aria-hidden="true" />;
 }
 
-export function AvatarPortrait({ color = '#399c92', name = '' }) {
+export function AvatarPortrait({ color = '#399c92', name = '', transparent=false }) {
   const ref = useRef(null);
   useEffect(() => {
     const ctx = ref.current.getContext('2d');
     ctx.save();
     ctx.fillStyle = '#efe5ce';
-    ctx.fillRect(0, 0, 72, 72);
+    if (transparent) ctx.clearRect(0,0,72,72);
+    else ctx.fillRect(0, 0, 72, 72);
     ctx.scale(1.7, 1.7);
     drawCharacter(ctx, 21, 46, color);
     ctx.restore();
-  }, [color]);
+  }, [color,transparent]);
   return <canvas ref={ref} width={72} height={72} className="avatar-portrait" role="img" aria-label={name ? name + ' avatar' : 'Avatar'} />;
 }

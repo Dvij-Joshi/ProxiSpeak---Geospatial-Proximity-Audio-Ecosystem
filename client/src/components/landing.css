@@ -1,0 +1,62 @@
+.landing{--ground:#f7f4e9;--deep:#173e3c;--fire:#be5134;--edge:#c8caba;background:var(--ground);color:var(--ink);min-height:100vh;font-family:'DM Sans',sans-serif}
+.landing .wrap{width:min(1320px,91%);margin-inline:auto}
+.landing-nav,.landing-nav nav,.landing-foot>.wrap,.landing-foot nav,.hero-actions,.directory-heading,.directory-tools,.directory-tools>div,.room-info>div,.design-invite,.studio-preview figcaption,.studio-preview figcaption span:first-child{display:flex;align-items:center}
+.landing-nav{justify-content:space-between;min-height:78px;border-bottom:1px solid var(--edge);gap:18px}
+.wordmark{display:inline-flex;align-items:center;gap:9px;font:800 29px/1 var(--display);letter-spacing:-.025em}
+.landing-nav nav,.landing-foot nav{gap:clamp(15px,3vw,44px);font-weight:600;font-size:.88rem}
+.landing nav a:hover,.landing nav button:hover,.text-action:hover{text-decoration:underline;text-underline-offset:4px}
+.nav-account,.line-action,.solid-action,.arrival button,.room-info button,.directory-tools button,.scene-switch button{font:600 .87rem/1.2 'DM Sans',sans-serif;cursor:pointer}
+.nav-account,.line-action,.solid-action,.arrival button{display:inline-flex;align-items:center;justify-content:center;gap:16px;padding:13px 19px;border-radius:5px}
+.nav-account,.line-action{border:1px solid var(--ink)}
+.solid-action,.arrival button{background:var(--deep);color:#fff9e8;border:1px solid var(--deep)}
+.hero-actions>a:hover,.line-action:hover,.nav-account:hover,.directory-heading button:hover{box-shadow:3px 3px 0 #8fa295;transform:translateY(-2px)}
+.landing button,.hero-actions a{transition:background-color .16s,transform .16s,box-shadow .16s}
+.landing-hero{display:grid;grid-template-columns:.85fr 1.15fr;align-items:center;gap:clamp(24px,4vw,72px);padding:clamp(34px,5.8vw,86px) 0}
+.section-label{display:flex;align-items:center;gap:9px;font:600 .69rem/1.2 'DM Sans',sans-serif;text-transform:uppercase;letter-spacing:.145em;color:#486861}
+.section-label i{width:24px;height:3px;background:var(--fire)}
+.hero-intro h1,.experience h2,.directory h2,.design-invite h2,.arrival h2,.room-info h3{font-family:var(--display);font-weight:800;letter-spacing:-.035em}
+.hero-intro h1{font-size:clamp(4rem,7.9vw,7.7rem);line-height:.88;margin:20px 0 23px}
+.hero-intro em,.experience em{font-style:normal;color:var(--teal)}
+.hero-intro p,.experience-copy p,.design-invite p{color:#435c56;max-width:43ch;line-height:1.65}
+.hero-actions{gap:10px;margin-top:25px;flex-wrap:wrap}
+.studio-preview{position:relative;isolation:isolate;overflow:hidden;color:#d5e5cd;background-color:#234844;background-image:radial-gradient(ellipse at 65% 55%,#67908365,transparent 65%),linear-gradient(#a5c9ab15 1px,transparent 1px),linear-gradient(90deg,#a5c9ab15 1px,transparent 1px);background-size:auto,22px 22px,22px 22px;border:2px solid var(--ink);border-radius:9px;box-shadow:6px 7px 0 #bec7b6}
+.studio-preview:before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 69%,#0e24258a,transparent 50%);z-index:-1}
+.studio-preview figcaption{justify-content:space-between;padding:16px 21px 0;font:600 .68rem/1.3 monospace;text-transform:uppercase;letter-spacing:.09em}
+.signal-bars{display:inline-flex;align-items:center;gap:2px;margin-right:8px}.signal-bars i{display:block;width:3px;height:7px;background:#ead77a}.signal-bars i:nth-child(2){height:13px}.signal-bars i:last-child{height:9px}
+.office-diorama{display:block;width:100%;height:auto;aspect-ratio:64/41}
+.studio-preview canvas{transform:translateX(var(--shift,0));transition:transform .18s ease-out}
+.scene-switch{display:flex;justify-content:center;gap:3px;margin:0 auto 15px;width:max-content;padding:3px;background:#163834;border:1px solid #648277;border-radius:5px}
+.scene-switch button,.directory-tools button{text-transform:capitalize;padding:7px 11px;border-radius:3px}
+.scene-switch button{font-size:.74rem}.scene-switch [aria-pressed=true]{background:#decd82;color:#213c36}
+.arrival{border-block:1px solid var(--edge);background:#edeeda}
+.arrival-grid{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:24px;padding-block:24px}
+.arrival h2,.room-info h3{font-size:1.8rem;line-height:1.1}
+.arrival p,.room-info p,.design-invite p{font-size:.92rem;margin-top:5px}
+.arrival form{display:flex;position:relative;gap:6px;align-items:stretch}
+.arrival form small{color:#94371d;position:absolute;top:100%}
+.arrival input,.directory-tools input{min-width:0;border:1px solid #92a195;border-radius:5px;padding:10px 12px;background:#fffdf2}
+.arrival input{flex:1}.arrival button{white-space:nowrap}
+.experience{display:grid;grid-template-columns:1.05fr 1fr;gap:clamp(28px,8vw,118px);align-items:center;padding-block:clamp(48px,7vw,104px)}
+.experience h2,.directory h2,.design-invite h2{font-size:clamp(2.7rem,4.8vw,4.6rem);line-height:.98;margin:12px 0}
+.text-action{margin-top:15px;font-weight:600;color:var(--teal)}
+.spatial-console{border-radius:6px;border:1px solid #82998c;overflow:hidden;background:#e7eddd}
+.spatial-stage{height:clamp(120px,13vw,180px);position:relative;overflow:hidden;background:repeating-linear-gradient(28deg,transparent 0 21px,#5775681a 22px 23px),repeating-linear-gradient(-28deg,transparent 0 21px,#5775681a 22px 23px)}
+.earshot{position:absolute;left:23%;top:68%;width:72%;height:100%;transform:translate(-50%,-50%);border:1px solid #4f8e7a88;border-radius:50%;background:radial-gradient(ellipse,#73b5a264,transparent 70%);box-shadow:0 0 0 14px #5797800b,0 0 0 15px #57978054}
+.speaker,.listener{position:absolute;left:23%;bottom:32%;width:50px;transform:translateX(-50%)}
+.speaker canvas,.listener canvas{border:0;background:none;border-radius:0}
+.spatial-controls{display:grid;grid-template-columns:1fr auto;gap:10px;padding:17px 20px;font-size:.84rem;font-weight:600;border-top:1px solid #aab9a9;background:#f5f5e8}
+.spatial-controls output{color:var(--teal)}.spatial-controls input{grid-column:1/-1;width:100%;accent-color:var(--teal)}
+.directory{padding:clamp(36px,5vw,72px) 0;background:#e7e6d8;border-block:1px solid var(--edge)}
+.directory-heading,.room-info>div,.design-invite,.landing-foot>.wrap{justify-content:space-between;gap:16px}
+.directory-tools{flex-wrap:wrap;gap:8px;margin:20px 0}.directory-tools>div{flex-wrap:wrap;gap:3px;margin-right:auto}
+.directory-tools button{border:1px solid #9da99b}.directory-tools [aria-pressed=true]{background:var(--deep);color:var(--ivory)}
+.room-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.room-card{display:flex;flex-direction:column;border:1px solid #9ba898;border-radius:6px;overflow:hidden;background:#fffcf0}
+.room-art{background:#a9c6b4;overflow:hidden}.room-conference{background:#d3b396}.room-lounge{background:#a3bcbd}
+.room-art canvas{width:100%;aspect-ratio:2/1;object-fit:contain;transition:transform .3s}.room-card:hover canvas{transform:translateY(-3px) scale(1.025)}
+.room-info{padding:18px;display:flex;flex-direction:column;flex:1}.room-info p{color:#455c55;line-height:1.5;margin-bottom:16px}.room-info>div{margin-top:auto;border-top:1px solid #c9cdbb;padding-top:12px}.room-info small{text-transform:capitalize;color:#546b60}
+.room-info button{color:#19665b}.design-invite{padding-block:clamp(38px,5vw,72px)}.design-invite h2{font-size:clamp(2.4rem,4vw,3.7rem)}.design-invite p{max-width:55ch}
+.landing-foot{background:var(--deep);color:#fff9e8;padding-block:24px}.landing-foot .wordmark{font-size:24px}
+.dashboard-wrap:has(.workspace-dashboard){padding-block:24px}
+@media(max-width:820px){.landing-nav nav{gap:12px}.landing-hero{grid-template-columns:1fr 1.1fr;gap:17px}.hero-intro h1{font-size:clamp(3.6rem,8vw,5rem)}.room-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.landing .wrap{width:90%}.landing-nav{min-height:64px}.landing-nav nav a,.landing-nav nav button{display:none}.landing-nav nav{margin-left:auto}.nav-account{padding:9px 12px}.landing-hero,.experience,.arrival-grid{grid-template-columns:1fr}.landing-hero{gap:24px;padding-top:32px}.hero-intro h1{font-size:clamp(4.1rem,14vw,5.6rem)}.studio-preview figcaption{padding:12px 12px 0}.experience-copy{grid-row:1}.room-gallery{grid-template-columns:1fr}.directory-heading,.design-invite,.landing-foot>.wrap{align-items:flex-start;flex-direction:column}.directory-tools>div{width:100%}.directory-tools input{flex:1}.arrival-grid{gap:12px}.landing-foot nav{gap:15px;flex-wrap:wrap}.arrival button{padding:12px}.scene-switch{margin-bottom:10px}}
+@media(prefers-reduced-motion:reduce){.landing *, .landing *::before {animation-duration:.01ms!important;transition:none!important}.studio-preview canvas,.room-card:hover canvas{transform:none}}

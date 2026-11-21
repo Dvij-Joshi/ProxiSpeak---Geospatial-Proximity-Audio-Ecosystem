@@ -5,11 +5,13 @@ function prefix(user) {
 export function listDrafts(user) {
   const drafts = [];
   const scope = prefix(user);
-  for (let i=0;i<localStorage.length;i++) {
-    const key = localStorage.key(i);
+  let storage;
+  try { storage = window.localStorage; } catch { return drafts; }
+  for (let i=0;i<storage.length;i++) {
+    const key = storage.key(i);
     if (!key?.startsWith(scope)) continue;
     try {
-      const draft = JSON.parse(localStorage.getItem(key));
+      const draft = JSON.parse(storage.getItem(key));
       if (draft?.layout && draft.id && key === scope+draft.id) drafts.push(draft);
     } catch { /* A damaged entry should not hide other drafts. */ }
   }

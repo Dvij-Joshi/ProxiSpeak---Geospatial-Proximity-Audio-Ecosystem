@@ -47,25 +47,7 @@ body { overflow-x: hidden; }
 .boot-screen { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: .65rem; }
 .boot-screen strong, .auth-poster strong { font: 800 2.5rem/1 var(--display); }
 .boot-screen span { color: #55675e; }
-.workspace-lobby {
-  background-image: radial-gradient(#20333418 .8px, transparent .9px);
-  background-size: 5px 5px;
-}
-.workspace-lobby header > div { background: var(--ink); border-bottom: 3px solid var(--citron); border-radius: 5px; box-shadow: 3px 4px 0 #20333445; }
-.workspace-lobby nav button:last-child, .workspace-lobby header button[title="Organizations"] { color: #a8dfc8; }
-.workspace-lobby header .font-h3 { font: 800 1.5rem/1 var(--display); }
-.workspace-lobby button.rounded-full, .workspace-lobby a.rounded-full { border-radius: 4px; }
-.workspace-hero {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  align-items: center; gap: clamp(2rem, 6vw, 6rem); margin: 1rem 0 3.25rem;
-}
-.hero-copy h1 { font: 800 clamp(3.3rem, 7.4vw, 7rem)/.88 var(--display); text-transform: uppercase; letter-spacing: -.035em; }
-.hero-copy em { font-style: normal; color: var(--teal); }
-.hero-copy p { margin-top: 1.3rem; max-width: 28rem; line-height: 1.55; color: #40584f; }
-.hero-copy > div { justify-content: flex-start; }
-.hero-copy button, .auth-poster, .workspace-lobby .bg-white-card { border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
-.hero-art { aspect-ratio: 1.76; border: 3px solid var(--ink); background: #b7c8b7; padding: 5px; box-shadow: 7px 7px 0 var(--ink); }
-.hero-art canvas { border: 1px solid var(--ink); }
+.auth-poster {border:2px solid var(--ink);box-shadow:4px 4px 0 var(--ink)}
 .auth-poster { width: 44%; background: var(--ink); color: var(--ivory); padding: 2rem; display: flex; flex-direction: column; justify-content: center; gap: 1.5rem; }
 .auth-poster canvas { height: auto; border: 2px solid var(--citron); }
 .auth-poster p { font-weight: 600; color: var(--citron); }
@@ -87,10 +69,6 @@ body { overflow-x: hidden; }
   .world-title > span, .world-header [title^="Click to copy meeting ID"], .world-header [title^="Signed in as"] > span { display: none !important; }
 }
 @media (max-width: 760px) {
-  .workspace-hero { grid-template-columns: 1fr; gap: 1.6rem; margin-bottom: 2rem; }
-  .hero-copy h1 br { display: none; }
-  .hero-copy h1 em::before { content: " "; }
-  .hero-art { width: 100%; max-height: 250px; overflow: hidden; }
   .auth-poster { width: 100%; padding: 1rem 1.5rem; flex-direction: row; align-items: center; justify-content: space-between; }
   .auth-poster strong { font-size: 1.5rem; }
   .auth-poster canvas { display: none; }
