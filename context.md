@@ -396,7 +396,13 @@ ooftop), with custom templates created via the in-app Office Designer.
     * Generated brand geometric spatial soundwave favicon in SVG and binary ICO formats, linked in `index.html` with `image/svg+xml` and `alternate icon`, eliminating 404 console errors.
   * **Render Cold-Start Room Fetch Auto-Retry (`client/src/components/MeetingLobby.jsx`):**
     * Added automatic 3-second retry logic to `fetchRooms()` so network disruptions or connection resets during Render free-tier container cold starts recover automatically without requiring user page reload.
-* **Latest Milestone:** Multi-Tier Personalized User Dashboard & Email Domain Categorization Engine
+* **Latest Milestone:** Comprehensive Technical Documentation & README Modernization
+  * **Architectural Accuracy & Zero-Emoji Standardization:**
+    * Completely overhauled [`README.md`](file:///e:/portfolio-projects/ProxiSpeak/README.md) to eliminate corrupted legacy UTF-8 emoji artifacts and establish a clean, publication-grade markdown technical reference.
+    * Synchronized all mathematical DSP models to the live V2 engine: updated open workspace earshot to 320 px ($0.75$ power-curve decay), enclosed meeting room acoustics to 850 px ($45\%$ to $100\%$ presence), and acoustic raycasting parameters.
+    * Documented all five architectural pillars: Spatial Audio DSP, Resilient WebRTC P2P Mesh with Metered OpenRelay TURN fallback and negotiation serialization, V2 2200x1300 Canvas Viewport with follow camera and interactive meeting actions, Custom In-App Office Designer with SAT collision detection and Clash-of-Clans style directional wall expansion, and Multi-Tenant Organization Engine with multi-tier dashboards.
+    * Updated project directory structure tree to include all modular world scenes (`client/src/world/`), office model catalog, and four automated unit test suites (`world.test.js`, `negotiation.test.js`, `meeting-actions.test.js`, `dashboard.test.js`).
+* **Prior Milestone:** Multi-Tier Personalized User Dashboard & Email Domain Categorization Engine
   * **Architectural Rationale & User Differentiation:**
     * Implemented a dedicated personalized dashboard engine that detects user account categories and serves distinct experiences based on organization membership and email domain type:
       * **Organization User (Company Email / Org Member):** Tailored for enterprise teams with corporate email domains (e.g., `@google.com`, `@microsoft.com`, `@<org-slug>.com`) or users belonging to an organization. Features Company Headquarters 1-click launch, team calendar and scheduled meetings log, colleague directory with role badges (`Owner`, `Admin`, `Member`), custom architectural layouts, and corporate soundstage telemetry (-18 dB soundproof doors, 850px boardroom audio).
