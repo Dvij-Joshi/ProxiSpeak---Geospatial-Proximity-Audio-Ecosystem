@@ -396,7 +396,19 @@ ooftop), with custom templates created via the in-app Office Designer.
     * Generated brand geometric spatial soundwave favicon in SVG and binary ICO formats, linked in `index.html` with `image/svg+xml` and `alternate icon`, eliminating 404 console errors.
   * **Render Cold-Start Room Fetch Auto-Retry (`client/src/components/MeetingLobby.jsx`):**
     * Added automatic 3-second retry logic to `fetchRooms()` so network disruptions or connection resets during Render free-tier container cold starts recover automatically without requiring user page reload.
-* **Latest Milestone:** Upstream Ecosystem Synchronization — Visual Styling, Modular World Scenes, Model Catalog & Room Geometry Integration (Commit `5076775`)
+* **Latest Milestone:** Technical SEO Overhaul, Static Pre-Rendering (SSG), Schema Markup & WebP Assets
+  * **Static Site Generation & Crawlability (`client/scripts/prerender.mjs`, `client/src/public/prerender.jsx`):**
+    * Upgraded client build pipeline (`npm --prefix client run build`) to pre-render static HTML via `react-dom/server` (`renderToString`) for public SEO routes (`/`, `/spatial-audio`, `/templates`, `/about`, and `404.html`), eliminating empty `<div id="root"></div>` CSR responses for search crawlers.
+    * Generated clean `dist/app.html` shell with `<meta name="robots" content="noindex, follow" />` for authenticated workspace routes (`/dashboard`, `/designer`, `/organizations`).
+    * Added [`client/public/robots.txt`](file:///e:/portfolio-projects/ProxiSpeak/client/public/robots.txt) and [`client/public/sitemap.xml`](file:///e:/portfolio-projects/ProxiSpeak/client/public/sitemap.xml) referencing `https://proxi-speak-geospatial-proximity-au-kappa.vercel.app`.
+    * Synchronized [`vercel.json`](file:///e:/portfolio-projects/ProxiSpeak/vercel.json) and [`client/vercel.json`](file:///e:/portfolio-projects/ProxiSpeak/client/vercel.json) with `cleanUrls: true`, `trailingSlash: false`, `/dashboard`, `/designer`, and `/organizations` rewrites to `/app.html`, and immutable asset caching headers.
+  * **On-Page SEO, Structured Data & Multi-Page Hierarchy (`client/src/public/`):**
+    * Added [`client/src/public/seoMeta.js`](file:///e:/portfolio-projects/ProxiSpeak/client/src/public/seoMeta.js) enforcing unique 50–60 character titles, 140–160 character meta descriptions, canonical tags, Open Graph/Twitter cards, and JSON-LD graphs (`Organization`, `SoftwareApplication`, `BreadcrumbList`, `FAQPage`).
+    * Added [`client/src/public/PublicLayout.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/public/PublicLayout.jsx), [`client/src/public/SpatialAudioPage.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/public/SpatialAudioPage.jsx), [`client/src/public/TemplatesPage.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/public/TemplatesPage.jsx), [`client/src/public/AboutPage.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/public/AboutPage.jsx), and [`client/src/public/NotFoundPage.jsx`](file:///e:/portfolio-projects/ProxiSpeak/client/src/public/NotFoundPage.jsx), eliminating orphan routes and adding visible FAQ, breadcrumbs, zero-storage WebRTC trust copy, and author credentials.
+    * Generated compressed WebP visual assets (`client/public/images/*.webp`) with explicit dimensions and keyword-relevant `alt` text; added WOFF2 font preloads and `PublicSite-*.css` head injection to prevent FOUC and CLS.
+  * **Automated Verification (`client/tests/seo.test.js`):**
+    * Added automated SEO unit test verifying meta length bounds, single H1 per page, canonicals, JSON-LD presence, WebP image alt/size attributes, orphan link coverage, `robots.txt`, and `sitemap.xml` (all tests passing).
+* **Prior Milestone:** Upstream Ecosystem Synchronization — Visual Styling, Modular World Scenes, Model Catalog & Room Geometry Integration (Commit `5076775`)
   * **Synchronization Across Branches:**
     * Synchronized and fast-forward merged `origin/main` commits `7de8fe2` and `5076775` into `branch-dvij`, `dev`, and local `main`.
     * Upstream branches `origin/main`, `origin/dev`, and `origin/branch-dvij` are now in 100% parity at commit `5076775`.
